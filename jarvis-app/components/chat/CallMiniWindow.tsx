@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
+import React, { useRef } from 'react';
+import { StyleSheet, View, TouchableOpacity, Text, Animated, PanResponder, Dimensions } from 'react-native';
 import { RTCView } from 'react-native-webrtc';
 import { useStore } from '@/store';
 import { useRouter, useSegments } from 'expo-router';
@@ -9,6 +9,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 
 const MINI_WINDOW_WIDTH = 120;
 const MINI_WINDOW_HEIGHT = 180;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export const CallMiniWindow = () => {
     const router = useRouter();
@@ -23,16 +24,70 @@ export const CallMiniWindow = () => {
     const chat = chats.find(c => c.id === activeChatId);
     const displayName = chat?.name || 'Call';
 
+    // Draggable position state
+    const pan = useRef(new Animated.ValueXY({ x: SCREEN_WIDTH - MINI_WINDOW_WIDTH - 20, y: SCREEN_HEIGHT - MINI_WINDOW_HEIGHT - 100 })).current;
+    const lastTap = useRef(0);
+
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onPanResponderGrant: () => {
+                pan.setOffset({
+                    x: (pan.x as any)._value,
+                    y: (pan.y as any)._value,
+                });
+                pan.setValue({ x: 0, y: 0 });
+            },
+            onPanResponderMove: Animated.event(
+                [null, { dx: pan.x, dy: pan.y }],
+                { useNativeDriver: false }
+            ),
+            onPanResponderRelease: (e, gesture) => {
+                pan.flattenOffset();
+
+                // Check for double tap to expand
+                const now = Date.now();
+                const DOUBLE_TAP_DELAY = 300;
+                if (now - lastTap.current < DOUBLE_TAP_DELAY && Math.abs(gesture.dx) < 10 && Math.abs(gesture.dy) < 10) {
+                    handleExpand();
+                    return;
+                }
+                lastTap.current = now;
+
+                // Snap to edges if needed
+                const finalX = (pan.x as any)._value;
+                const finalY = (pan.y as any)._value;
+
+                // Keep within screen bounds
+                const boundedX = Math.max(0, Math.min(finalX, SCREEN_WIDTH - MINI_WINDOW_WIDTH));
+                const boundedY = Math.max(0, Math.min(finalY, SCREEN_HEIGHT - MINI_WINDOW_HEIGHT));
+
+                Animated.spring(pan, {
+                    toValue: { x: boundedX, y: boundedY },
+                    useNativeDriver: false,
+                    friction: 7,
+                    tension: 40,
+                }).start();
+            },
+        })
+    ).current;
+
     const handleExpand = () => {
         setIsMinimized(false);
         router.push(`/call/${activeChatId}`);
     };
 
     return (
-        <TouchableOpacity
-            style={[styles.container, { borderColor: colors.primary }]}
-            onPress={handleExpand}
-            activeOpacity={0.9}
+        <Animated.View
+            style={[
+                styles.container,
+                { borderColor: colors.primary },
+                {
+                    transform: pan.getTranslateTransform(),
+                },
+            ]}
+            {...panResponder.panHandlers}
         >
             <View style={styles.streamContainer}>
                 {remoteStream ? (
@@ -63,7 +118,7 @@ export const CallMiniWindow = () => {
                 )}
             </View>
 
-        </TouchableOpacity>
+        </Animated.View>
     );
 };
 

@@ -48,6 +48,8 @@ export default function ChatDetailScreen() {
     const editMessage = useStore(useCallback((state: any) => state.editMessage, []));
     const deleteMessage = useStore(useCallback((state: any) => state.deleteMessage, []));
     const reactToMessage = useStore(useCallback((state: any) => state.reactToMessage, []));
+    const pinMessage = useStore(useCallback((state: any) => state.pinMessage, []));
+    const unpinMessage = useStore(useCallback((state: any) => state.unpinMessage, []));
     const deleteChat = useStore(useCallback((state: any) => state.deleteChat, []));
     const forwardMessage = useStore(useCallback((state: any) => state.forwardMessage, []));
     const showAlert = useStore(useCallback((state: any) => state.showAlert, []));
@@ -81,6 +83,17 @@ export default function ChatDetailScreen() {
     // Forward Message State
     const [forwardModalVisible, setForwardModalVisible] = useState(false);
     const [messageToForward, setMessageToForward] = useState<Message | null>(null);
+
+    // Message Selection State
+    const [selectionMode, setSelectionMode] = useState(false);
+    const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
+
+    // Reaction Picker State
+    const [reactionPickerVisible, setReactionPickerVisible] = useState(false);
+    const [messageToReact, setMessageToReact] = useState<Message | null>(null);
+
+    // Pinned Messages State
+    const [pinnedMessagesVisible, setPinnedMessagesVisible] = useState(false);
 
     const flatListRef = useRef<FlatList>(null);
     const lastTypingSent = useRef<number>(0);
@@ -154,9 +167,78 @@ export default function ChatDetailScreen() {
     }, [chat, text, editingMessageId, replyingToMessage, editMessage, sendMessage]);
 
     const handleLongPressMessage = useCallback((message: Message) => {
-        setSelectedMessage(message);
-        setModalVisible(true);
+        if (selectionMode) {
+            toggleMessageSelection(message.id);
+        } else {
+            setSelectedMessage(message);
+            setModalVisible(true);
+        }
+    }, [selectionMode]);
+
+    const toggleMessageSelection = useCallback((messageId: string) => {
+        setSelectedMessages(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(messageId)) {
+                newSet.delete(messageId);
+            } else {
+                newSet.add(messageId);
+            }
+            // Exit selection mode if no messages selected
+            if (newSet.size === 0) {
+                setSelectionMode(false);
+            }
+            return newSet;
+        });
     }, []);
+
+    const handleMessagePress = useCallback((message: Message) => {
+        if (selectionMode) {
+            toggleMessageSelection(message.id);
+        }
+    }, [selectionMode, toggleMessageSelection]);
+
+    const enterSelectionMode = useCallback((messageId: string) => {
+        setSelectionMode(true);
+        setSelectedMessages(new Set([messageId]));
+    }, []);
+
+    const exitSelectionMode = useCallback(() => {
+        setSelectionMode(false);
+        setSelectedMessages(new Set());
+    }, []);
+
+    const deleteSelectedMessages = useCallback(() => {
+        if (!chat) return;
+        showAlert(
+            'Delete Messages',
+            `Delete ${selectedMessages.size} message(s)?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => {
+                        selectedMessages.forEach((msgId: string) => {
+                            deleteMessage(chat.id, msgId);
+                        });
+                        exitSelectionMode();
+                    }
+                }
+            ]
+        );
+    }, [chat, selectedMessages, deleteMessage, showAlert, exitSelectionMode]);
+
+    const forwardSelectedMessages = useCallback(() => {
+        if (selectedMessages.size === 1) {
+            const msgId = Array.from(selectedMessages)[0];
+            const message = chat?.messages.find(m => m.id === msgId);
+            if (message) {
+                setMessageToForward(message);
+                setForwardModalVisible(true);
+                exitSelectionMode();
+            }
+        }
+    }, [chat, selectedMessages, exitSelectionMode]);
 
     const handleReact = useCallback((reaction: string) => {
         if (selectedMessage && chat) {
@@ -325,8 +407,18 @@ export default function ChatDetailScreen() {
     };
 
     const renderMessage = useCallback(({ item }: { item: Message }) => {
-        return <MessageItem item={item} onLongPress={handleLongPressMessage} onSwipeReply={handleSwipeReply} onSwipeForward={handleSwipeForward} />;
-    }, [handleLongPressMessage, handleSwipeReply, handleSwipeForward]);
+        return (
+            <MessageItem
+                item={item}
+                onLongPress={handleLongPressMessage}
+                onSwipeReply={handleSwipeReply}
+                onSwipeForward={handleSwipeForward}
+                selectionMode={selectionMode}
+                isSelected={selectedMessages.has(item.id)}
+                onPress={handleMessagePress}
+            />
+        );
+    }, [handleLongPressMessage, handleSwipeReply, handleSwipeForward, selectionMode, selectedMessages, handleMessagePress]);
 
     const handleLoadMore = useCallback(async () => {
         if (!chat || loadingMore || chat.messages.length < 20) return;
@@ -668,6 +760,30 @@ export default function ChatDetailScreen() {
                                                     <MaterialCommunityIcons name="content-copy" size={20} color={colors.text} />
                                                 </TouchableOpacity>
 
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        if (selectedMessage) {
+                                                            if (selectedMessage.is_pinned) {
+                                                                unpinMessage(chat.id, selectedMessage.id);
+                                                            } else {
+                                                                pinMessage(chat.id, selectedMessage.id);
+                                                            }
+                                                            setModalVisible(false);
+                                                            setSelectedMessage(null);
+                                                        }
+                                                    }}
+                                                    style={styles.menuOption}
+                                                >
+                                                    <Text style={{ color: colors.text, fontSize: 16 }}>
+                                                        {selectedMessage?.is_pinned ? 'Unpin' : 'Pin'}
+                                                    </Text>
+                                                    <MaterialCommunityIcons
+                                                        name={selectedMessage?.is_pinned ? 'pin-off' : 'pin'}
+                                                        size={20}
+                                                        color={colors.text}
+                                                    />
+                                                </TouchableOpacity>
+
                                                 {selectedMessage.file && (
                                                     <TouchableOpacity onPress={handleSaveToGallery} style={styles.menuOption}>
                                                         <Text style={{ color: colors.text, fontSize: 16 }}>Save to Gallery</Text>
@@ -722,33 +838,58 @@ export default function ChatDetailScreen() {
                             maxToRenderPerBatch={10}
                             windowSize={10}
                             removeClippedSubviews={Platform.OS === 'android'}
-                        />
+                        </FlatList>
 
-                        <ChatInput
-                            chatId={chat.id}
-                            text={text}
-                            setText={handleTextChange}
-                            handleSend={handleSend}
-                            editingMessageId={editingMessageId}
-                            setEditingMessageId={setEditingMessageId}
-                            replyingToMessage={replyingToMessage}
-                            setReplyingToMessage={setReplyingToMessage}
-                            insets={insets}
-                            keyboardVisible={keyboardVisible}
-                        />
-                    </KeyboardAvoidingView>
+                    {/* Selection Mode Toolbar */}
+                    {selectionMode && (
+                        <View style={[styles.selectionToolbar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+                            <TouchableOpacity onPress={exitSelectionMode} style={styles.toolbarButton}>
+                                <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+                            </TouchableOpacity>
 
-                    {/* Forward Message Modal */}
-                    <ForwardMessageModal
-                        visible={forwardModalVisible}
-                        onClose={() => setForwardModalVisible(false)}
-                        message={messageToForward}
-                        chats={chats.filter((c: any) => c.id !== chat.id)}
-                        onForward={handleForwardSubmit}
+                            <Text style={[styles.selectionCount, { color: colors.text }]}>
+                                {selectedMessages.size} selected
+                            </Text>
+
+                            <View style={styles.toolbarActions}>
+                                {selectedMessages.size === 1 && (
+                                    <TouchableOpacity onPress={forwardSelectedMessages} style={styles.toolbarButton}>
+                                        <MaterialCommunityIcons name="share-variant" size={24} color={colors.primary} />
+                                    </TouchableOpacity>
+                                )}
+                                <TouchableOpacity onPress={deleteSelectedMessages} style={styles.toolbarButton}>
+                                    <MaterialCommunityIcons name="trash-can-outline" size={24} color={colors.error} />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    )}
+
+                    <ChatInput
+                        chatId={chat.id}
+                        text={text}
+                        setText={handleTextChange}
+                        handleSend={handleSend}
+                        editingMessageId={editingMessageId}
+                        setEditingMessageId={setEditingMessageId}
+                        replyingToMessage={replyingToMessage}
+                        setReplyingToMessage={setReplyingToMessage}
+                        insets={insets}
+                        keyboardVisible={keyboardVisible}
                     />
-                </>
-            )}
-        </ScreenWrapper>
+                </KeyboardAvoidingView>
+
+            {/* Forward Message Modal */}
+            <ForwardMessageModal
+                visible={forwardModalVisible}
+                onClose={() => setForwardModalVisible(false)}
+                message={messageToForward}
+                chats={chats.filter((c: any) => c.id !== chat.id)}
+                onForward={handleForwardSubmit}
+            />
+        </>
+    )
+}
+        </ScreenWrapper >
     );
 }
 

@@ -195,6 +195,64 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     )
             return
 
+        if message_type == 'pin_message':
+            message_id = text_data_json.get('message_id')
+            conversation_id = text_data_json.get('conversation_id')
+            
+            if message_id:
+                success = await self.pin_message(message_id)
+                if success:
+                    # Notify sender
+                    await self.send(text_data=json.dumps({
+                        'type': 'message_pinned',
+                        'message_id': message_id,
+                        'conversation_id': conversation_id,
+                        'is_pinned': True
+                    }))
+
+                    # Notify recipient
+                    recipient_id = await self.get_recipient_from_conversation(conversation_id)
+                    if recipient_id:
+                        await self.channel_layer.group_send(
+                            f"user_{recipient_id}",
+                            {
+                                'type': 'message_pinned',
+                                'message_id': message_id,
+                                'conversation_id': conversation_id,
+                                'is_pinned': True
+                            }
+                        )
+            return
+
+        if message_type == 'unpin_message':
+            message_id = text_data_json.get('message_id')
+            conversation_id = text_data_json.get('conversation_id')
+            
+            if message_id:
+                success = await self.unpin_message(message_id)
+                if success:
+                    # Notify sender
+                    await self.send(text_data=json.dumps({
+                        'type': 'message_pinned',
+                        'message_id': message_id,
+                        'conversation_id': conversation_id,
+                        'is_pinned': False
+                    }))
+
+                    # Notify recipient
+                    recipient_id = await self.get_recipient_from_conversation(conversation_id)
+                    if recipient_id:
+                        await self.channel_layer.group_send(
+                            f"user_{recipient_id}",
+                            {
+                                'type': 'message_pinned',
+                                'message_id': message_id,
+                                'conversation_id': conversation_id,
+                                'is_pinned': False
+                            }
+                        )
+            return
+
         # WebRTC Signaling
         # WebRTC Signaling
         if message_type in ['webrtc_offer', 'webrtc_answer', 'webrtc_ice_candidate']:
@@ -480,6 +538,36 @@ class ChatConsumer(AsyncWebsocketConsumer):
         except Message.DoesNotExist:
             return []
 
+    @database_sync_to_async
+    def pin_message(self, message_id):
+        from .models import Message
+        try:
+            message = Message.objects.get(id=message_id)
+            # Check if user is participant
+            if not message.conversation.participants.filter(id=self.user.id).exists():
+                return False
+            
+            message.is_pinned = True
+            message.save()
+            return True
+        except Message.DoesNotExist:
+            return False
+
+    @database_sync_to_async
+    def unpin_message(self, message_id):
+        from .models import Message
+        try:
+            message = Message.objects.get(id=message_id)
+            # Check if user is participant
+            if not message.conversation.participants.filter(id=self.user.id).exists():
+                return False
+            
+            message.is_pinned = False
+            message.save()
+            return True
+        except Message.DoesNotExist:
+            return False
+
     async def message_edited(self, event):
         await self.send(text_data=json.dumps({
             'type': 'message_edited',
@@ -503,6 +591,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'message_id': event['message_id'],
             'conversation_id': event['conversation_id'],
             'reactions': event['reactions']
+        }))
+
+    async def message_pinned(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'message_pinned',
+            'message_id': event['message_id'],
+            'conversation_id': event['conversation_id'],
+            'is_pinned': event['is_pinned']
         }))
 
     async def webrtc_signal(self, event):

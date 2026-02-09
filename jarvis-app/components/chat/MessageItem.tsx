@@ -14,9 +14,12 @@ interface MessageItemProps {
     onLongPress: (message: Message) => void;
     onSwipeReply?: (message: Message) => void;
     onSwipeForward?: (message: Message) => void;
+    selectionMode?: boolean;
+    isSelected?: boolean;
+    onPress?: (message: Message) => void;
 }
 
-export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeForward }: MessageItemProps) => {
+export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeForward, selectionMode = false, isSelected = false, onPress }: MessageItemProps) => {
     const { colors } = useAppTheme();
     const isMe = item.sender === 'me';
     const reactions = item.reactions || [];
@@ -116,6 +119,24 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
                     isMe ? styles.myMessageContainer : styles.theirMessageContainer,
                 ]}
             >
+                {/* Selection Checkbox */}
+                {selectionMode && (
+                    <TouchableOpacity
+                        onPress={() => onPress?.(item)}
+                        style={styles.checkboxContainer}
+                    >
+                        <View style={[
+                            styles.checkbox,
+                            { borderColor: colors.primary },
+                            isSelected && { backgroundColor: colors.primary }
+                        ]}>
+                            {isSelected && (
+                                <MaterialCommunityIcons name="check" size={16} color="white" />
+                            )}
+                        </View>
+                    </TouchableOpacity>
+                )}
+
                 {!isMe && (
                     <View style={styles.avatarContainer}>
                         {/* Placeholder for user avatar - could be replaced with actual user image if available */}
@@ -219,7 +240,7 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
                                     </Text>
                                 ) : null}
 
-                                <View style={styles.metaRow}>
+                                <View style={styles.messageFooter}>
                                     <Text style={[styles.timestamp, { color: colors.tabIconDefault }]}>
                                         {item.timestamp.toLocaleTimeString([], {
                                             hour: '2-digit',
@@ -438,12 +459,10 @@ const styles = StyleSheet.create({
         fontSize: 15,
         lineHeight: 20,
     },
-    metaRow: {
+    messageFooter: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'flex-end',
-        marginTop: 2,
-        opacity: 0.7,
+        marginTop: 4,
     },
     metaRowMe: {
         flexDirection: 'row',
@@ -578,6 +597,21 @@ const styles = StyleSheet.create({
     fileInfo: {
         flex: 1,
         justifyContent: 'center',
+    },
+    checkboxContainer: {
+        marginRight: 8,
+        justifyContent: 'center',
+    },
+    checkbox: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 2,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    readReceiptContainer: {
+        marginLeft: 4,
     },
 });
 

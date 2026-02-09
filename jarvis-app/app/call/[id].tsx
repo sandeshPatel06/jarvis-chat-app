@@ -7,14 +7,19 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, BackHandler } from 'react-native';
 import { RTCView } from 'react-native-webrtc';
+import { Avatar } from '@/components/ui/Avatar';
+import { useAppTheme } from '@/hooks/useAppTheme';
 
 export default function CallScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
+    const { colors } = useAppTheme();
+
     // Granular selectors to isolate re-renders
     const localStream = useStore((state: any) => state.callState.localStream);
     const remoteStream = useStore((state: any) => state.callState.remoteStream);
     const isCalling = useStore((state: any) => state.callState.isCalling);
+    const isVideo = useStore((state: any) => state.callState.isVideo) ?? true; // Default to video if not set
     const endCall = useStore((state: any) => state.endCall);
     const setIsMinimized = useStore((state: any) => state.setIsMinimized);
     const chat = useStore(useCallback((state: any) => state.chats.find((c: any) => c.id === id) || null, [id]));
@@ -111,24 +116,40 @@ export default function CallScreen() {
                         <FontAwesome name="phone-square" size={60} color="red" style={{ marginBottom: 20 }} />
                         <Text style={[styles.connectingText, { color: 'red' }]}>Call Ended</Text>
                     </View>
-                ) : remoteStream ? (
-                    <RTCView
-                        key={remoteStream.toURL()} // Force re-render on stream change
-                        streamURL={remoteStream.toURL()}
-                        style={styles.remoteStream}
-                        objectFit="cover"
-                        mirror={false}
-                        zOrder={0} // Ensure it's behind local stream
-                    />
+                ) : isVideo ? (
+                    // Video Call UI
+                    remoteStream ? (
+                        <RTCView
+                            key={remoteStream.toURL()}
+                            streamURL={remoteStream.toURL()}
+                            style={styles.remoteStream}
+                            objectFit="cover"
+                            mirror={false}
+                            zOrder={0}
+                        />
+                    ) : (
+                        <View style={styles.connectingContainer}>
+                            <Text style={styles.connectingText}>Connecting...</Text>
+                        </View>
+                    )
                 ) : (
-                    <View style={styles.connectingContainer}>
-                        <Text style={styles.connectingText}>Connecting...</Text>
+                    // Voice Call UI
+                    <View style={styles.voiceCallContainer}>
+                        <Avatar
+                            source={chat?.avatar}
+                            size={120}
+                            style={{ marginBottom: 20 }}
+                        />
+                        <Text style={styles.callerName}>{chat?.name || 'Unknown'}</Text>
+                        <Text style={styles.callStatus}>
+                            {remoteStream ? 'Connected' : 'Connecting...'}
+                        </Text>
                     </View>
                 )}
             </View>
 
-            {/* Local Stream (PIP) */}
-            {localStream && isVideoEnabled && (
+            {/* Local Stream (PIP) - Only for video calls */}
+            {isVideo && localStream && isVideoEnabled && (
                 <View style={styles.localStreamContainer}>
                     <RTCView
                         key={localStream.toURL()}
@@ -151,14 +172,20 @@ export default function CallScreen() {
                     <MaterialIcons name="call-end" size={32} color="white" />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={[styles.controlButton, { backgroundColor: !isVideoEnabled ? 'white' : 'rgba(255,255,255,0.2)' }]} onPress={toggleVideo}>
-                    <FontAwesome name={!isVideoEnabled ? "video-camera" : "video-camera"} size={24} color={!isVideoEnabled ? 'black' : 'white'} />
-                    {!isVideoEnabled && <View style={styles.slashLine} />}
-                </TouchableOpacity>
+                {/* Video Toggle - Only for video calls */}
+                {isVideo && (
+                    <TouchableOpacity style={[styles.controlButton, { backgroundColor: !isVideoEnabled ? 'white' : 'rgba(255,255,255,0.2)' }]} onPress={toggleVideo}>
+                        <FontAwesome name={!isVideoEnabled ? "video-camera" : "video-camera"} size={24} color={!isVideoEnabled ? 'black' : 'white'} />
+                        {!isVideoEnabled && <View style={styles.slashLine} />}
+                    </TouchableOpacity>
+                )}
 
-                <TouchableOpacity style={[styles.controlButton, { backgroundColor: 'rgba(255,255,255,0.2)' }]} onPress={switchCamera}>
-                    <MaterialIcons name="flip-camera-ios" size={24} color="white" />
-                </TouchableOpacity>
+                {/* Switch Camera - Only for video calls */}
+                {isVideo && (
+                    <TouchableOpacity style={[styles.controlButton, { backgroundColor: 'rgba(255,255,255,0.2)' }]} onPress={switchCamera}>
+                        <MaterialIcons name="flip-camera-ios" size={24} color="white" />
+                    </TouchableOpacity>
+                )}
 
                 <TouchableOpacity style={[styles.controlButton, { backgroundColor: isSpeakerOn ? 'white' : 'rgba(255,255,255,0.2)' }]} onPress={toggleSpeaker}>
                     <MaterialIcons name={isSpeakerOn ? "volume-up" : "volume-off"} size={24} color={isSpeakerOn ? 'black' : 'white'} />
@@ -204,6 +231,20 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 24,
         fontWeight: 'bold',
+    },
+    voiceCallContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    callerName: {
+        color: 'white',
+        fontSize: 28,
+        fontWeight: 'bold',
+        marginBottom: 8,
+    },
+    callStatus: {
+        color: '#aaa',
+        fontSize: 16,
     },
     localStreamContainer: {
         position: 'absolute',
