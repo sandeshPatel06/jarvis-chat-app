@@ -56,7 +56,11 @@ class RequestOTPView(APIView):
             if '@' in identifier and not re.match(email_regex, identifier):
                 return Response({"error": "Invalid email format"}, status=status.HTTP_400_BAD_REQUEST)
 
-            otp_code = str(random.randint(100000, 999999))
+            from django.conf import settings
+            if settings.DEBUG:
+                otp_code = '000000'
+            else:
+                otp_code = str(random.randint(100000, 999999))
             session_id = str(uuid.uuid4())
             
             print(f"[{identifier}] Starting OTP request...", flush=True)
