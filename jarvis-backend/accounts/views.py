@@ -20,7 +20,7 @@ from django.contrib.auth import authenticate
 
 User = get_user_model()
 
-def background_send_email(subject, message, recipient_list):
+def background_send_email(subject, message, recipient_list, html_message=None):
     """Sends an email in a separate thread to avoid blocking the main request."""
     import threading
     from django.core.mail import send_mail
@@ -28,7 +28,7 @@ def background_send_email(subject, message, recipient_list):
     def run():
         try:
             print(f"[EmailThread] Sending to {recipient_list}...", flush=True)
-            send_mail(subject, message, None, recipient_list, fail_silently=False)
+            send_mail(subject, message, None, recipient_list, fail_silently=False, html_message=html_message)
             print(f"[EmailThread] Success for {recipient_list}", flush=True)
         except Exception as e:
             print(f"[EmailThread] FAILED for {recipient_list}: {str(e)}", flush=True)
@@ -73,11 +73,18 @@ class RequestOTPView(APIView):
 
             # 2. Send Email (Non-blocking)
             if '@' in identifier:
+                from django.template.loader import render_to_string
+                from django.utils.html import strip_tags
+
+                html_message = render_to_string('accounts/emails/otp_email.html', {'otp_code': otp_code})
+                plain_message = strip_tags(html_message)
+
                 print(f"[{identifier}] Dispatching email to thread...", flush=True)
                 background_send_email(
                     'Your OTP for Jarvis',
-                    f'Your OTP code is {otp_code}. It will expire in 10 minutes.',
-                    [identifier]
+                    plain_message,
+                    [identifier],
+                    html_message=html_message
                 )
             
             total_time = time.time() - start_time
@@ -168,6 +175,24 @@ class CompleteSignupView(APIView):
             token, _ = Token.objects.get_or_create(user=user)
             pending.delete() # Cleanup
             
+            # Send Welcome Email
+            if user.email:
+                try:
+                    from django.template.loader import render_to_string
+                    from django.utils.html import strip_tags
+
+                    html_message = render_to_string('accounts/emails/welcome_email.html', {'username': user.username})
+                    plain_message = strip_tags(html_message)
+                    
+                    background_send_email(
+                        'Welcome to Jarvis!',
+                        plain_message,
+                        [user.email],
+                        html_message=html_message
+                    )
+                except Exception as e:
+                    print(f"Failed to send welcome email: {e}", flush=True)
+
             return Response({
                 "token": token.key,
                 "user": UserSerializer(user).data
@@ -191,6 +216,65 @@ class UniversalLoginView(APIView):
         
         if user and user.check_password(password):
             token, _ = Token.objects.get_or_create(user=user)
+            
+            # Send login notification email
+            if user.email:
+                try:
+                    # Basic info
+                    import datetime
+                    login_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # IP and Location
+                    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+                    if x_forwarded_for:
+                        ip = x_forwarded_for.split(',')[0]
+                    else:
+                        ip = request.META.get('REMOTE_ADDR')
+                    
+                    location = "Unknown"
+                    if ip and ip != '127.0.0.1':
+                        try:
+                            # Simple IP geolocation (using ipinfo.io or similar if available, or just log IP)
+                            # For now, we will just use the IP. 
+                            # In a real app, you might use a library like 'geoip2' or an external API.
+                            import requests
+                            resp = requests.get(f"https://ipinfo.io/{ip}/json", timeout=2)
+                            if resp.status_code == 200:
+                                data = resp.json()
+                                city = data.get('city', 'Unknown')
+                                region = data.get('region', '')
+                                country = data.get('country', '')
+                                location = f"{city}, {region}, {country} ({ip})"
+                            else:
+                                location = f"IP: {ip}"
+                        except:
+                            location = f"IP: {ip}"
+                    else:
+                         location = "Localhost"
+
+                    # Device Info
+                    user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown Device')
+                    
+                    from django.template.loader import render_to_string
+                    from django.utils.html import strip_tags
+
+                    html_message = render_to_string('accounts/emails/login_notification.html', {
+                        'username': user.username,
+                        'time': login_time,
+                        'location': location,
+                        'device': user_agent
+                    })
+                    plain_message = strip_tags(html_message)
+                    
+                    background_send_email(
+                        'New Login to Jarvis',
+                        plain_message,
+                        [user.email],
+                        html_message=html_message
+                    )
+                except Exception as e:
+                    print(f"Failed to send login notification: {e}", flush=True)
+
             return Response({
                 'token': token.key,
                 'user': UserSerializer(user).data

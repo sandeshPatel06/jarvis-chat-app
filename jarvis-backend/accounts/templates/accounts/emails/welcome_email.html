@@ -1,0 +1,13 @@
+{% extends "accounts/emails/base_email.html" %}
+
+{% block content %}
+<h2>Welcome to Jarvis!</h2>
+<p>Hi {{ username }},</p>
+<p>We're thrilled to have you on board. Jarvis is your new AI companion, ready to assist you.</p>
+<p>To get started, simply log in to your account and start chatting.</p>
+<div style="text-align: center;">
+    <a href="https://jarvis-chat-nhi5.onrender.com/" class="button">Get Started</a>
+</div>
+<p>If you have any questions, feel free to reply to this email.</p>
+<p>Best regards,<br>The Jarvis Team</p>
+{% endblock %}

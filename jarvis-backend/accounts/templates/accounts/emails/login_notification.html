@@ -1,0 +1,31 @@
+{% extends "accounts/emails/base_email.html" %}
+
+{% block content %}
+<h2>New Login to Your Jarvis Account</h2>
+<p>Hi {{ username }},</p>
+<p>We detected a new login to your Jarvis account.</p>
+
+<table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+    <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; width: 30%;">Time:</td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">{{ time }}</td>
+    </tr>
+    <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">Location:</td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">{{ location }}</td>
+    </tr>
+    <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">Device:</td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee;">{{ device }}</td>
+    </tr>
+</table>
+
+<p>If this was you, you can safely ignore this email.</p>
+<div
+    style="background-color: #ffebee; border: 1px solid #ef5350; color: #b71c1c; padding: 15px; border-radius: 4px; margin: 20px 0;">
+    <strong>If this wasn't you:</strong><br>
+    Please change your password immediately and contact support.
+</div>
+
+<p>Best regards,<br>The Jarvis Team</p>
+{% endblock %}
