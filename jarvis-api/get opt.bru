@@ -1,0 +1,21 @@
+meta {
+  name: get opt
+  type: http
+  seq: 1
+}
+
+post {
+  url: http://localhost:8000/api/auth/request-otp/
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identifier":"sandeshg@yopmail.com"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

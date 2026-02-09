@@ -4,7 +4,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'jarvis-app/**'
   pull_request:
+    paths:
+      - 'jarvis-app/**'
 
 jobs:
   build:
