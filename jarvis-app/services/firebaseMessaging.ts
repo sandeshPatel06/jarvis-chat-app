@@ -66,7 +66,62 @@ async function handleRemoteMessage(remoteMessage: any, context: 'foreground' | '
             // Standardize field extraction with multiple fallbacks
             const senderName = data?.sender_name || firebaseNotification?.title || 'New Message';
             const messageText = data?.text || data?.body || firebaseNotification?.body || 'You have a new message';
-            const avatarUrl = data?.sender_avatar ? getMediaUrl(data.sender_avatar) : null;
+
+            let avatarUrl = data?.sender_avatar ? getMediaUrl(data.sender_avatar) : null;
+
+            // Validate URL for Notifee (must be http/https or file://)
+            if (avatarUrl && !avatarUrl.startsWith('http') && !avatarUrl.startsWith('file')) {
+                console.log('[Firebase] Invalid avatar URL for notification:', avatarUrl);
+                avatarUrl = null;
+            }
+
+            // Construct Android config dynamically to avoid passing undefined/null for icons
+            const person: any = {
+                name: senderName,
+            };
+
+            const androidConfig: any = {
+                channelId,
+                importance: AndroidImportance.HIGH,
+                style: {
+                    type: AndroidStyle.MESSAGING,
+                    person: person,
+                    messages: [
+                        {
+                            text: messageText,
+                            timestamp: Date.now(),
+                            person: person,
+                        },
+                    ],
+                },
+                pressAction: {
+                    id: 'default',
+                    launchActivity: 'default',
+                },
+                actions: [
+                    {
+                        title: 'Reply',
+                        pressAction: {
+                            id: 'reply',
+                        },
+                        input: {
+                            placeholder: 'Type a message...',
+                        },
+                    },
+                    {
+                        title: 'Mark as Read',
+                        pressAction: {
+                            id: 'mark_as_read',
+                        },
+                    },
+                ],
+            };
+
+            // Only add icon properties if we have a valid URL
+            if (avatarUrl) {
+                androidConfig.largeIcon = avatarUrl;
+                person.icon = avatarUrl;
+            }
 
             await notifee.displayNotification({
                 id: data?.message_id || Date.now().toString(),
@@ -77,50 +132,9 @@ async function handleRemoteMessage(remoteMessage: any, context: 'foreground' | '
                     conversation_id: data?.conversation_id,
                     message_id: data?.message_id,
                 },
-                android: {
-                    channelId,
-                    importance: AndroidImportance.HIGH,
-                    largeIcon: avatarUrl || undefined,
-                    style: {
-                        type: AndroidStyle.MESSAGING,
-                        person: {
-                            name: senderName,
-                            icon: avatarUrl || undefined,
-                        },
-                        messages: [
-                            {
-                                text: messageText,
-                                timestamp: Date.now(),
-                                person: {
-                                    name: senderName,
-                                    icon: avatarUrl || undefined,
-                                },
-                            },
-                        ],
-                    },
-                    pressAction: {
-                        id: 'default',
-                        launchActivity: 'default',
-                    },
-                    actions: [
-                        {
-                            title: 'Reply',
-                            pressAction: {
-                                id: 'reply',
-                            },
-                            input: {
-                                placeholder: 'Type a message...',
-                            },
-                        },
-                        {
-                            title: 'Mark as Read',
-                            pressAction: {
-                                id: 'mark_as_read',
-                            },
-                        },
-                    ],
-                },
+                android: androidConfig,
             });
+
             console.log(`[Firebase ${context}] ✅ Message notification displayed`);
         } else {
             console.log(`[Firebase ${context}] ⚠️ Unknown notification type or missing data`);
