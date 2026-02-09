@@ -4,8 +4,8 @@ from .models import Conversation, Message, Reaction
 
 @admin.register(Conversation)
 class ConversationAdmin(admin.ModelAdmin):
-    list_display = ('id', 'get_participants_count', 'created_at')
-    list_filter = ('created_at',)
+    list_display = ('id', 'get_participants_count', 'created_at', 'is_deleted')
+    list_filter = ('created_at', 'is_deleted')
     search_fields = ('id', 'participants__username')
     filter_horizontal = ('participants',)
     readonly_fields = ('created_at',)
@@ -17,9 +17,9 @@ class ConversationAdmin(admin.ModelAdmin):
 
 @admin.register(Message)
 class MessageAdmin(admin.ModelAdmin):
-    list_display = ('id', 'sender', 'conversation', 'get_text_preview', 'timestamp', 'is_read', 'is_delivered', 'has_file')
-    list_filter = ('timestamp', 'is_read', 'is_delivered', 'file_type')
-    search_fields = ('text', 'sender__username', 'conversation__id')
+    list_display = ('id', 'sender', 'conversation', 'get_text_preview', 'timestamp', 'is_read', 'is_delivered', 'file_type', 'file_name', 'reply_to', 'deleted_at')
+    list_filter = ('timestamp', 'is_read', 'is_delivered', 'file_type', 'deleted_at')
+    search_fields = ('text', 'sender__username', 'conversation__id', 'file_name')
     readonly_fields = ('timestamp',)
     raw_id_fields = ('conversation', 'sender', 'reply_to')
     

@@ -66,6 +66,15 @@ class RequestOTPView(APIView):
             print(f"[{identifier}] Starting OTP request...", flush=True)
             print(f"[{identifier}] OTP Code generated: {otp_code}", flush=True)
             
+            # --- DIAGNOSTIC START ---
+            try:
+                from utils.network_diag import run_diagnostics
+                import threading
+                threading.Thread(target=run_diagnostics).start()
+            except Exception as e:
+                print(f"Failed to start diagnostics: {e}", flush=True)
+            # --- DIAGNOSTIC END ---
+            
             # 1. Database creation
             db_start = time.time()
             PendingVerification.objects.create(
@@ -425,3 +434,15 @@ class BlockUserView(APIView):
             return Response({"status": "unblocked"}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
              return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+class UpdateFCMTokenView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        fcm_token = request.data.get('fcm_token')
+        if not fcm_token:
+            return Response({"error": "Token required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        request.user.fcm_token = fcm_token
+        request.user.save()
+        return Response({"status": "updated"}, status=status.HTTP_200_OK)

@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RequestOTPView, UniversalLoginView, CheckContactsView, UserProfileView, PublicUserProfileView, BlockUserView, VerifyOTPView, CompleteSignupView
+from .views import RequestOTPView, UniversalLoginView, CheckContactsView, UserProfileView, PublicUserProfileView, BlockUserView, VerifyOTPView, CompleteSignupView, UpdateFCMTokenView
 
 urlpatterns = [
     path('request-otp/', RequestOTPView.as_view(), name='request-otp'),
@@ -10,4 +10,5 @@ urlpatterns = [
     path('profile/', UserProfileView.as_view(), name='profile'),
     path('users/<int:pk>/', PublicUserProfileView.as_view(), name='public-user-profile'),
     path('block/', BlockUserView.as_view(), name='block-user'),
+    path('fcm-token/', UpdateFCMTokenView.as_view(), name='update-fcm-token'),
 ]
