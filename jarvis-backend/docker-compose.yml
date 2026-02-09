@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - DJANGO_DEBUG=True
+      - DJANGO_ALLOWED_HOSTS=*
+      - DJANGO_SECRET_KEY=django-insecure-docker-dev-key
+      - DJANGO_CORS_ALLOW_ALL_ORIGINS=True

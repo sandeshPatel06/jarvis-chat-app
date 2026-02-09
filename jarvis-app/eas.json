@@ -1,0 +1,42 @@
+{
+    "cli": {
+        "version": ">= 10.0.0",
+        "appVersionSource": "remote"
+    },
+    "build": {
+        "development": {
+            "developmentClient": true,
+            "distribution": "internal",
+            "channel": "development",
+            "env": {
+                "EXPO_PUBLIC_BACKEND_URL": "https://jarvis-chat-nhi5.onrender.com",
+                "EXPO_PUBLIC_WS_URL": "wss://jarvis-chat-nhi5.onrender.com/ws/chat",
+                "EXPO_PUBLIC_APP_DOWNLOAD_LINK": "https://jarvis-chat.app/download",
+                "EXPO_PUBLIC_PROJECT_ID": "a51c6b97-eece-4ad5-896b-7825ea991232"
+            }
+        },
+        "preview": {
+            "distribution": "internal",
+            "channel": "preview",
+            "env": {
+                "EXPO_PUBLIC_BACKEND_URL": "https://jarvis-chat-nhi5.onrender.com",
+                "EXPO_PUBLIC_WS_URL": "wss://jarvis-chat-nhi5.onrender.com/ws/chat",
+                "EXPO_PUBLIC_APP_DOWNLOAD_LINK": "https://jarvis-chat.app/download",
+                "EXPO_PUBLIC_PROJECT_ID": "a51c6b97-eece-4ad5-896b-7825ea991232"
+            }
+        },
+        "production": {
+            "channel": "production",
+            "autoIncrement": true,
+            "env": {
+                "EXPO_PUBLIC_BACKEND_URL": "https://jarvis-chat-nhi5.onrender.com",
+                "EXPO_PUBLIC_WS_URL": "wss://jarvis-chat-nhi5.onrender.com/ws/chat",
+                "EXPO_PUBLIC_APP_DOWNLOAD_LINK": "https://jarvis-chat.app/download",
+                "EXPO_PUBLIC_PROJECT_ID": "a51c6b97-eece-4ad5-896b-7825ea991232"
+            }
+        }
+    },
+    "submit": {
+        "production": {}
+    }
+}

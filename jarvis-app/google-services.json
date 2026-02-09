@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "766562507304",
+    "project_id": "comjarvischatapp",
+    "storage_bucket": "comjarvischatapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:766562507304:android:232636b2230071e498b31d",
+        "android_client_info": {
+          "package_name": "com.jarvischat.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCspSjkQ0JZkmljcikJnRT12v7DwrZRWZg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
