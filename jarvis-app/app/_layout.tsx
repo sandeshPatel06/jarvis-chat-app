@@ -185,10 +185,6 @@ function RootLayoutNav() {
     } else if (token && inAuthGroup) {
       router.replace('/(tabs)');
     }
-
-    if (token) {
-      requestFirebasePermission();
-    }
   }, [token, segments, hasHydrated, router]);
 
   if (appLockEnabled && isLocked) {

@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
-import { getMediaUrl } from '@/utils/media';
+import { Avatar } from '@/components/ui/Avatar';
 
 interface CallLogItemProps {
     item: any;
@@ -21,8 +21,9 @@ const CallLogItem = ({ item, user, colors, onPress }: CallLogItemProps) => {
             onPress={() => onPress(otherParty.username, item.is_video)}
             activeOpacity={0.7}
         >
-            <Image
-                source={getMediaUrl(otherParty.profile_picture) ? { uri: getMediaUrl(otherParty.profile_picture)! } : require('@/assets/images/default-avatar.png')}
+            <Avatar
+                source={otherParty.profile_picture}
+                size={50}
                 style={styles.avatar}
             />
             <View style={styles.info}>

@@ -110,7 +110,6 @@ export default function CallScreen() {
                     <View style={styles.connectingContainer}>
                         <FontAwesome name="phone-square" size={60} color="red" style={{ marginBottom: 20 }} />
                         <Text style={[styles.connectingText, { color: 'red' }]}>Call Ended</Text>
-                        <Text style={styles.remoteName}>{chat?.name || 'Unknown'}</Text>
                     </View>
                 ) : remoteStream ? (
                     <RTCView
@@ -124,7 +123,6 @@ export default function CallScreen() {
                 ) : (
                     <View style={styles.connectingContainer}>
                         <Text style={styles.connectingText}>Connecting...</Text>
-                        <Text style={styles.remoteName}>{chat?.name || 'Unknown'}</Text>
                     </View>
                 )}
             </View>

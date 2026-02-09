@@ -27,6 +27,8 @@ import * as Clipboard from 'expo-clipboard';
 import * as MediaLibrary from 'expo-media-library';
 import { cacheDirectory, documentDirectory, downloadAsync } from 'expo-file-system/legacy';
 import { getMediaUrl } from '@/utils/media';
+import { api } from '@/services/api';
+
 
 export default function ChatDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -49,8 +51,13 @@ export default function ChatDetailScreen() {
     const deleteChat = useStore(useCallback((state: any) => state.deleteChat, []));
     const forwardMessage = useStore(useCallback((state: any) => state.forwardMessage, []));
     const showAlert = useStore(useCallback((state: any) => state.showAlert, []));
+    const showToast = useStore(useCallback((state: any) => state.showToast, []));
     const animationsEnabled = useStore(useCallback((state: any) => state.animationsEnabled, []));
     const chats = useStore(useCallback((state: any) => state.chats, []));
+    const muteChat = useStore(useCallback((state: any) => state.muteChat, []));
+    const unmuteChat = useStore(useCallback((state: any) => state.unmuteChat, []));
+    const isChatMuted = useStore(useCallback((state: any) => state.isChatMuted, []));
+    const clearChatMessages = useStore(useCallback((state: any) => state.clearChat, []));
 
     const [text, setText] = useState('');
     const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -65,7 +72,11 @@ export default function ChatDetailScreen() {
 
     // Chat Options
     const [chatOptionsVisible, setChatOptionsVisible] = useState(false);
-    const [loadingMore, setLoadingMore] = useState(false); // New
+    const [loadingMore, setLoadingMore] = useState(false);
+
+    // Search State
+    const [searchVisible, setSearchVisible] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Forward Message State
     const [forwardModalVisible, setForwardModalVisible] = useState(false);
@@ -383,6 +394,32 @@ export default function ChatDetailScreen() {
                         style={{ backgroundColor: backgroundSource ? 'transparent' : colors.background }}
                     />
 
+                    {/* Search Bar */}
+                    {searchVisible && (
+                        <View style={[styles.searchBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                            <MaterialCommunityIcons name="magnify" size={20} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                            <TextInput
+                                style={[styles.searchInput, { color: colors.text }]}
+                                placeholder="Search messages..."
+                                placeholderTextColor={colors.textSecondary}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                                autoFocus
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')} style={{ marginRight: 8 }}>
+                                    <MaterialCommunityIcons name="close-circle" size={20} color={colors.textSecondary} />
+                                </TouchableOpacity>
+                            )}
+                            <TouchableOpacity onPress={() => {
+                                setSearchVisible(false);
+                                setSearchQuery('');
+                            }}>
+                                <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
                     {/* Chat Options Modal */}
                     <Modal
                         transparent={true}
@@ -392,32 +429,167 @@ export default function ChatDetailScreen() {
                     >
                         <Pressable style={styles.modalOverlay} onPress={() => setChatOptionsVisible(false)}>
                             <View style={[styles.chatOptionsContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                <TouchableOpacity onPress={async () => {
+                                {/* View Contact Profile */}
+                                <TouchableOpacity onPress={() => {
                                     setChatOptionsVisible(false);
-                                    const { exportChatAsEmail } = await import('@/utils/chatExport');
-                                    await exportChatAsEmail(chat.messages, chat.name);
+                                    if (chat.user_id) {
+                                        router.push(`/user/${chat.user_id}`);
+                                    } else {
+                                        router.push(`/contact/${chat.id}`);
+                                    }
                                 }} style={styles.menuOption}>
-                                    <Text style={{ color: colors.text, fontSize: 16 }}>Export as Email</Text>
-                                    <MaterialCommunityIcons name="email-outline" size={20} color={colors.text} />
+                                    <Text style={{ color: colors.text, fontSize: 16 }}>View Profile</Text>
+                                    <MaterialCommunityIcons name="account-outline" size={20} color={colors.text} />
                                 </TouchableOpacity>
+
+                                {/* Search in Chat */}
+                                <TouchableOpacity onPress={() => {
+                                    setChatOptionsVisible(false);
+                                    setSearchVisible(true);
+                                }} style={styles.menuOption}>
+                                    <Text style={{ color: colors.text, fontSize: 16 }}>Search</Text>
+                                    <MaterialCommunityIcons name="magnify" size={20} color={colors.text} />
+                                </TouchableOpacity>
+
+                                {/* Mute Notifications */}
+                                <TouchableOpacity onPress={() => {
+                                    setChatOptionsVisible(false);
+                                    const isMuted = isChatMuted(chat.id);
+                                    if (isMuted) {
+                                        unmuteChat(chat.id);
+                                        showToast('success', 'Unmuted', `Notifications for ${chat.name} are now enabled`);
+                                    } else {
+                                        muteChat(chat.id);
+                                        showToast('success', 'Muted', `Notifications for ${chat.name} are now disabled`);
+                                    }
+                                }} style={styles.menuOption}>
+                                    <Text style={{ color: colors.text, fontSize: 16 }}>
+                                        {isChatMuted(chat.id) ? 'Unmute' : 'Mute'} Notifications
+                                    </Text>
+                                    <MaterialCommunityIcons
+                                        name={isChatMuted(chat.id) ? "bell" : "bell-off-outline"}
+                                        size={20}
+                                        color={colors.text}
+                                    />
+                                </TouchableOpacity>
+
+                                {/* Wallpaper */}
+                                <TouchableOpacity onPress={() => {
+                                    setChatOptionsVisible(false);
+                                    router.push('/settings/wallpaper');
+                                }} style={styles.menuOption}>
+                                    <Text style={{ color: colors.text, fontSize: 16 }}>Wallpaper</Text>
+                                    <MaterialCommunityIcons name="image-outline" size={20} color={colors.text} />
+                                </TouchableOpacity>
+
+                                {/* Export Chat */}
                                 <TouchableOpacity onPress={async () => {
                                     setChatOptionsVisible(false);
                                     try {
+                                        const Share = await import('react-native').then((m: any) => m.Share);
+                                        const messageText = chat.messages
+                                            .map((m: any) => `[${new Date(m.timestamp).toLocaleString()}] ${m.sender}: ${m.text}`)
+                                            .reverse()
+                                            .join('\n');
+                                        await Share.share({
+                                            message: `Chat with ${chat.name}\n\n${messageText}`,
+                                            title: `Chat with ${chat.name}`
+                                        });
+                                    } catch (error) {
+                                        console.error('Export error:', error);
+                                        showAlert('Error', 'Failed to export chat');
+                                    }
+                                }} style={styles.menuOption}>
+                                    <Text style={{ color: colors.text, fontSize: 16 }}>Export Chat</Text>
+                                    <MaterialCommunityIcons name="export" size={20} color={colors.text} />
+                                </TouchableOpacity>
+
+                                {/* Clear Chat History */}
+                                <TouchableOpacity onPress={() => {
+                                    setChatOptionsVisible(false);
+                                    showAlert(
+                                        'Clear Chat',
+                                        'Are you sure you want to clear all messages in this chat? This cannot be undone.',
+                                        [
+                                            { text: 'Cancel', style: 'cancel' },
+                                            {
+                                                text: 'Clear',
+                                                style: 'destructive',
+                                                onPress: async () => {
+                                                    try {
+                                                        await clearChatMessages(chat.id);
+                                                        showToast('success', 'Chat Cleared', 'All messages have been deleted');
+                                                    } catch (error) {
+                                                        showAlert('Error', 'Failed to clear chat. Please try again.');
+                                                    }
+                                                },
+                                            },
+                                        ]
+                                    );
+                                }} style={styles.menuOption}>
+                                    <Text style={{ color: colors.text, fontSize: 16 }}>Clear Chat</Text>
+                                    <MaterialCommunityIcons name="broom" size={20} color={colors.text} />
+                                </TouchableOpacity>
+
+                                {/* Divider */}
+                                <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+
+                                {/* Send SMS */}
+                                <TouchableOpacity onPress={async () => {
+                                    setChatOptionsVisible(false);
+                                    try {
+                                        // Get user phone number from chat.user_id
+                                        if (!chat.user_id) {
+                                            showAlert('Error', 'Cannot send SMS: User information not available');
+                                            return;
+                                        }
+
+                                        const token = useStore.getState().token;
+                                        if (!token) {
+                                            showAlert('Error', 'Authentication required');
+                                            return;
+                                        }
+
+                                        // Fetch user profile to get phone number
+                                        const userProfile = await api.auth.getUserProfile(token, chat.user_id);
+
+                                        if (!userProfile.phone_number) {
+                                            showAlert('No Phone Number', 'This user does not have a phone number registered');
+                                            return;
+                                        }
+
+                                        // Check if SMS is available on device
                                         const isAvailable = await import('expo-sms').then(m => m.isAvailableAsync());
                                         if (!isAvailable) {
                                             showAlert('SMS Not Available', 'SMS is not available on this device');
                                             return;
                                         }
+
+                                        // Open SMS with pre-filled phone number and message
                                         const SMS = await import('expo-sms');
-                                        await SMS.sendSMSAsync([], `Hi! Let's chat on Jarvis.`);
+                                        const result = await SMS.sendSMSAsync(
+                                            [userProfile.phone_number],
+                                            `Hi ${chat.name}! Let's chat on Jarvis.`
+                                        );
+
+                                        // If SMS was sent successfully, you could optionally notify backend
+                                        // For now, just show success feedback
+                                        if (result.result === 'sent') {
+                                            console.log('SMS sent successfully to', userProfile.phone_number);
+                                        }
                                     } catch (error) {
                                         console.error('SMS error:', error);
-                                        showAlert('Error', 'Failed to open SMS');
+                                        showAlert('Error', 'Failed to send SMS');
                                     }
                                 }} style={styles.menuOption}>
                                     <Text style={{ color: colors.text, fontSize: 16 }}>Send SMS</Text>
                                     <MaterialCommunityIcons name="message-text-outline" size={20} color={colors.text} />
                                 </TouchableOpacity>
+
+                                {/* Divider */}
+                                <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+
+                                {/* Delete Chat */}
                                 <TouchableOpacity onPress={() => {
                                     setChatOptionsVisible(false);
                                     showAlert(
@@ -533,7 +705,9 @@ export default function ChatDetailScreen() {
                     >
                         <FlatList
                             ref={flatListRef}
-                            data={chat.messages}
+                            data={searchQuery ? chat.messages.filter((m: any) =>
+                                m.text.toLowerCase().includes(searchQuery.toLowerCase())
+                            ) : chat.messages}
                             keyExtractor={(item) => item.id.toString()}
                             renderItem={renderMessage}
                             inverted={true}
@@ -634,6 +808,22 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingVertical: 12,
+    },
+    menuDivider: {
+        height: 1,
+        marginVertical: 8,
+    },
+    searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 16,
+        paddingVertical: 4,
     },
     chatOptionsContainer: {
         position: 'absolute',

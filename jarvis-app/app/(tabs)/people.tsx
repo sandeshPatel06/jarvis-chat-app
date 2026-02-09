@@ -2,16 +2,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { Text, View } from '@/components/Themed';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { StyleSheet, FlatList, Image, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { StyleSheet, FlatList, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useStore } from '@/store';
 import { api } from '@/services/api';
-import { getMediaUrl } from '@/utils/media';
 import { formatLastSeen } from '@/utils/date';
 import { useRouter } from 'expo-router';
 import * as SMS from 'expo-sms';
 import * as Contacts from 'expo-contacts';
+import { Avatar } from '@/components/ui/Avatar';
 
 interface Contact {
     id: string;
@@ -173,12 +173,10 @@ export default function PeopleScreen() {
 
         return (
             <View style={[styles.contactItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Image
-                    source={
-                        getMediaUrl(item.profile_picture)
-                            ? { uri: getMediaUrl(item.profile_picture)! }
-                            : require('@/assets/images/default-avatar.png')
-                    }
+                <Avatar
+                    source={item.profile_picture}
+                    size={50}
+                    online={item.is_online && hasJarvisAccount}
                     style={styles.avatar}
                 />
                 <View style={styles.contactInfo}>

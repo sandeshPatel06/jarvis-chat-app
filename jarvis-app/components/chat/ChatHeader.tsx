@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { getMediaUrl } from '@/utils/media';
 import { formatLastSeen } from '@/utils/date';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Avatar } from '@/components/ui/Avatar';
 
 interface ChatHeaderProps {
     chat: Chat;
@@ -35,7 +36,7 @@ export const ChatHeader = ({ chat, typingUser, onOptionsPress, onSMSPress, style
 
 
 
-    const avatarUrl = getMediaUrl(chat.avatar);
+
 
     return (
         <View
@@ -71,12 +72,9 @@ export const ChatHeader = ({ chat, typingUser, onOptionsPress, onSMSPress, style
                     }
                 }}
             >
-                <Image
-                    source={
-                        avatarUrl
-                            ? { uri: avatarUrl }
-                            : require('@/assets/images/default-avatar.png')
-                    }
+                <Avatar
+                    source={chat.avatar}
+                    size={42}
                     style={styles.headerAvatar}
                 />
 

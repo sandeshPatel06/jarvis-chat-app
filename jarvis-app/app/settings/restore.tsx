@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,7 +9,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { useStore } from '@/store';
 import { Chat } from '@/types';
 import { api } from '@/services/api';
-import { getMediaUrl } from '@/utils/media';
+import { Avatar } from '@/components/ui/Avatar';
 
 export default function RestoreSettingsScreen() {
     const { colors, isDark } = useAppTheme();
@@ -63,7 +63,6 @@ export default function RestoreSettingsScreen() {
 
     const renderItem = useCallback(({ item }: { item: Chat }) => {
         const isSelected = selectedChatIds.includes(parseInt(item.id));
-        const avatarUrl = getMediaUrl(item.avatar);
 
         return (
             <TouchableOpacity
@@ -80,8 +79,9 @@ export default function RestoreSettingsScreen() {
             >
                 <View style={styles.chatInfo}>
                     <View style={styles.avatarContainer}>
-                        <Image
-                            source={avatarUrl ? { uri: avatarUrl } : require('@/assets/images/default-avatar.png')}
+                        <Avatar
+                            source={item.avatar}
+                            size={54}
                             style={styles.avatar}
                         />
                         {isSelected && (

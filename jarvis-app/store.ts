@@ -127,6 +127,15 @@ interface AppState {
     blockUser: (userId: number) => Promise<void>;
     unblockUser: (userId: number) => Promise<void>;
 
+    // Mute Notifications
+    mutedChats: string[];
+    muteChat: (chatId: string) => void;
+    unmuteChat: (chatId: string) => void;
+    isChatMuted: (chatId: string) => boolean;
+
+    // Clear Chat
+    clearChat: (chatId: string) => Promise<void>;
+
     // Restore
     restoreChats: (conversationIds: number[], restoreDate?: string) => Promise<void>;
     initApp: () => Promise<void>;
@@ -1635,6 +1644,50 @@ export const useStore = create<AppState>((set, get) => {
         }
         ,
 
+        // Mute Notifications
+        mutedChats: [],
+        muteChat: (chatId: string) => {
+            set((state) => {
+                const mutedChats = [...state.mutedChats, chatId];
+                AsyncStorage.setItem('mutedChats', JSON.stringify(mutedChats)).catch(console.error);
+                return { mutedChats };
+            });
+        },
+        unmuteChat: (chatId: string) => {
+            set((state) => {
+                const mutedChats = state.mutedChats.filter(id => id !== chatId);
+                AsyncStorage.setItem('mutedChats', JSON.stringify(mutedChats)).catch(console.error);
+                return { mutedChats };
+            });
+        },
+        isChatMuted: (chatId: string) => {
+            return get().mutedChats.includes(chatId);
+        },
+
+        // Clear Chat
+        clearChat: async (chatId: string) => {
+            try {
+                const { token } = get();
+                if (!token) throw new Error('Not authenticated');
+
+                // Clear messages on server
+                await api.chat.clearMessages(token, chatId);
+
+                // Clear messages locally
+                set((state) => ({
+                    chats: state.chats.map((c) =>
+                        c.id === chatId ? { ...c, messages: [], lastMessage: '', lastMessageTime: new Date() } : c
+                    )
+                }));
+
+                // Clear from database
+                await database.clearChatMessages(chatId);
+            } catch (error) {
+                console.error('Failed to clear chat:', error);
+                throw error;
+            }
+        },
+
         initApp: async () => {
             try {
                 // 1. Initialize SQLite
@@ -1644,6 +1697,7 @@ export const useStore = create<AppState>((set, get) => {
                 const token = await SecureStore.getItemAsync('token');
                 const userStr = await AsyncStorage.getItem('user');
                 const theme = (await AsyncStorage.getItem('theme')) as 'system' | 'light' | 'dark' | null;
+                const mutedChatsStr = await AsyncStorage.getItem('mutedChats');
 
                 if (token && userStr) {
                     set({ token, user: JSON.parse(userStr) });
@@ -1653,6 +1707,10 @@ export const useStore = create<AppState>((set, get) => {
 
                 if (theme) {
                     set({ theme });
+                }
+
+                if (mutedChatsStr) {
+                    set({ mutedChats: JSON.parse(mutedChatsStr) });
                 }
 
                 set({ hasHydrated: true });

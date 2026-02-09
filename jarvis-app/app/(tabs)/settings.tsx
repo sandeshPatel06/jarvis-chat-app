@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Image, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { Text, View } from '@/components/Themed';
 import { useStore } from '@/store';
@@ -8,8 +8,8 @@ import { useRouter } from 'expo-router';
 
 
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { getMediaUrl } from '@/utils/media';
 import SettingCard from '@/components/settings/SettingCard';
+import { Avatar } from '@/components/ui/Avatar';
 
 const SettingItem = React.memo(({ icon, title, subtitle, onPress, badge, color, colors }: any) => {
     return (
@@ -77,11 +77,12 @@ export default function SettingsScreen() {
                     >
                         <View style={styles.profileContent}>
                             <View style={styles.avatarWrapper}>
-                                <Image
-                                    source={getMediaUrl(user?.profile_picture) ? { uri: getMediaUrl(user?.profile_picture)! } : require('@/assets/images/default-avatar.png')}
+                                <Avatar
+                                    source={user?.profile_picture}
+                                    size={76}
+                                    online={true}
                                     style={styles.avatar}
                                 />
-                                <View style={[styles.onlineStatus, { backgroundColor: colors.success, borderColor: colors.card }]} />
                             </View>
                             <View style={styles.profileInfo}>
                                 <Text style={[styles.name, { color: colors.text }]}>{user?.username || 'User'}</Text>
