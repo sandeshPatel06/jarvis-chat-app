@@ -114,6 +114,27 @@ export const api = {
                 throw error;
             }
         },
+        updateFCMToken: async (token: string, fcmToken: string) => {
+            const url = `${API_URL}/auth/fcm-token/`;
+            try {
+                log(`POST ${url}`, { fcm_token: fcmToken });
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Token ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ fcm_token: fcmToken }),
+                });
+                const json = await response.json();
+                log('Update FCM Token response', { status: response.status, json });
+                if (!response.ok) throw new Error(JSON.stringify(json) || 'Failed to update FCM token');
+                return json;
+            } catch (error) {
+                log('Update FCM Token error', error);
+                throw error;
+            }
+        },
         deleteAccount: async (token: string) => {
             const url = `${API_URL}/auth/profile/`;
             try {

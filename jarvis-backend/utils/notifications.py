@@ -6,22 +6,33 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+import json
+
 # Initialize Firebase
 def _initialize():
     if not firebase_admin._apps:
         try:
+            # 1. Try environment variable (Production/CI)
+            env_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+            if env_json:
+                logger.info("Loading Firebase credentials from environment variable")
+                cred_dict = json.loads(env_json)
+                cred = credentials.Certificate(cred_dict)
+                firebase_admin.initialize_app(cred)
+                return
+
+            # 2. Fallback to file (Local Development)
             # BASE_DIR is utils/.. -> jarvis-backend/
             BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             JSON_PATH = os.path.join(BASE_DIR, "service-account.json")
 
             logger.info(f"Loading Firebase JSON from: {JSON_PATH}")
             
-            if not os.path.exists(JSON_PATH):
-                logger.error(f"Service account file not found at: {JSON_PATH}")
-                return
-
-            cred = credentials.Certificate(JSON_PATH)
-            firebase_admin.initialize_app(cred)
+            if os.path.exists(JSON_PATH):
+                cred = credentials.Certificate(JSON_PATH)
+                firebase_admin.initialize_app(cred)
+            else:
+                logger.error(f"Service account not found in ENV or at: {JSON_PATH}")
 
         except Exception as e:
             logger.error(f"Firebase Init Failed: {e}")

@@ -270,7 +270,7 @@ export async function syncTokenWithBackend() {
         const fcmToken = await getFCMToken();
         if (fcmToken) {
             console.log('[Firebase] 🔄 Syncing FCM Token with backend...');
-            await api.auth.updateProfile(token, { fcm_token: fcmToken });
+            await api.auth.updateFCMToken(token, fcmToken);
             console.log('[Firebase] ✅ FCM Token synced');
         }
     } catch (error) {
