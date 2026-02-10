@@ -748,63 +748,60 @@ export default function ChatDetailScreen() {
 
                                         <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 10 }} />
 
-                                        {selectedMessage && (
+                                        <TouchableOpacity onPress={handleReplyOption} style={styles.menuOption}>
+                                            <Text style={{ color: colors.text, fontSize: 16 }}>Reply</Text>
+                                            <MaterialCommunityIcons name="reply" size={20} color={colors.text} />
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity onPress={handleCopyOption} style={styles.menuOption}>
+                                            <Text style={{ color: colors.text, fontSize: 16 }}>Copy</Text>
+                                            <MaterialCommunityIcons name="content-copy" size={20} color={colors.text} />
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                if (selectedMessage) {
+                                                    if (selectedMessage.is_pinned) {
+                                                        unpinMessage(chat.id, selectedMessage.id);
+                                                    } else {
+                                                        pinMessage(chat.id, selectedMessage.id);
+                                                    }
+                                                    setModalVisible(false);
+                                                    setSelectedMessage(null);
+                                                }
+                                            }}
+                                            style={styles.menuOption}
+                                        >
+                                            <Text style={{ color: colors.text, fontSize: 16 }}>
+                                                {selectedMessage?.is_pinned ? 'Unpin' : 'Pin'}
+                                            </Text>
+                                            <MaterialCommunityIcons
+                                                name={selectedMessage?.is_pinned ? 'pin-off' : 'pin'}
+                                                size={20}
+                                                color={colors.text}
+                                            />
+                                        </TouchableOpacity>
+
+                                        {selectedMessage.file && (
+                                            <TouchableOpacity onPress={handleSaveToGallery} style={styles.menuOption}>
+                                                <Text style={{ color: colors.text, fontSize: 16 }}>Save to Gallery</Text>
+                                                <MaterialCommunityIcons name="download" size={20} color={colors.text} />
+                                            </TouchableOpacity>
+                                        )}
+
+                                        {selectedMessage.sender === 'me' && (
                                             <>
-                                                <TouchableOpacity onPress={handleReplyOption} style={styles.menuOption}>
-                                                    <Text style={{ color: colors.text, fontSize: 16 }}>Reply</Text>
-                                                    <MaterialCommunityIcons name="reply" size={20} color={colors.text} />
+                                                <TouchableOpacity onPress={handleEditOption} style={styles.menuOption}>
+                                                    <Text style={{ color: colors.text, fontSize: 16 }}>Edit</Text>
+                                                    <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.text} />
                                                 </TouchableOpacity>
-
-                                                <TouchableOpacity onPress={handleCopyOption} style={styles.menuOption}>
-                                                    <Text style={{ color: colors.text, fontSize: 16 }}>Copy</Text>
-                                                    <MaterialCommunityIcons name="content-copy" size={20} color={colors.text} />
+                                                <TouchableOpacity onPress={handleDeleteOption} style={styles.menuOption}>
+                                                    <Text style={{ color: colors.error, fontSize: 16 }}>Delete</Text>
+                                                    <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
                                                 </TouchableOpacity>
-
-                                                <TouchableOpacity
-                                                    onPress={() => {
-                                                        if (selectedMessage) {
-                                                            if (selectedMessage.is_pinned) {
-                                                                unpinMessage(chat.id, selectedMessage.id);
-                                                            } else {
-                                                                pinMessage(chat.id, selectedMessage.id);
-                                                            }
-                                                            setModalVisible(false);
-                                                            setSelectedMessage(null);
-                                                        }
-                                                    }}
-                                                    style={styles.menuOption}
-                                                >
-                                                    <Text style={{ color: colors.text, fontSize: 16 }}>
-                                                        {selectedMessage?.is_pinned ? 'Unpin' : 'Pin'}
-                                                    </Text>
-                                                    <MaterialCommunityIcons
-                                                        name={selectedMessage?.is_pinned ? 'pin-off' : 'pin'}
-                                                        size={20}
-                                                        color={colors.text}
-                                                    />
-                                                </TouchableOpacity>
-
-                                                {selectedMessage.file && (
-                                                    <TouchableOpacity onPress={handleSaveToGallery} style={styles.menuOption}>
-                                                        <Text style={{ color: colors.text, fontSize: 16 }}>Save to Gallery</Text>
-                                                        <MaterialCommunityIcons name="download" size={20} color={colors.text} />
-                                                    </TouchableOpacity>
-                                                )}
-
-                                                {selectedMessage.sender === 'me' && (
-                                                    <>
-                                                        <TouchableOpacity onPress={handleEditOption} style={styles.menuOption}>
-                                                            <Text style={{ color: colors.text, fontSize: 16 }}>Edit</Text>
-                                                            <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.text} />
-                                                        </TouchableOpacity>
-                                                        <TouchableOpacity onPress={handleDeleteOption} style={styles.menuOption}>
-                                                            <Text style={{ color: colors.error, fontSize: 16 }}>Delete</Text>
-                                                            <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
-                                                        </TouchableOpacity>
-                                                    </>
-                                                )}
                                             </>
                                         )}
+
                                         <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.menuOption}>
                                             <Text style={{ color: colors.text, fontSize: 16 }}>Cancel</Text>
                                         </TouchableOpacity>
@@ -838,60 +835,60 @@ export default function ChatDetailScreen() {
                             maxToRenderPerBatch={10}
                             windowSize={10}
                             removeClippedSubviews={Platform.OS === 'android'}
-                        </FlatList>
+                        />
 
-                    {/* Selection Mode Toolbar */}
-                    {selectionMode && (
-                        <View style={[styles.selectionToolbar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-                            <TouchableOpacity onPress={exitSelectionMode} style={styles.toolbarButton}>
-                                <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-                            </TouchableOpacity>
-
-                            <Text style={[styles.selectionCount, { color: colors.text }]}>
-                                {selectedMessages.size} selected
-                            </Text>
-
-                            <View style={styles.toolbarActions}>
-                                {selectedMessages.size === 1 && (
-                                    <TouchableOpacity onPress={forwardSelectedMessages} style={styles.toolbarButton}>
-                                        <MaterialCommunityIcons name="share-variant" size={24} color={colors.primary} />
-                                    </TouchableOpacity>
-                                )}
-                                <TouchableOpacity onPress={deleteSelectedMessages} style={styles.toolbarButton}>
-                                    <MaterialCommunityIcons name="trash-can-outline" size={24} color={colors.error} />
+                        {/* Selection Mode Toolbar */}
+                        {selectionMode && (
+                            <View style={[styles.selectionToolbar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+                                <TouchableOpacity onPress={exitSelectionMode} style={styles.toolbarButton}>
+                                    <MaterialCommunityIcons name="close" size={24} color={colors.text} />
                                 </TouchableOpacity>
+
+                                <Text style={[styles.selectionCount, { color: colors.text }]}>
+                                    {selectedMessages.size} selected
+                                </Text>
+
+                                <View style={styles.toolbarActions}>
+                                    {selectedMessages.size === 1 && (
+                                        <TouchableOpacity onPress={forwardSelectedMessages} style={styles.toolbarButton}>
+                                            <MaterialCommunityIcons name="share-variant" size={24} color={colors.primary} />
+                                        </TouchableOpacity>
+                                    )}
+                                    <TouchableOpacity onPress={deleteSelectedMessages} style={styles.toolbarButton}>
+                                        <MaterialCommunityIcons name="trash-can-outline" size={24} color={colors.error} />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                        </View>
-                    )}
+                        )}
 
-                    <ChatInput
-                        chatId={chat.id}
-                        text={text}
-                        setText={handleTextChange}
-                        handleSend={handleSend}
-                        editingMessageId={editingMessageId}
-                        setEditingMessageId={setEditingMessageId}
-                        replyingToMessage={replyingToMessage}
-                        setReplyingToMessage={setReplyingToMessage}
-                        insets={insets}
-                        keyboardVisible={keyboardVisible}
+                        <ChatInput
+                            chatId={chat.id}
+                            text={text}
+                            setText={handleTextChange}
+                            handleSend={handleSend}
+                            editingMessageId={editingMessageId}
+                            setEditingMessageId={setEditingMessageId}
+                            replyingToMessage={replyingToMessage}
+                            setReplyingToMessage={setReplyingToMessage}
+                            insets={insets}
+                            keyboardVisible={keyboardVisible}
+                        />
+                    </KeyboardAvoidingView>
+
+                    {/* Forward Message Modal */}
+                    <ForwardMessageModal
+                        visible={forwardModalVisible}
+                        onClose={() => setForwardModalVisible(false)}
+                        message={messageToForward}
+                        chats={chats.filter((c: any) => c.id !== chat.id)}
+                        onForward={handleForwardSubmit}
                     />
-                </KeyboardAvoidingView>
-
-            {/* Forward Message Modal */}
-            <ForwardMessageModal
-                visible={forwardModalVisible}
-                onClose={() => setForwardModalVisible(false)}
-                message={messageToForward}
-                chats={chats.filter((c: any) => c.id !== chat.id)}
-                onForward={handleForwardSubmit}
-            />
-        </>
-    )
-}
-        </ScreenWrapper >
+                </>
+            )}
+        </ScreenWrapper>
     );
 }
+
 
 const styles = StyleSheet.create({
     container: { flex: 1 },

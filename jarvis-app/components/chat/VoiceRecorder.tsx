@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
-import { useAudioRecorder, RecordingOptions } from 'expo-audio';
+import { useAudioRecorder } from 'expo-audio';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAppTheme } from '@/hooks/useAppTheme';
 

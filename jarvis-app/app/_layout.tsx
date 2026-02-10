@@ -14,8 +14,6 @@ import { AppState, BackHandler, useColorScheme } from 'react-native';
 import Colors from '@/constants/Colors';
 import { useStore } from '@/store';
 import { logger } from '@/services/logger';
-
-logger.init();
 import { requestFirebasePermission, setupForegroundHandler, setupNotificationOpenedHandler, setupTokenRefreshListener, syncTokenWithBackend } from '@/services/firebaseMessaging';
 import CustomToast from '@/components/CustomToast';
 import CustomAlert from '@/components/CustomAlert';
@@ -26,6 +24,8 @@ import { LockScreen } from '@/components/LockScreen';
 
 
 import { KeyboardProvider } from 'react-native-keyboard-controller';
+
+logger.init();
 
 // Initialize Firebase listeners at module level if needed
 setupNotificationOpenedHandler();
