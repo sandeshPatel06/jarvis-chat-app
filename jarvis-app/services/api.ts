@@ -403,6 +403,32 @@ export const api = {
                 throw error;
             }
         },
+        clearMessages: async (token: string, conversationId: string) => {
+            const url = `${API_URL}/chat/conversations/${conversationId}/clear/`;
+            try {
+                log(`POST ${url}`);
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Token ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                if (response.status === 204 || response.status === 200) {
+                    log(`Messages cleared`, { conversationId });
+                    return true;
+                }
+
+                const json = await response.json();
+                log(`Clear messages response`, { status: response.status, json });
+                if (!response.ok) throw new Error(JSON.stringify(json) || 'Failed to clear messages');
+                return json;
+            } catch (error) {
+                log(`Delete conversation error`, error);
+                throw error;
+            }
+        },
 
         // Helper function to normalize file URIs for platform compatibility
         normalizeFileUri: (uri: string): string => {

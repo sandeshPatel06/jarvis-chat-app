@@ -128,3 +128,12 @@ export const markMessageSent = async (id: string, newId: string, timestamp: Date
     }
 };
 
+export const clearChatMessages = async (conversationId: string) => {
+    const db = await getDb();
+    try {
+        await db.runAsync('DELETE FROM messages WHERE conversation_id = ?', [conversationId]);
+    } catch (error) {
+        console.error('Error clearing chat messages:', error);
+    }
+};
+

@@ -4,6 +4,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Chat } from '@/types';
 import { getMediaUrl } from '@/utils/media';
+import { Avatar } from '@/components/ui/Avatar';
 
 interface ChatItemProps {
     item: Chat;
@@ -78,13 +79,12 @@ const ChatItem = ({
                     onPress={() => onProfilePress(item.user_id)}
                     disabled={!item.user_id}
                 >
-                    <Image
-                        source={getMediaUrl(item.avatar) ? { uri: getMediaUrl(item.avatar)! } : require('@/assets/images/default-avatar.png')}
-                        style={styles.avatar}
+                    <Avatar
+                        source={item.avatar}
+                        size={54}
+                        online={item.is_online}
+                        style={styles.avatar} // Pass style if needed, though size prop handles dimensions
                     />
-                    {item.is_online && (
-                        <View style={[styles.onlineIndicator, { borderColor: colors.card }]} />
-                    )}
                 </TouchableOpacity>
                 <View style={styles.contentContainer}>
                     <View style={styles.headerRow}>
@@ -128,16 +128,7 @@ const styles = StyleSheet.create({
         height: 54,
         borderRadius: 27,
     },
-    onlineIndicator: {
-        position: 'absolute',
-        bottom: 2,
-        right: 2,
-        width: 14,
-        height: 14,
-        borderRadius: 7,
-        backgroundColor: '#4ade80',
-        borderWidth: 2,
-    },
+
     contentContainer: {
         flex: 1,
         justifyContent: 'center',

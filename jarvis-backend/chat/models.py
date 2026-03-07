@@ -21,6 +21,8 @@ class Message(models.Model):
     is_delivered = models.BooleanField(default=False)
     reply_to = models.ForeignKey('self', null=True, blank=True, related_name='replies', on_delete=models.SET_NULL)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    is_pinned = models.BooleanField(default=False)
+
 
     def __str__(self):
         return f"{self.sender.username}: {self.text[:20]}"

@@ -5,7 +5,8 @@ import { useStore } from '@/store';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
-import { Image, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { Avatar } from '@/components/ui/Avatar';
 
 export default function ContactProfileScreen() {
     const { id } = useLocalSearchParams<{ id: string }>(); // This is Chat ID
@@ -40,8 +41,9 @@ export default function ContactProfileScreen() {
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.profileSection}>
-                    <Image
-                        source={chat.avatar ? { uri: chat.avatar } : require('@/assets/images/default-avatar.png')}
+                    <Avatar
+                        source={chat.avatar}
+                        size={120}
                         style={styles.avatar}
                     />
                     <Text style={[styles.name, { color: colors.text }]}>{chat.name}</Text>

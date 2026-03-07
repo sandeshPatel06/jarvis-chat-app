@@ -43,6 +43,7 @@ export const ChatInput = ({
     const [showAttachMenu, setShowAttachMenu] = React.useState(false);
     const [selectedFile, setSelectedFile] = React.useState<any>(null);
     const [showImageEditor, setShowImageEditor] = React.useState(false);
+    const [isRecordingVoice, setIsRecordingVoice] = React.useState(false);
 
     const isExpoGo = Constants.appOwnership === 'expo';
 

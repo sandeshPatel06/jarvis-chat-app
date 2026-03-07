@@ -27,6 +27,8 @@ import * as Clipboard from 'expo-clipboard';
 import * as MediaLibrary from 'expo-media-library';
 import { cacheDirectory, documentDirectory, downloadAsync } from 'expo-file-system/legacy';
 import { getMediaUrl } from '@/utils/media';
+import { api } from '@/services/api';
+
 
 export default function ChatDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -46,11 +48,18 @@ export default function ChatDetailScreen() {
     const editMessage = useStore(useCallback((state: any) => state.editMessage, []));
     const deleteMessage = useStore(useCallback((state: any) => state.deleteMessage, []));
     const reactToMessage = useStore(useCallback((state: any) => state.reactToMessage, []));
+    const pinMessage = useStore(useCallback((state: any) => state.pinMessage, []));
+    const unpinMessage = useStore(useCallback((state: any) => state.unpinMessage, []));
     const deleteChat = useStore(useCallback((state: any) => state.deleteChat, []));
     const forwardMessage = useStore(useCallback((state: any) => state.forwardMessage, []));
     const showAlert = useStore(useCallback((state: any) => state.showAlert, []));
+    const showToast = useStore(useCallback((state: any) => state.showToast, []));
     const animationsEnabled = useStore(useCallback((state: any) => state.animationsEnabled, []));
     const chats = useStore(useCallback((state: any) => state.chats, []));
+    const muteChat = useStore(useCallback((state: any) => state.muteChat, []));
+    const unmuteChat = useStore(useCallback((state: any) => state.unmuteChat, []));
+    const isChatMuted = useStore(useCallback((state: any) => state.isChatMuted, []));
+    const clearChatMessages = useStore(useCallback((state: any) => state.clearChat, []));
 
     const [text, setText] = useState('');
     const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -65,11 +74,26 @@ export default function ChatDetailScreen() {
 
     // Chat Options
     const [chatOptionsVisible, setChatOptionsVisible] = useState(false);
-    const [loadingMore, setLoadingMore] = useState(false); // New
+    const [loadingMore, setLoadingMore] = useState(false);
+
+    // Search State
+    const [searchVisible, setSearchVisible] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Forward Message State
     const [forwardModalVisible, setForwardModalVisible] = useState(false);
     const [messageToForward, setMessageToForward] = useState<Message | null>(null);
+
+    // Message Selection State
+    const [selectionMode, setSelectionMode] = useState(false);
+    const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
+
+    // Reaction Picker State
+    const [reactionPickerVisible, setReactionPickerVisible] = useState(false);
+    const [messageToReact, setMessageToReact] = useState<Message | null>(null);
+
+    // Pinned Messages State
+    const [pinnedMessagesVisible, setPinnedMessagesVisible] = useState(false);
 
     const flatListRef = useRef<FlatList>(null);
     const lastTypingSent = useRef<number>(0);
@@ -143,9 +167,78 @@ export default function ChatDetailScreen() {
     }, [chat, text, editingMessageId, replyingToMessage, editMessage, sendMessage]);
 
     const handleLongPressMessage = useCallback((message: Message) => {
-        setSelectedMessage(message);
-        setModalVisible(true);
+        if (selectionMode) {
+            toggleMessageSelection(message.id);
+        } else {
+            setSelectedMessage(message);
+            setModalVisible(true);
+        }
+    }, [selectionMode]);
+
+    const toggleMessageSelection = useCallback((messageId: string) => {
+        setSelectedMessages(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(messageId)) {
+                newSet.delete(messageId);
+            } else {
+                newSet.add(messageId);
+            }
+            // Exit selection mode if no messages selected
+            if (newSet.size === 0) {
+                setSelectionMode(false);
+            }
+            return newSet;
+        });
     }, []);
+
+    const handleMessagePress = useCallback((message: Message) => {
+        if (selectionMode) {
+            toggleMessageSelection(message.id);
+        }
+    }, [selectionMode, toggleMessageSelection]);
+
+    const enterSelectionMode = useCallback((messageId: string) => {
+        setSelectionMode(true);
+        setSelectedMessages(new Set([messageId]));
+    }, []);
+
+    const exitSelectionMode = useCallback(() => {
+        setSelectionMode(false);
+        setSelectedMessages(new Set());
+    }, []);
+
+    const deleteSelectedMessages = useCallback(() => {
+        if (!chat) return;
+        showAlert(
+            'Delete Messages',
+            `Delete ${selectedMessages.size} message(s)?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => {
+                        selectedMessages.forEach((msgId: string) => {
+                            deleteMessage(chat.id, msgId);
+                        });
+                        exitSelectionMode();
+                    }
+                }
+            ]
+        );
+    }, [chat, selectedMessages, deleteMessage, showAlert, exitSelectionMode]);
+
+    const forwardSelectedMessages = useCallback(() => {
+        if (selectedMessages.size === 1) {
+            const msgId = Array.from(selectedMessages)[0];
+            const message = chat?.messages.find(m => m.id === msgId);
+            if (message) {
+                setMessageToForward(message);
+                setForwardModalVisible(true);
+                exitSelectionMode();
+            }
+        }
+    }, [chat, selectedMessages, exitSelectionMode]);
 
     const handleReact = useCallback((reaction: string) => {
         if (selectedMessage && chat) {
@@ -314,8 +407,18 @@ export default function ChatDetailScreen() {
     };
 
     const renderMessage = useCallback(({ item }: { item: Message }) => {
-        return <MessageItem item={item} onLongPress={handleLongPressMessage} onSwipeReply={handleSwipeReply} onSwipeForward={handleSwipeForward} />;
-    }, [handleLongPressMessage, handleSwipeReply, handleSwipeForward]);
+        return (
+            <MessageItem
+                item={item}
+                onLongPress={handleLongPressMessage}
+                onSwipeReply={handleSwipeReply}
+                onSwipeForward={handleSwipeForward}
+                selectionMode={selectionMode}
+                isSelected={selectedMessages.has(item.id)}
+                onPress={handleMessagePress}
+            />
+        );
+    }, [handleLongPressMessage, handleSwipeReply, handleSwipeForward, selectionMode, selectedMessages, handleMessagePress]);
 
     const handleLoadMore = useCallback(async () => {
         if (!chat || loadingMore || chat.messages.length < 20) return;
@@ -383,6 +486,32 @@ export default function ChatDetailScreen() {
                         style={{ backgroundColor: backgroundSource ? 'transparent' : colors.background }}
                     />
 
+                    {/* Search Bar */}
+                    {searchVisible && (
+                        <View style={[styles.searchBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                            <MaterialCommunityIcons name="magnify" size={20} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                            <TextInput
+                                style={[styles.searchInput, { color: colors.text }]}
+                                placeholder="Search messages..."
+                                placeholderTextColor={colors.textSecondary}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                                autoFocus
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')} style={{ marginRight: 8 }}>
+                                    <MaterialCommunityIcons name="close-circle" size={20} color={colors.textSecondary} />
+                                </TouchableOpacity>
+                            )}
+                            <TouchableOpacity onPress={() => {
+                                setSearchVisible(false);
+                                setSearchQuery('');
+                            }}>
+                                <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
                     {/* Chat Options Modal */}
                     <Modal
                         transparent={true}
@@ -392,32 +521,167 @@ export default function ChatDetailScreen() {
                     >
                         <Pressable style={styles.modalOverlay} onPress={() => setChatOptionsVisible(false)}>
                             <View style={[styles.chatOptionsContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                <TouchableOpacity onPress={async () => {
+                                {/* View Contact Profile */}
+                                <TouchableOpacity onPress={() => {
                                     setChatOptionsVisible(false);
-                                    const { exportChatAsEmail } = await import('@/utils/chatExport');
-                                    await exportChatAsEmail(chat.messages, chat.name);
+                                    if (chat.user_id) {
+                                        router.push(`/user/${chat.user_id}`);
+                                    } else {
+                                        router.push(`/contact/${chat.id}`);
+                                    }
                                 }} style={styles.menuOption}>
-                                    <Text style={{ color: colors.text, fontSize: 16 }}>Export as Email</Text>
-                                    <MaterialCommunityIcons name="email-outline" size={20} color={colors.text} />
+                                    <Text style={{ color: colors.text, fontSize: 16 }}>View Profile</Text>
+                                    <MaterialCommunityIcons name="account-outline" size={20} color={colors.text} />
                                 </TouchableOpacity>
+
+                                {/* Search in Chat */}
+                                <TouchableOpacity onPress={() => {
+                                    setChatOptionsVisible(false);
+                                    setSearchVisible(true);
+                                }} style={styles.menuOption}>
+                                    <Text style={{ color: colors.text, fontSize: 16 }}>Search</Text>
+                                    <MaterialCommunityIcons name="magnify" size={20} color={colors.text} />
+                                </TouchableOpacity>
+
+                                {/* Mute Notifications */}
+                                <TouchableOpacity onPress={() => {
+                                    setChatOptionsVisible(false);
+                                    const isMuted = isChatMuted(chat.id);
+                                    if (isMuted) {
+                                        unmuteChat(chat.id);
+                                        showToast('success', 'Unmuted', `Notifications for ${chat.name} are now enabled`);
+                                    } else {
+                                        muteChat(chat.id);
+                                        showToast('success', 'Muted', `Notifications for ${chat.name} are now disabled`);
+                                    }
+                                }} style={styles.menuOption}>
+                                    <Text style={{ color: colors.text, fontSize: 16 }}>
+                                        {isChatMuted(chat.id) ? 'Unmute' : 'Mute'} Notifications
+                                    </Text>
+                                    <MaterialCommunityIcons
+                                        name={isChatMuted(chat.id) ? "bell" : "bell-off-outline"}
+                                        size={20}
+                                        color={colors.text}
+                                    />
+                                </TouchableOpacity>
+
+                                {/* Wallpaper */}
+                                <TouchableOpacity onPress={() => {
+                                    setChatOptionsVisible(false);
+                                    router.push('/settings/wallpaper');
+                                }} style={styles.menuOption}>
+                                    <Text style={{ color: colors.text, fontSize: 16 }}>Wallpaper</Text>
+                                    <MaterialCommunityIcons name="image-outline" size={20} color={colors.text} />
+                                </TouchableOpacity>
+
+                                {/* Export Chat */}
                                 <TouchableOpacity onPress={async () => {
                                     setChatOptionsVisible(false);
                                     try {
+                                        const Share = await import('react-native').then((m: any) => m.Share);
+                                        const messageText = chat.messages
+                                            .map((m: any) => `[${new Date(m.timestamp).toLocaleString()}] ${m.sender}: ${m.text}`)
+                                            .reverse()
+                                            .join('\n');
+                                        await Share.share({
+                                            message: `Chat with ${chat.name}\n\n${messageText}`,
+                                            title: `Chat with ${chat.name}`
+                                        });
+                                    } catch (error) {
+                                        console.error('Export error:', error);
+                                        showAlert('Error', 'Failed to export chat');
+                                    }
+                                }} style={styles.menuOption}>
+                                    <Text style={{ color: colors.text, fontSize: 16 }}>Export Chat</Text>
+                                    <MaterialCommunityIcons name="export" size={20} color={colors.text} />
+                                </TouchableOpacity>
+
+                                {/* Clear Chat History */}
+                                <TouchableOpacity onPress={() => {
+                                    setChatOptionsVisible(false);
+                                    showAlert(
+                                        'Clear Chat',
+                                        'Are you sure you want to clear all messages in this chat? This cannot be undone.',
+                                        [
+                                            { text: 'Cancel', style: 'cancel' },
+                                            {
+                                                text: 'Clear',
+                                                style: 'destructive',
+                                                onPress: async () => {
+                                                    try {
+                                                        await clearChatMessages(chat.id);
+                                                        showToast('success', 'Chat Cleared', 'All messages have been deleted');
+                                                    } catch (error) {
+                                                        showAlert('Error', 'Failed to clear chat. Please try again.');
+                                                    }
+                                                },
+                                            },
+                                        ]
+                                    );
+                                }} style={styles.menuOption}>
+                                    <Text style={{ color: colors.text, fontSize: 16 }}>Clear Chat</Text>
+                                    <MaterialCommunityIcons name="broom" size={20} color={colors.text} />
+                                </TouchableOpacity>
+
+                                {/* Divider */}
+                                <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+
+                                {/* Send SMS */}
+                                <TouchableOpacity onPress={async () => {
+                                    setChatOptionsVisible(false);
+                                    try {
+                                        // Get user phone number from chat.user_id
+                                        if (!chat.user_id) {
+                                            showAlert('Error', 'Cannot send SMS: User information not available');
+                                            return;
+                                        }
+
+                                        const token = useStore.getState().token;
+                                        if (!token) {
+                                            showAlert('Error', 'Authentication required');
+                                            return;
+                                        }
+
+                                        // Fetch user profile to get phone number
+                                        const userProfile = await api.auth.getUserProfile(token, chat.user_id);
+
+                                        if (!userProfile.phone_number) {
+                                            showAlert('No Phone Number', 'This user does not have a phone number registered');
+                                            return;
+                                        }
+
+                                        // Check if SMS is available on device
                                         const isAvailable = await import('expo-sms').then(m => m.isAvailableAsync());
                                         if (!isAvailable) {
                                             showAlert('SMS Not Available', 'SMS is not available on this device');
                                             return;
                                         }
+
+                                        // Open SMS with pre-filled phone number and message
                                         const SMS = await import('expo-sms');
-                                        await SMS.sendSMSAsync([], `Hi! Let's chat on Jarvis.`);
+                                        const result = await SMS.sendSMSAsync(
+                                            [userProfile.phone_number],
+                                            `Hi ${chat.name}! Let's chat on Jarvis.`
+                                        );
+
+                                        // If SMS was sent successfully, you could optionally notify backend
+                                        // For now, just show success feedback
+                                        if (result.result === 'sent') {
+                                            console.log('SMS sent successfully to', userProfile.phone_number);
+                                        }
                                     } catch (error) {
                                         console.error('SMS error:', error);
-                                        showAlert('Error', 'Failed to open SMS');
+                                        showAlert('Error', 'Failed to send SMS');
                                     }
                                 }} style={styles.menuOption}>
                                     <Text style={{ color: colors.text, fontSize: 16 }}>Send SMS</Text>
                                     <MaterialCommunityIcons name="message-text-outline" size={20} color={colors.text} />
                                 </TouchableOpacity>
+
+                                {/* Divider */}
+                                <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+
+                                {/* Delete Chat */}
                                 <TouchableOpacity onPress={() => {
                                     setChatOptionsVisible(false);
                                     showAlert(
@@ -484,39 +748,60 @@ export default function ChatDetailScreen() {
 
                                         <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 10 }} />
 
-                                        {selectedMessage && (
+                                        <TouchableOpacity onPress={handleReplyOption} style={styles.menuOption}>
+                                            <Text style={{ color: colors.text, fontSize: 16 }}>Reply</Text>
+                                            <MaterialCommunityIcons name="reply" size={20} color={colors.text} />
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity onPress={handleCopyOption} style={styles.menuOption}>
+                                            <Text style={{ color: colors.text, fontSize: 16 }}>Copy</Text>
+                                            <MaterialCommunityIcons name="content-copy" size={20} color={colors.text} />
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                if (selectedMessage) {
+                                                    if (selectedMessage.is_pinned) {
+                                                        unpinMessage(chat.id, selectedMessage.id);
+                                                    } else {
+                                                        pinMessage(chat.id, selectedMessage.id);
+                                                    }
+                                                    setModalVisible(false);
+                                                    setSelectedMessage(null);
+                                                }
+                                            }}
+                                            style={styles.menuOption}
+                                        >
+                                            <Text style={{ color: colors.text, fontSize: 16 }}>
+                                                {selectedMessage?.is_pinned ? 'Unpin' : 'Pin'}
+                                            </Text>
+                                            <MaterialCommunityIcons
+                                                name={selectedMessage?.is_pinned ? 'pin-off' : 'pin'}
+                                                size={20}
+                                                color={colors.text}
+                                            />
+                                        </TouchableOpacity>
+
+                                        {selectedMessage.file && (
+                                            <TouchableOpacity onPress={handleSaveToGallery} style={styles.menuOption}>
+                                                <Text style={{ color: colors.text, fontSize: 16 }}>Save to Gallery</Text>
+                                                <MaterialCommunityIcons name="download" size={20} color={colors.text} />
+                                            </TouchableOpacity>
+                                        )}
+
+                                        {selectedMessage.sender === 'me' && (
                                             <>
-                                                <TouchableOpacity onPress={handleReplyOption} style={styles.menuOption}>
-                                                    <Text style={{ color: colors.text, fontSize: 16 }}>Reply</Text>
-                                                    <MaterialCommunityIcons name="reply" size={20} color={colors.text} />
+                                                <TouchableOpacity onPress={handleEditOption} style={styles.menuOption}>
+                                                    <Text style={{ color: colors.text, fontSize: 16 }}>Edit</Text>
+                                                    <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.text} />
                                                 </TouchableOpacity>
-
-                                                <TouchableOpacity onPress={handleCopyOption} style={styles.menuOption}>
-                                                    <Text style={{ color: colors.text, fontSize: 16 }}>Copy</Text>
-                                                    <MaterialCommunityIcons name="content-copy" size={20} color={colors.text} />
+                                                <TouchableOpacity onPress={handleDeleteOption} style={styles.menuOption}>
+                                                    <Text style={{ color: colors.error, fontSize: 16 }}>Delete</Text>
+                                                    <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
                                                 </TouchableOpacity>
-
-                                                {selectedMessage.file && (
-                                                    <TouchableOpacity onPress={handleSaveToGallery} style={styles.menuOption}>
-                                                        <Text style={{ color: colors.text, fontSize: 16 }}>Save to Gallery</Text>
-                                                        <MaterialCommunityIcons name="download" size={20} color={colors.text} />
-                                                    </TouchableOpacity>
-                                                )}
-
-                                                {selectedMessage.sender === 'me' && (
-                                                    <>
-                                                        <TouchableOpacity onPress={handleEditOption} style={styles.menuOption}>
-                                                            <Text style={{ color: colors.text, fontSize: 16 }}>Edit</Text>
-                                                            <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.text} />
-                                                        </TouchableOpacity>
-                                                        <TouchableOpacity onPress={handleDeleteOption} style={styles.menuOption}>
-                                                            <Text style={{ color: colors.error, fontSize: 16 }}>Delete</Text>
-                                                            <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
-                                                        </TouchableOpacity>
-                                                    </>
-                                                )}
                                             </>
                                         )}
+
                                         <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.menuOption}>
                                             <Text style={{ color: colors.text, fontSize: 16 }}>Cancel</Text>
                                         </TouchableOpacity>
@@ -533,7 +818,9 @@ export default function ChatDetailScreen() {
                     >
                         <FlatList
                             ref={flatListRef}
-                            data={chat.messages}
+                            data={searchQuery ? chat.messages.filter((m: any) =>
+                                m.text.toLowerCase().includes(searchQuery.toLowerCase())
+                            ) : chat.messages}
                             keyExtractor={(item) => item.id.toString()}
                             renderItem={renderMessage}
                             inverted={true}
@@ -549,6 +836,30 @@ export default function ChatDetailScreen() {
                             windowSize={10}
                             removeClippedSubviews={Platform.OS === 'android'}
                         />
+
+                        {/* Selection Mode Toolbar */}
+                        {selectionMode && (
+                            <View style={[styles.selectionToolbar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+                                <TouchableOpacity onPress={exitSelectionMode} style={styles.toolbarButton}>
+                                    <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+                                </TouchableOpacity>
+
+                                <Text style={[styles.selectionCount, { color: colors.text }]}>
+                                    {selectedMessages.size} selected
+                                </Text>
+
+                                <View style={styles.toolbarActions}>
+                                    {selectedMessages.size === 1 && (
+                                        <TouchableOpacity onPress={forwardSelectedMessages} style={styles.toolbarButton}>
+                                            <MaterialCommunityIcons name="share-variant" size={24} color={colors.primary} />
+                                        </TouchableOpacity>
+                                    )}
+                                    <TouchableOpacity onPress={deleteSelectedMessages} style={styles.toolbarButton}>
+                                        <MaterialCommunityIcons name="trash-can-outline" size={24} color={colors.error} />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
 
                         <ChatInput
                             chatId={chat.id}
@@ -577,6 +888,7 @@ export default function ChatDetailScreen() {
         </ScreenWrapper>
     );
 }
+
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
@@ -634,6 +946,22 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingVertical: 12,
+    },
+    menuDivider: {
+        height: 1,
+        marginVertical: 8,
+    },
+    searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 16,
+        paddingVertical: 4,
     },
     chatOptionsContainer: {
         position: 'absolute',

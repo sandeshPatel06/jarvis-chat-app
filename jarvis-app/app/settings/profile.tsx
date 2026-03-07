@@ -8,8 +8,8 @@ import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { api } from '@/services/api';
 import { useStore } from '@/store';
-import { getMediaUrl } from '@/utils/media';
 import SettingCard from '@/components/settings/SettingCard';
+import { Avatar } from '@/components/ui/Avatar';
 
 export default function ProfileScreen() {
     const router = useRouter();
@@ -24,7 +24,6 @@ export default function ProfileScreen() {
     const [image, setImage] = useState<string | null>(null);
     const { colors, isDark } = useAppTheme();
 
-    const avatarUrl = getMediaUrl(user?.profile_picture);
 
     const pickImage = useCallback(async () => {
         const result = await import('expo-image-picker').then(m => m.launchImageLibraryAsync({
@@ -110,10 +109,18 @@ export default function ProfileScreen() {
                     <View style={styles.avatarContainer}>
                         <TouchableOpacity onPress={pickImage} activeOpacity={0.8} style={styles.avatarWrapper}>
                             <View style={[styles.avatarBorder, { borderColor: isDark ? colors.cardBorder : colors.primary + '30' }]}>
-                                <Image
-                                    source={image ? { uri: image } : avatarUrl ? { uri: avatarUrl } : require('@/assets/images/default-avatar.png')}
-                                    style={styles.avatar}
-                                />
+                                {image ? (
+                                    <Image
+                                        source={{ uri: image }}
+                                        style={styles.avatar}
+                                    />
+                                ) : (
+                                    <Avatar
+                                        source={user?.profile_picture}
+                                        size={140}
+                                        style={styles.avatar}
+                                    />
+                                )}
                             </View>
                             <LinearGradient
                                 colors={[colors.primary, colors.secondary]}

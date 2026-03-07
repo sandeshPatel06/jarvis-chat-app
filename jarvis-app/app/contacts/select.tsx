@@ -9,9 +9,9 @@ import * as Contacts from 'expo-contacts';
 import * as SMS from 'expo-sms';
 import { useRouter, Stack } from 'expo-router';
 import React, { useEffect, useState, useCallback } from 'react';
-import { ActivityIndicator, FlatList, Image, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
-import { getMediaUrl } from '@/utils/media';
+import { ActivityIndicator, FlatList, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { formatLastSeen } from '@/utils/date';
+import { Avatar } from '@/components/ui/Avatar';
 
 interface Contact {
     id: string;
@@ -260,12 +260,10 @@ export default function SelectContactScreen() {
 
                         return (
                             <View style={[styles.contactItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                <Image
-                                    source={
-                                        getMediaUrl(item.profile_picture)
-                                            ? { uri: getMediaUrl(item.profile_picture)! }
-                                            : require('@/assets/images/default-avatar.png')
-                                    }
+                                <Avatar
+                                    source={item.profile_picture}
+                                    size={50}
+                                    online={item.is_online && hasJarvisAccount}
                                     style={styles.avatar}
                                 />
                                 <View style={styles.contactInfo}>

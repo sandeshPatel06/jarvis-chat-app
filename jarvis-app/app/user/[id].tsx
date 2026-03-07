@@ -7,8 +7,8 @@ import { User } from '@/types';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
-import { getMediaUrl } from '@/utils/media';
+import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { Avatar } from '@/components/ui/Avatar';
 
 export default function UserProfileScreen() {
     const { id } = useLocalSearchParams<{ id: string }>(); // This is user ID
@@ -121,8 +121,6 @@ export default function UserProfileScreen() {
         );
     }
 
-    const avatarUrl = getMediaUrl(userProfile.profile_picture);
-
     return (
         <ScreenWrapper style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right', 'bottom']}>
             <Stack.Screen options={{ headerShown: false }} />
@@ -136,8 +134,9 @@ export default function UserProfileScreen() {
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.profileSection}>
-                    <Image
-                        source={avatarUrl ? { uri: avatarUrl } : require('@/assets/images/default-avatar.png')}
+                    <Avatar
+                        source={userProfile.profile_picture}
+                        size={120}
                         style={styles.avatar}
                     />
                     <Text style={[styles.name, { color: colors.text }]}>{userProfile.username}</Text>

@@ -39,6 +39,7 @@ export interface Message {
     };
     isUnsent?: boolean;
     deleted_at?: string;
+    is_pinned?: boolean;
 }
 
 export interface Chat {

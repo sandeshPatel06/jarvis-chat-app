@@ -76,6 +76,8 @@ interface AppState {
     editMessage: (chatId: string, messageId: string, newText: string) => void; // New
     deleteMessage: (chatId: string, messageId: string) => void; // New
     reactToMessage: (chatId: string, messageId: string, reaction: string) => void; // New
+    pinMessage: (chatId: string, messageId: string) => void;
+    unpinMessage: (chatId: string, messageId: string) => void;
     markRead: (chatId: string, messageId: string) => void;
     markDelivered: (chatId: string, messageId: string) => void;
     updateMessageRead: (messageId: string, chatId?: string) => void;
@@ -127,6 +129,15 @@ interface AppState {
     blockUser: (userId: number) => Promise<void>;
     unblockUser: (userId: number) => Promise<void>;
 
+    // Mute Notifications
+    mutedChats: string[];
+    muteChat: (chatId: string) => void;
+    unmuteChat: (chatId: string) => void;
+    isChatMuted: (chatId: string) => boolean;
+
+    // Clear Chat
+    clearChat: (chatId: string) => Promise<void>;
+
     // Restore
     restoreChats: (conversationIds: number[], restoreDate?: string) => Promise<void>;
     initApp: () => Promise<void>;
@@ -135,9 +146,17 @@ interface AppState {
 
 
 let callSound: any = null;
+let ringtoneActive = false;
 
 const playRingtone = async (isIncoming: boolean) => {
     try {
+        if (ringtoneActive) {
+            console.log('[Ringtone] Already playing, skipping');
+            return;
+        }
+        ringtoneActive = true;
+        console.log('[Ringtone] Starting ringtone, incoming:', isIncoming);
+
         // Configure audio session for VoIP-like behavior
         await Audio.setAudioModeAsync({
             playsInSilentMode: true,
@@ -163,14 +182,18 @@ const playRingtone = async (isIncoming: boolean) => {
         callSound = player;
     } catch (e) {
         console.log('Error playing ringtone', e);
+        ringtoneActive = false;
     }
 };
 
 const stopRingtone = async () => {
     try {
+        console.log('[Ringtone] Stopping ringtone, active:', ringtoneActive);
+        ringtoneActive = false;
         if (callSound) {
             callSound.pause();
             callSound = null;
+            console.log('[Ringtone] Ringtone stopped successfully');
         }
     } catch (e) {
         console.log('Error stopping ringtone', e);
@@ -418,7 +441,7 @@ export const useStore = create<AppState>((set, get) => {
 
                 stopRingtone(); // Stop incoming ringtone
 
-                // Configure audio for voice call (recording allowed)
+                // Configure audio for voice call BEFORE getUserMedia
                 await Audio.setAudioModeAsync({
                     playsInSilentMode: true,
                     allowsRecording: true, // Crucial for WebRTC to pick up mic
@@ -428,6 +451,7 @@ export const useStore = create<AppState>((set, get) => {
                 });
 
                 const stream = await webrtcService.startLocalStream(incomingCall.isVideo); // Respect isVideo flag
+                console.log('[Store] Local stream started, tracks:', stream.getTracks().map(t => `${t.kind}:${t.enabled}`));
                 set((state) => ({
                     callState: { ...state.callState, localStream: stream }
                 }));
@@ -887,11 +911,61 @@ export const useStore = create<AppState>((set, get) => {
                 socket.send(JSON.stringify({
                     type: 'react_message',
                     message_id: messageId,
-                    conversation_id: chatId,
                     reaction: reaction
                 }));
             }
         },
+
+        pinMessage: (chatId, messageId) => {
+            const { socket, chats } = get();
+
+            // Update local state
+            const updatedChats = chats.map(chat => {
+                if (chat.id === chatId) {
+                    const updatedMessages = chat.messages.map(msg =>
+                        msg.id === messageId ? { ...msg, is_pinned: true } : msg
+                    );
+                    return { ...chat, messages: updatedMessages };
+                }
+                return chat;
+            });
+            set({ chats: updatedChats });
+
+            // Send to server
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'pin_message',
+                    message_id: messageId,
+                    conversation_id: chatId,
+                }));
+            }
+        },
+
+        unpinMessage: (chatId, messageId) => {
+            const { socket, chats } = get();
+
+            // Update local state
+            const updatedChats = chats.map(chat => {
+                if (chat.id === chatId) {
+                    const updatedMessages = chat.messages.map(msg =>
+                        msg.id === messageId ? { ...msg, is_pinned: false } : msg
+                    );
+                    return { ...chat, messages: updatedMessages };
+                }
+                return chat;
+            });
+            set({ chats: updatedChats });
+
+            // Send to server
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'unpin_message',
+                    message_id: messageId,
+                    conversation_id: chatId,
+                }));
+            }
+        },
+
         deleteChat: async (chatId) => {
             const { token } = get();
             if (!token) return;
@@ -1635,6 +1709,50 @@ export const useStore = create<AppState>((set, get) => {
         }
         ,
 
+        // Mute Notifications
+        mutedChats: [],
+        muteChat: (chatId: string) => {
+            set((state) => {
+                const mutedChats = [...state.mutedChats, chatId];
+                AsyncStorage.setItem('mutedChats', JSON.stringify(mutedChats)).catch(console.error);
+                return { mutedChats };
+            });
+        },
+        unmuteChat: (chatId: string) => {
+            set((state) => {
+                const mutedChats = state.mutedChats.filter(id => id !== chatId);
+                AsyncStorage.setItem('mutedChats', JSON.stringify(mutedChats)).catch(console.error);
+                return { mutedChats };
+            });
+        },
+        isChatMuted: (chatId: string) => {
+            return get().mutedChats.includes(chatId);
+        },
+
+        // Clear Chat
+        clearChat: async (chatId: string) => {
+            try {
+                const { token } = get();
+                if (!token) throw new Error('Not authenticated');
+
+                // Clear messages on server
+                await api.chat.clearMessages(token, chatId);
+
+                // Clear messages locally
+                set((state) => ({
+                    chats: state.chats.map((c) =>
+                        c.id === chatId ? { ...c, messages: [], lastMessage: '', lastMessageTime: new Date() } : c
+                    )
+                }));
+
+                // Clear from database
+                await database.clearChatMessages(chatId);
+            } catch (error) {
+                console.error('Failed to clear chat:', error);
+                throw error;
+            }
+        },
+
         initApp: async () => {
             try {
                 // 1. Initialize SQLite
@@ -1644,6 +1762,7 @@ export const useStore = create<AppState>((set, get) => {
                 const token = await SecureStore.getItemAsync('token');
                 const userStr = await AsyncStorage.getItem('user');
                 const theme = (await AsyncStorage.getItem('theme')) as 'system' | 'light' | 'dark' | null;
+                const mutedChatsStr = await AsyncStorage.getItem('mutedChats');
 
                 if (token && userStr) {
                     set({ token, user: JSON.parse(userStr) });
@@ -1653,6 +1772,10 @@ export const useStore = create<AppState>((set, get) => {
 
                 if (theme) {
                     set({ theme });
+                }
+
+                if (mutedChatsStr) {
+                    set({ mutedChats: JSON.parse(mutedChatsStr) });
                 }
 
                 set({ hasHydrated: true });
