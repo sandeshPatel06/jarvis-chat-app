@@ -285,6 +285,9 @@ class MessageUploadView(APIView):
             return Response(data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            logger.error(f"Error in upload view: {e}")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in upload view: {e}", exc_info=True)
+            return Response({"error": "Failed to upload message. Please try again."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

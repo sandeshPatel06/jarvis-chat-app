@@ -10,6 +10,7 @@ import { FlatList, StyleSheet, TextInput, TouchableOpacity, LayoutAnimation, Pla
 
 import { useAppTheme } from '@/hooks/useAppTheme';
 import ChatItem from '@/components/chat/ChatItem';
+import { Avatar } from '@/components/ui/Avatar';
 
 export default function ChatsScreen() {
   const router = useRouter();
@@ -197,11 +198,53 @@ export default function ChatsScreen() {
         data={filteredChats}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
+        ListHeaderComponent={() => (
+          <View style={styles.headerComponent}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Active Now</Text>
+            </View>
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              data={chats.filter(c => c.is_online)}
+              keyExtractor={(item) => `story-${item.id}`}
+              contentContainerStyle={styles.storyList}
+              renderItem={({ item }) => (
+                <TouchableOpacity 
+                   style={styles.storyItem}
+                   onPress={() => router.push(`/chat/${item.id}`)}
+                >
+                  <LinearGradient
+                    colors={[colors.primary, colors.secondary]}
+                    style={styles.storyRing}
+                  >
+                    <Avatar
+                      source={item.avatar}
+                      size={60}
+                      style={styles.storyAvatar}
+                    />
+                  </LinearGradient>
+                  <Text style={[styles.storyName, { color: colors.text }]} numberOfLines={1}>
+                    {item.name?.split(' ')[0]}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={() => (
+                 <View style={styles.storyEmpty}>
+                    <Text style={{color: colors.textSecondary, fontSize: 12}}>No one active</Text>
+                 </View>
+              )}
+            />
+            <View style={[styles.sectionHeader, { marginTop: 20 }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Messages</Text>
+            </View>
+          </View>
+        )}
         contentContainerStyle={styles.listContent}
-        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         getItemLayout={(_, index) => ({
-          length: 84, // Approximate height of each item (64 avatar + 20 padding)
-          offset: (84 + 10) * index, // 10 is separator height
+          length: 96,
+          offset: (96 + 12) * index,
           index,
         })}
         initialNumToRender={10}
@@ -363,4 +406,54 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
+  headerComponent: {
+    paddingVertical: 10,
+  },
+  sectionHeader: {
+    paddingHorizontal: 20,
+    marginBottom: 15,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    opacity: 0.6,
+  },
+  storyList: {
+    paddingLeft: 20,
+    paddingRight: 10,
+  },
+  storyItem: {
+    alignItems: 'center',
+    marginRight: 15,
+    width: 75,
+  },
+  storyRing: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    padding: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  storyAvatar: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 3,
+    borderColor: 'white',
+  },
+  storyName: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  storyEmpty: {
+    paddingHorizontal: 20,
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0.5,
+  }
 });

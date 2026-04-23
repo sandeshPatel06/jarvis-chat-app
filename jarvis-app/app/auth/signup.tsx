@@ -4,12 +4,24 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useRouter } from 'expo-router';
 import { useStore } from '@/store';
 import React, { useState } from 'react';
-import { ActivityIndicator, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { 
+    ActivityIndicator, 
+    StyleSheet, 
+    TextInput, 
+    TouchableOpacity, 
+    useWindowDimensions,
+    Platform,
+    Image 
+} from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function SignupScreen() {
+    const { width } = useWindowDimensions();
+    const isSmallDevice = width < 375;
+    
     const [step, setStep] = useState(1); // 1: Email, 2: OTP, 3: Details
     const [email, setEmail] = useState('');
     const [otpCode, setOtpCode] = useState('');
@@ -18,9 +30,11 @@ export default function SignupScreen() {
     const [phone, setPhone] = useState('');
     const [sessionId, setSessionId] = useState('');
     const [loading, setLoading] = useState(false);
+    const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+    
     const router = useRouter();
     const { setUser, showAlert } = useStore();
-    const { colors } = useAppTheme();
+    const { colors, isDark } = useAppTheme();
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const isEmailValid = emailRegex.test(email);
@@ -85,34 +99,45 @@ export default function SignupScreen() {
             case 1:
                 return (
                     <>
-                        <Text style={styles.title}>Welcome</Text>
-                        <Text style={styles.subtitle}>Enter your email to get started</Text>
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Email Address *</Text>
-                            <TextInput
-                                style={[
-                                    styles.input,
-                                    { borderColor: email ? (isEmailValid ? '#4CAF50' : '#F44336') : 'rgba(255,255,255,0.1)' }
-                                ]}
-                                value={email}
-                                onChangeText={setEmail}
-                                placeholder="name@example.com"
-                                placeholderTextColor="#666"
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                            />
+                        <View style={styles.header}>
+                             <View style={styles.logoContainer}>
+                                <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
+                            </View>
+                            <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
+                            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Enter your email to get started</Text>
                         </View>
-                        <TouchableOpacity
-                            onPress={handleRequestOTP}
+                        
+                        <View style={styles.inputWrapper}>
+                            <Text style={[styles.label, { color: colors.textSecondary }]}>Email Address *</Text>
+                            <View style={[
+                                styles.inputContainer, 
+                                { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: email ? (isEmailValid ? colors.success : colors.error) : colors.border }
+                            ]}>
+                                <Ionicons name="mail-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                                <TextInput
+                                    style={[styles.input, { color: colors.text }]}
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    placeholder="name@example.com"
+                                    placeholderTextColor={colors.textSecondary + '80'}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                />
+                                {isEmailValid && <Ionicons name="checkmark-circle" size={20} color={colors.success} />}
+                            </View>
+                        </View>
+
+                        <TouchableOpacity 
+                            onPress={handleRequestOTP} 
                             disabled={loading || !isEmailValid}
-                            style={[styles.buttonContainer, (!isEmailValid || loading) && { opacity: 0.5 }]}
+                            style={[styles.submitButton, (!isEmailValid || loading) && { opacity: 0.6 }]}
                         >
                             <LinearGradient
                                 colors={[colors.primary, colors.secondary]}
-                                style={styles.button}
+                                style={styles.gradient}
                                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                             >
-                                {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Send OTP</Text>}
+                                {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Continue</Text>}
                             </LinearGradient>
                         </TouchableOpacity>
                     </>
@@ -120,80 +145,113 @@ export default function SignupScreen() {
             case 2:
                 return (
                     <>
-                        <Text style={styles.title}>Verify OTP</Text>
-                        <Text style={styles.subtitle}>OTP has been sent to your email. Please check your inbox.</Text>
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>6-Digit Code</Text>
-                            <TextInput
-                                value={otpCode}
-                                onChangeText={setOtpCode}
-                                placeholder="123456"
-                                placeholderTextColor="#666"
-                                keyboardType="number-pad"
-                                maxLength={6}
-                                textAlign="center"
-                                style={[styles.input, { fontSize: 24, letterSpacing: 8 }]}
-                            />
+                        <View style={styles.header}>
+                             <View style={styles.logoContainer}>
+                                <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
+                            </View>
+                            <Text style={[styles.title, { color: colors.text }]}>Verify Email</Text>
+                            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Check your inbox for the 6-digit code</Text>
                         </View>
-                        <TouchableOpacity onPress={handleVerifyOTP} disabled={loading || otpCode.length !== 6} style={styles.buttonContainer}>
+
+                        <View style={styles.inputWrapper}>
+                            <Text style={[styles.label, { color: colors.textSecondary }]}>Verification Code</Text>
+                            <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}>
+                                <TextInput
+                                    style={[styles.input, styles.otpInput, { color: colors.text }]}
+                                    value={otpCode}
+                                    onChangeText={setOtpCode}
+                                    placeholder="000000"
+                                    placeholderTextColor={colors.textSecondary + '80'}
+                                    keyboardType="number-pad"
+                                    maxLength={6}
+                                />
+                            </View>
+                            <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+                                Sent to {email}
+                            </Text>
+                        </View>
+
+                        <TouchableOpacity onPress={handleVerifyOTP} disabled={loading || otpCode.length !== 6} style={styles.submitButton}>
                             <LinearGradient
                                 colors={[colors.primary, colors.secondary]}
-                                style={styles.button}
+                                style={styles.gradient}
                                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                             >
                                 {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Verify Code</Text>}
                             </LinearGradient>
                         </TouchableOpacity>
+
                         <TouchableOpacity onPress={() => setStep(1)} style={styles.backButton}>
-                            <Text style={{ color: colors.primary }}>Change Email</Text>
+                            <Text style={{ color: colors.primary, fontWeight: '600' }}>Change Email</Text>
                         </TouchableOpacity>
                     </>
                 );
             case 3:
                 return (
                     <>
-                        <Text style={styles.title}>Complete Account</Text>
-                        <Text style={styles.subtitle}>Set your username and password</Text>
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Username *</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={username}
-                                onChangeText={setUsername}
-                                placeholder="johndoe"
-                                placeholderTextColor="#666"
-                                autoCapitalize="none"
-                            />
+                        <View style={styles.header}>
+                             <View style={styles.logoContainer}>
+                                <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
+                            </View>
+                            <Text style={[styles.title, { color: colors.text }]}>Set Profile</Text>
+                            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Almost there! Just a few more details</Text>
                         </View>
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Password *</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={password}
-                                onChangeText={setPassword}
-                                placeholder="••••••••"
-                                placeholderTextColor="#666"
-                                secureTextEntry
-                            />
+
+                        <View style={styles.inputWrapper}>
+                            <Text style={[styles.label, { color: colors.textSecondary }]}>Username *</Text>
+                            <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}>
+                                <Ionicons name="at-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                                <TextInput
+                                    style={[styles.input, { color: colors.text }]}
+                                    value={username}
+                                    onChangeText={setUsername}
+                                    placeholder="johndoe"
+                                    placeholderTextColor={colors.textSecondary + '80'}
+                                    autoCapitalize="none"
+                                />
+                            </View>
                         </View>
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Phone Number (Optional)</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={phone}
-                                onChangeText={setPhone}
-                                placeholder="+1234567890"
-                                placeholderTextColor="#666"
-                                keyboardType="phone-pad"
-                            />
+
+                        <View style={styles.inputWrapper}>
+                            <Text style={[styles.label, { color: colors.textSecondary }]}>Password *</Text>
+                            <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}>
+                                <Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                                <TextInput
+                                    style={[styles.input, { color: colors.text }]}
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    placeholder="••••••••"
+                                    placeholderTextColor={colors.textSecondary + '80'}
+                                    secureTextEntry={!isPasswordVisible}
+                                />
+                                <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
+                                    <Ionicons name={isPasswordVisible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textSecondary} />
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                        <TouchableOpacity onPress={handleCompleteSignup} disabled={loading} style={styles.buttonContainer}>
+
+                        <View style={styles.inputWrapper}>
+                            <Text style={[styles.label, { color: colors.textSecondary }]}>Phone Number (Optional)</Text>
+                            <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}>
+                                <Ionicons name="call-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                                <TextInput
+                                    style={[styles.input, { color: colors.text }]}
+                                    value={phone}
+                                    onChangeText={setPhone}
+                                    placeholder="+1234567890"
+                                    placeholderTextColor={colors.textSecondary + '80'}
+                                    keyboardType="phone-pad"
+                                />
+                            </View>
+                        </View>
+
+                        <TouchableOpacity onPress={handleCompleteSignup} disabled={loading} style={styles.submitButton}>
                             <LinearGradient
                                 colors={[colors.primary, colors.secondary]}
-                                style={styles.button}
+                                style={styles.gradient}
                                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                             >
-                                {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Finish Signup</Text>}
+                                {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Complete Signup</Text>}
                             </LinearGradient>
                         </TouchableOpacity>
                     </>
@@ -204,8 +262,11 @@ export default function SignupScreen() {
     return (
         <ScreenWrapper style={{ backgroundColor: colors.background }}>
             <KeyboardAwareScrollView
-                bottomOffset={100}
-                contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }}
+                bottomOffset={Platform.OS === 'ios' ? 100 : 0}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    { paddingHorizontal: isSmallDevice ? 20 : 40 }
+                ]}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
@@ -214,10 +275,10 @@ export default function SignupScreen() {
 
                     {step === 1 && (
                         <View style={styles.footer}>
-                            <Text style={styles.footerText}>Already have an account? </Text>
+                            <Text style={[styles.footerText, { color: colors.textSecondary }]}>Already have an account? </Text>
                             <Link href="/auth/login" asChild>
                                 <TouchableOpacity>
-                                    <Text style={[styles.link, { color: colors.primary }]}>Log In</Text>
+                                    <Text style={[styles.link, { color: colors.primary }]}>Sign In</Text>
                                 </TouchableOpacity>
                             </Link>
                         </View>
@@ -229,72 +290,121 @@ export default function SignupScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
+    scrollContent: {
+        flexGrow: 1,
         justifyContent: 'center',
-        padding: 20,
+        paddingVertical: 40,
+    },
+    header: {
+        alignItems: 'center',
+        marginBottom: 40,
+        backgroundColor: 'transparent',
+    },
+    logoContainer: {
+        width: 100,
+        height: 100,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    logo: {
+        width: '100%',
+        height: '100%',
     },
     content: {
         backgroundColor: 'transparent',
         width: '100%',
-        maxWidth: 400,
+        maxWidth: 420,
         alignSelf: 'center',
     },
     title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        marginBottom: 10,
+        fontSize: 28,
+        fontWeight: '800',
+        marginBottom: 8,
     },
     subtitle: {
         fontSize: 16,
-        color: 'gray',
-        marginBottom: 40,
+        textAlign: 'center',
     },
-    inputContainer: {
-        marginBottom: 15,
+    inputWrapper: {
+        marginBottom: 20,
         backgroundColor: 'transparent',
     },
     label: {
+        fontSize: 14,
+        fontWeight: '700',
         marginBottom: 8,
-        fontWeight: '600',
+        marginLeft: 4,
+    },
+    inputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        borderWidth: 1.5,
+        height: 60,
+    },
+    inputIcon: {
+        marginRight: 14,
     },
     input: {
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        borderRadius: 12,
-        padding: 15,
-        color: 'white',
+        flex: 1,
         fontSize: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
+        fontWeight: '500',
+        paddingVertical: Platform.OS === 'android' ? 0 : 4,
+        textAlignVertical: 'center',
     },
-    buttonContainer: {
-        marginTop: 20,
-        borderRadius: 12,
+    otpInput: {
+        fontSize: 26,
+        textAlign: 'center',
+        paddingLeft: 14,
+        letterSpacing: 14,
+        fontWeight: '800',
+        paddingVertical: 0,
+    },
+    infoText: {
+        fontSize: 13,
+        marginTop: 8,
+        textAlign: 'center',
+    },
+    submitButton: {
+        borderRadius: 18,
         overflow: 'hidden',
+        marginTop: 12,
+        height: 56,
+        elevation: 6,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
     },
-    button: {
-        padding: 16,
+    gradient: {
+        flex: 1,
         alignItems: 'center',
+        justifyContent: 'center',
     },
     buttonText: {
         color: 'white',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    footer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginTop: 30,
-        backgroundColor: 'transparent',
-    },
-    footerText: {
-        color: 'gray',
-    },
-    link: {
-        fontWeight: 'bold',
+        fontSize: 16,
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
     backButton: {
         alignItems: 'center',
         marginTop: 20,
-    }
+    },
+    footer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        marginTop: 40,
+        backgroundColor: 'transparent',
+    },
+    footerText: {
+        fontSize: 15,
+        fontWeight: '500',
+    },
+    link: {
+        fontSize: 15,
+        fontWeight: '800',
+    },
 });
+

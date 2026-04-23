@@ -8,12 +8,10 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, BackHandler } from 'react-native';
 import { RTCView } from 'react-native-webrtc';
 import { Avatar } from '@/components/ui/Avatar';
-import { useAppTheme } from '@/hooks/useAppTheme';
 
 export default function CallScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
-    const { colors } = useAppTheme();
 
     // Granular selectors to isolate re-renders
     const localStream = useStore((state: any) => state.callState.localStream);

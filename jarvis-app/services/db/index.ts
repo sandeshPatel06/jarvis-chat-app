@@ -79,7 +79,7 @@ export const initDatabase = async () => {
         for (const query of migrations) {
             try {
                 await db.execAsync(query);
-            } catch (e) {
+            } catch {
                 // Column likely exists, ignore
             }
         }

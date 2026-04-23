@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Text, Image, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Chat } from '@/types';
-import { getMediaUrl } from '@/utils/media';
+// import { getMediaUrl } from '@/utils/media';
 import { Avatar } from '@/components/ui/Avatar';
 
 interface ChatItemProps {

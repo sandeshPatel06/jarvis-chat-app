@@ -1,5 +1,4 @@
 import notifee, { AndroidImportance, AndroidVisibility, EventType } from '@notifee/react-native';
-import { Platform } from 'react-native';
 
 /**
  * Handles incoming call data from FCM and displays a notification.
@@ -7,7 +6,7 @@ import { Platform } from 'react-native';
 export async function handleIncomingCallFCM(data: any) {
     console.log('[BackgroundCallHelper] 📞 Handling incoming call FCM data:', data);
 
-    const { callUUID, callerName, type } = data;
+    const { callUUID, callerName } = data;
 
     // Create a channel (required for Android)
     const channelId = await notifee.createChannel({

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Image, ImageStyle, StyleProp, StyleSheet, View, Text } from 'react-native';
+import { Image, ImageStyle, StyleProp, StyleSheet, View } from 'react-native';
 import { getMediaUrl } from '@/utils/media';
 
 interface AvatarProps {

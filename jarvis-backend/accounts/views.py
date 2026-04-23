@@ -66,15 +66,6 @@ class RequestOTPView(APIView):
             print(f"[{identifier}] Starting OTP request...", flush=True)
             print(f"[{identifier}] OTP Code generated: {otp_code}", flush=True)
             
-            # --- DIAGNOSTIC START ---
-            try:
-                from utils.network_diag import run_diagnostics
-                import threading
-                threading.Thread(target=run_diagnostics).start()
-            except Exception as e:
-                print(f"Failed to start diagnostics: {e}", flush=True)
-            # --- DIAGNOSTIC END ---
-            
             # 1. Database creation
             db_start = time.time()
             PendingVerification.objects.create(
@@ -110,7 +101,7 @@ class RequestOTPView(APIView):
             print(f"[{identifier}] Error after {total_time:.2f}s: {str(e)}", flush=True)
             import traceback
             traceback.print_exc()
-            return Response({"error": f"Internal server error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": "Failed to send OTP. Please try again later."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class VerifyOTPView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -177,6 +168,12 @@ class CompleteSignupView(APIView):
             email = pending.identifier if '@' in pending.identifier else None
             phone = phone_number or (pending.identifier if '@' not in pending.identifier else None)
 
+            if phone and User.objects.filter(phone_number=phone).exists():
+                return Response({"error": "Phone number already registered"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if email and User.objects.filter(email=email).exists():
+                return Response({"error": "Email already registered"}, status=status.HTTP_400_BAD_REQUEST)
+
             user = User.objects.create_user(
                 username=username,
                 email=email,
@@ -213,6 +210,9 @@ class CompleteSignupView(APIView):
 
         except PendingVerification.DoesNotExist:
             return Response({"error": "Invalid or unverified session"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"Error in CompleteSignupView: {e}", flush=True)
+            return Response({"error": "An error occurred during signup. Please try again."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class UniversalLoginView(APIView):
     permission_classes = [permissions.AllowAny]

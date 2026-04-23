@@ -394,7 +394,7 @@ export const api = {
                     log(`Delete conversation response`, { status: response.status, json });
                     if (!response.ok) throw new Error(JSON.stringify(json) || 'Failed to delete conversation');
                     return json;
-                } catch (e) {
+                } catch {
                     log(`Delete conversation non-JSON response`, { status: response.status, text });
                     throw new Error(`Server returned non-JSON response: ${response.status}`);
                 }

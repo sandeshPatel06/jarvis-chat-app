@@ -1,0 +1,335 @@
+openapi: 3.0.3
+info:
+  title: Jarvis Backend API
+  version: 2.0.0
+  description: |
+    Canonical API contract for the Jarvis Chat backend.
+
+    This file is the source of truth for public application endpoints.
+    Legacy aliases removed from the router must not appear here.
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://api.jarvis.chat
+    description: Production environment
+
+tags:
+  - name: Auth
+  - name: Chat
+  - name: Calls
+  - name: Admin
+
+components:
+  securitySchemes:
+    TokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "Token <your_token>"
+
+  schemas:
+    Envelope:
+      type: object
+      required: [ response, message ]
+      properties:
+        response:
+          type: string
+          enum: [ success, error, pending ]
+        message:
+          type: string
+        payload:
+          nullable: true
+        error:
+          type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+
+    LoginRequest:
+      type: object
+      required: [ identifier, password ]
+      properties:
+        identifier:
+          type: string
+          description: Email or phone number
+        password:
+          type: string
+      example:
+        identifier: user@example.com
+        password: password123
+
+    RequestOTPRequest:
+      type: object
+      required: [ identifier ]
+      properties:
+        identifier:
+          type: string
+          description: Email or phone number
+
+    VerifyOTPRequest:
+      type: object
+      required: [ session_id, otp_code ]
+      properties:
+        session_id:
+          type: string
+          description: Session identifier or email
+        otp_code:
+          type: string
+
+    CompleteSignupRequest:
+      type: object
+      required: [ session_id, otp_code, password, first_name ]
+      properties:
+        session_id:
+          type: string
+        otp_code:
+          type: string
+        password:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+          nullable: true
+
+    UserListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        avatar:
+          type: string
+          nullable: true
+        is_online:
+          type: boolean
+
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserListItem"
+        last_message:
+          type: string
+        last_message_time:
+          type: string
+          format: date-time
+        unread_count:
+          type: integer
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversation_id:
+          type: integer
+        sender_id:
+          type: integer
+        text:
+          type: string
+        file_url:
+          type: string
+          nullable: true
+        file_type:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        reactions:
+          type: object
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserListItem"
+
+paths:
+  /api/auth/request-otp/:
+    post:
+      tags: [ Auth ]
+      summary: Request OTP for login/signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestOTPRequest"
+      responses:
+        "200":
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/auth/verify-otp/:
+    post:
+      tags: [ Auth ]
+      summary: Verify OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOTPRequest"
+      responses:
+        "200":
+          description: OTP verified
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      payload:
+                        $ref: "#/components/schemas/AuthResponse"
+
+  /api/auth/complete-signup/:
+    post:
+      tags: [ Auth ]
+      summary: Complete account registration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteSignupRequest"
+      responses:
+        "200":
+          description: Signup complete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  /api/auth/login/:
+    post:
+      tags: [ Auth ]
+      summary: Login with password or OTP session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  /api/auth/profile/:
+    get:
+      tags: [ Auth ]
+      security:
+        - TokenAuth: []
+      summary: Get own profile
+      responses:
+        "200":
+          description: Profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListItem"
+
+  /api/chat/conversations/:
+    get:
+      tags: [ Chat ]
+      security:
+        - TokenAuth: []
+      summary: List all user conversations
+      responses:
+        "200":
+          description: Conversations retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+
+  /api/chat/messages/{conversation_id}/:
+    get:
+      tags: [ Chat ]
+      security:
+        - TokenAuth: []
+      summary: Get messages for a conversation
+      parameters:
+        - in: path
+          name: conversation_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Messages retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+
+  /api/chat/messages/upload/:
+    post:
+      tags: [ Chat ]
+      security:
+        - TokenAuth: []
+      summary: Upload media file for a message
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                conversation_id:
+                  type: integer
+      responses:
+        "201":
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+
+  /api/calls/:
+    get:
+      tags: [ Calls ]
+      security:
+        - TokenAuth: []
+      summary: List call history
+      responses:
+        "200":
+          description: Call logs retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object

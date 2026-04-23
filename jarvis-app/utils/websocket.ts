@@ -86,7 +86,7 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
                         },
                         trigger: null,
                     });
-                } catch (error) {
+                } catch {
                 }
             }
         } else if (data.message) {
@@ -129,7 +129,7 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
                             },
                             trigger: null,
                         });
-                    } catch (error) {
+                    } catch {
                     }
                 }
             }

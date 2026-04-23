@@ -2,11 +2,22 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables
+env_paths = [
+    BASE_DIR / ".env",
+    BASE_DIR.parent / ".env",
+    BASE_DIR / ".env.production",
+    BASE_DIR.parent / ".env.production",
+]
+for env_path in env_paths:
+    if env_path.exists():
+        load_dotenv(env_path)
+        break
+else:
+    load_dotenv() # Fallback to default behavior
 
 
 # Quick-start development settings - unsuitable for production
@@ -177,7 +188,8 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/day',
         'user': '1000/day'
-    }
+    },
+    'EXCEPTION_HANDLER': 'utils.exceptions.custom_exception_handler',
 }
 
 CORS_ALLOW_ALL_ORIGINS = os.environ.get("DJANGO_CORS_ALLOW_ALL_ORIGINS", "True") == "True"
@@ -187,7 +199,9 @@ CORS_ALLOW_CREDENTIALS = True
 
 
 if not DEBUG:
-    SECURE_SSL_REDIRECT = True
+    # Disable redirect if accessing via localhost to allow local testing of production settings
+    # You can also use the DJANGO_SECURE_SSL_REDIRECT env var to override this
+    SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SECURE_SSL_REDIRECT', 'True') == 'True'
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 
@@ -200,5 +214,5 @@ EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False') == 'True'
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_TIMEOUT = 60
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER or 'noreply@jarvis.chat'
 

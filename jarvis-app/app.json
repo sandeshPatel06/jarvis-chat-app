@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Jarvis Chat",
-    "slug": "jarvis",
+    "slug": "jarvis-chat",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
@@ -94,10 +94,10 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "a51c6b97-eece-4ad5-896b-7825ea991232"
+        "projectId": "abf592b6-38a4-4cf0-bf50-9fa366456abd"
       }
     },
-    "owner": "reakuser",
+    "owner": "userofplayvee2",
     "runtimeVersion": {
       "policy": "appVersion"
     },

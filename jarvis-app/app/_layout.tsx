@@ -63,7 +63,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     initApp();
-  }, []); // Run only once on mount
+  }, [initApp]); // Run only once on mount
 
 
   useEffect(() => {

@@ -23,7 +23,7 @@ export const VoicePlayer = ({ audioUri, duration }: VoicePlayerProps) => {
         }, 100);
 
         return () => clearInterval(interval);
-    }, [player.playing]);
+    }, [player.playing, player.currentTime]);
 
     const togglePlayback = () => {
         if (player.playing) {

@@ -1,11 +1,10 @@
 import React, { useRef } from 'react';
-import { StyleSheet, View, TouchableOpacity, Text, Animated, PanResponder, Dimensions } from 'react-native';
+import { StyleSheet, View, Text, Animated, PanResponder, Dimensions } from 'react-native';
 import { RTCView } from 'react-native-webrtc';
 import { useStore } from '@/store';
 import { useRouter, useSegments } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme } from '@/hooks/useAppTheme';
-
 
 const MINI_WINDOW_WIDTH = 120;
 const MINI_WINDOW_HEIGHT = 180;
@@ -18,15 +17,14 @@ export const CallMiniWindow = () => {
     const { callState, setIsMinimized, chats } = useStore();
     const { isCalling, isMinimized, remoteStream, localStream, activeChatId } = callState;
 
-    const isOnCallScreen = segments[0] === 'call';
-    if (!isCalling || !isMinimized || isOnCallScreen) return null;
-
-    const chat = chats.find(c => c.id === activeChatId);
-    const displayName = chat?.name || 'Call';
-
     // Draggable position state
     const pan = useRef(new Animated.ValueXY({ x: SCREEN_WIDTH - MINI_WINDOW_WIDTH - 20, y: SCREEN_HEIGHT - MINI_WINDOW_HEIGHT - 100 })).current;
     const lastTap = useRef(0);
+
+    const handleExpand = () => {
+        setIsMinimized(false);
+        router.push(`/call/${activeChatId}`);
+    };
 
     const panResponder = useRef(
         PanResponder.create({
@@ -73,10 +71,11 @@ export const CallMiniWindow = () => {
         })
     ).current;
 
-    const handleExpand = () => {
-        setIsMinimized(false);
-        router.push(`/call/${activeChatId}`);
-    };
+    const isOnCallScreen = segments[0] === 'call';
+    if (!isCalling || !isMinimized || isOnCallScreen) return null;
+
+    const chat = chats.find(c => c.id === activeChatId);
+    const displayName = chat?.name || 'Call';
 
     return (
         <Animated.View
@@ -117,7 +116,6 @@ export const CallMiniWindow = () => {
                     </View>
                 )}
             </View>
-
         </Animated.View>
     );
 };
@@ -166,28 +164,5 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: 'bold',
         marginTop: 5,
-    },
-    badge: {
-        position: 'absolute',
-        top: 8,
-        left: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 0, 0, 0.8)',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 10,
-    },
-    dot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: '#fff',
-        marginRight: 4,
-    },
-    badgeText: {
-        color: '#fff',
-        fontSize: 10,
-        fontWeight: 'bold',
     },
 });

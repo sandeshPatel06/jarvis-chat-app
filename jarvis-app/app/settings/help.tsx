@@ -16,18 +16,15 @@ export default function HelpSettingsScreen() {
     const { colors } = useAppTheme();
     const showAlert = useStore((state) => state.showAlert);
     const router = useRouter();
-    const [clickCount, setClickCount] = React.useState(0);
+    const clickCountRef = React.useRef(0);
     const [devMenuVisible, setDevMenuVisible] = React.useState(false);
 
     const handleDevMenuTrigger = useCallback(() => {
-        setClickCount(prev => {
-            const next = prev + 1;
-            if (next === 7) {
-                setDevMenuVisible(true);
-                return 0;
-            }
-            return next;
-        });
+        clickCountRef.current += 1;
+        if (clickCountRef.current === 7) {
+            setDevMenuVisible(true);
+            clickCountRef.current = 0;
+        }
     }, []);
 
     const handleHelpCenter = useCallback(async () => {

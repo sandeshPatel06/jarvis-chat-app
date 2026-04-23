@@ -88,13 +88,6 @@ export default function ChatDetailScreen() {
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
 
-    // Reaction Picker State
-    const [reactionPickerVisible, setReactionPickerVisible] = useState(false);
-    const [messageToReact, setMessageToReact] = useState<Message | null>(null);
-
-    // Pinned Messages State
-    const [pinnedMessagesVisible, setPinnedMessagesVisible] = useState(false);
-
     const flatListRef = useRef<FlatList>(null);
     const lastTypingSent = useRef<number>(0);
 
@@ -166,15 +159,6 @@ export default function ChatDetailScreen() {
         }
     }, [chat, text, editingMessageId, replyingToMessage, editMessage, sendMessage]);
 
-    const handleLongPressMessage = useCallback((message: Message) => {
-        if (selectionMode) {
-            toggleMessageSelection(message.id);
-        } else {
-            setSelectedMessage(message);
-            setModalVisible(true);
-        }
-    }, [selectionMode]);
-
     const toggleMessageSelection = useCallback((messageId: string) => {
         setSelectedMessages(prev => {
             const newSet = new Set(prev);
@@ -191,16 +175,20 @@ export default function ChatDetailScreen() {
         });
     }, []);
 
+    const handleLongPressMessage = useCallback((message: Message) => {
+        if (selectionMode) {
+            toggleMessageSelection(message.id);
+        } else {
+            setSelectedMessage(message);
+            setModalVisible(true);
+        }
+    }, [selectionMode, toggleMessageSelection]);
+
     const handleMessagePress = useCallback((message: Message) => {
         if (selectionMode) {
             toggleMessageSelection(message.id);
         }
     }, [selectionMode, toggleMessageSelection]);
-
-    const enterSelectionMode = useCallback((messageId: string) => {
-        setSelectionMode(true);
-        setSelectedMessages(new Set([messageId]));
-    }, []);
 
     const exitSelectionMode = useCallback(() => {
         setSelectionMode(false);
@@ -218,8 +206,9 @@ export default function ChatDetailScreen() {
                     text: 'Delete',
                     style: 'destructive',
                     onPress: () => {
+                        const cid = chat.id;
                         selectedMessages.forEach((msgId: string) => {
-                            deleteMessage(chat.id, msgId);
+                            deleteMessage(cid, msgId);
                         });
                         exitSelectionMode();
                     }
@@ -231,7 +220,7 @@ export default function ChatDetailScreen() {
     const forwardSelectedMessages = useCallback(() => {
         if (selectedMessages.size === 1) {
             const msgId = Array.from(selectedMessages)[0];
-            const message = chat?.messages.find(m => m.id === msgId);
+            const message = chat?.messages.find((m: any) => m.id === msgId);
             if (message) {
                 setMessageToForward(message);
                 setForwardModalVisible(true);
@@ -611,7 +600,7 @@ export default function ChatDetailScreen() {
                                                     try {
                                                         await clearChatMessages(chat.id);
                                                         showToast('success', 'Chat Cleared', 'All messages have been deleted');
-                                                    } catch (error) {
+                                                    } catch {
                                                         showAlert('Error', 'Failed to clear chat. Please try again.');
                                                     }
                                                 },
@@ -972,5 +961,25 @@ const styles = StyleSheet.create({
         padding: 10,
         elevation: 5,
         borderWidth: 1,
+    },
+    selectionToolbar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        height: 60,
+        borderTopWidth: 1,
+    },
+    toolbarButton: {
+        padding: 8,
+    },
+    selectionCount: {
+        flex: 1,
+        fontSize: 16,
+        fontWeight: '600',
+        marginLeft: 12,
+    },
+    toolbarActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
 });

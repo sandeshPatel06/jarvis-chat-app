@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
-import { useAudioRecorder } from 'expo-audio';
+import { useAudioRecorder, RecordingPresets } from 'expo-audio';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAppTheme } from '@/hooks/useAppTheme';
 
@@ -11,12 +11,12 @@ interface VoiceRecorderProps {
 
 export const VoiceRecorder = ({ onSend, onCancel }: VoiceRecorderProps) => {
     const { colors } = useAppTheme();
-    const audioRecorder = useAudioRecorder(RecordingOptions.HIGH_QUALITY);
+    const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
     const [duration, setDuration] = useState(0);
     const durationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
     const waveAnimation = useRef(new Animated.Value(1)).current;
 
-    const startRecording = async () => {
+    const startRecording = useCallback(async () => {
         try {
             await audioRecorder.record();
 
@@ -43,16 +43,17 @@ export const VoiceRecorder = ({ onSend, onCancel }: VoiceRecorderProps) => {
         } catch (err) {
             console.error('Failed to start recording', err);
         }
-    };
+    }, [audioRecorder, waveAnimation]);
 
-    const stopRecording = async () => {
+    const stopRecording = useCallback(async () => {
         try {
-            const uri = await audioRecorder.stop();
+            await audioRecorder.stop();
 
             if (durationInterval.current) {
                 clearInterval(durationInterval.current);
             }
 
+            const uri = audioRecorder.uri;
             if (uri) {
                 onSend(uri, duration);
             }
@@ -61,9 +62,9 @@ export const VoiceRecorder = ({ onSend, onCancel }: VoiceRecorderProps) => {
         } catch (err) {
             console.error('Failed to stop recording', err);
         }
-    };
+    }, [audioRecorder, duration, onSend]);
 
-    const cancelRecording = async () => {
+    const cancelRecording = useCallback(async () => {
         try {
             await audioRecorder.stop();
         } catch (err) {
@@ -76,7 +77,7 @@ export const VoiceRecorder = ({ onSend, onCancel }: VoiceRecorderProps) => {
 
         setDuration(0);
         onCancel();
-    };
+    }, [audioRecorder, onCancel]);
 
     const formatDuration = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -91,7 +92,7 @@ export const VoiceRecorder = ({ onSend, onCancel }: VoiceRecorderProps) => {
                 clearInterval(durationInterval.current);
             }
         };
-    }, []);
+    }, [startRecording]);
 
     return (
         <View style={[styles.container, { backgroundColor: colors.card }]}>

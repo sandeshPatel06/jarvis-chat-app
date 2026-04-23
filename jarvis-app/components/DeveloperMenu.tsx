@@ -15,7 +15,6 @@ import { logger } from '@/services/logger';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as Clipboard from 'expo-clipboard';
 import * as Device from 'expo-device';
-import Constants from 'expo-constants';
 import NetInfo from '@react-native-community/netinfo';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';

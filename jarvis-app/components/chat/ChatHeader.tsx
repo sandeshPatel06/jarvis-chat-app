@@ -1,11 +1,11 @@
-import { View, Text, TouchableOpacity, Image, StyleSheet, ViewStyle } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { Chat } from '@/types';
 import { useStore } from '@/store';
 import { useRouter } from 'expo-router';
-import { getMediaUrl } from '@/utils/media';
+// import { getMediaUrl } from '@/utils/media';
 import { formatLastSeen } from '@/utils/date';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/Avatar';

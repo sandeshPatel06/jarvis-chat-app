@@ -1,11 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
 import { api } from './services/api';
 import NetInfo from '@react-native-community/netinfo';
 import * as database from './services/database';
 import { User, Message, Chat, Call } from '@/types';
-import { getMediaUrl, downloadMedia } from './utils/media';
+import { getMediaUrl, downloadMedia, getLocalMediaUri } from './utils/media';
 import { webrtcService } from './services/webrtc';
 import { MediaStream } from 'react-native-webrtc';
 import * as SecureStore from 'expo-secure-store';
@@ -15,18 +14,7 @@ import * as Audio from 'expo-audio';
 import * as ImagePicker from 'expo-image-picker';
 import { scheduleLocalNotification } from './utils/notifications';
 
-// Custom storage wrapper for Zustand to use SecureStore for sensitive data
-const secureStorage = {
-    getItem: async (name: string): Promise<string | null> => {
-        return await SecureStore.getItemAsync(name);
-    },
-    setItem: async (name: string, value: string): Promise<void> => {
-        await SecureStore.setItemAsync(name, value);
-    },
-    removeItem: async (name: string): Promise<void> => {
-        await SecureStore.deleteItemAsync(name);
-    },
-};
+
 
 interface Toast {
     type: 'success' | 'error' | 'info';
@@ -203,7 +191,7 @@ const stopRingtone = async () => {
 
 
 
-const mockChats: Chat[] = [];
+
 
 export const useStore = create<AppState>((set, get) => {
     return {
@@ -550,7 +538,7 @@ export const useStore = create<AppState>((set, get) => {
             const { token } = get();
             if (!token) return;
             try {
-                const response = await api.chat.restoreChats(token, conversationIds, restoreDate);
+                await api.chat.restoreChats(token, conversationIds, restoreDate);
                 // Refresh chats
                 await get().fetchChats();
             } catch (e) {
@@ -560,26 +548,18 @@ export const useStore = create<AppState>((set, get) => {
         },
 
         handleSignalingMessage: async (message: any) => {
-            const { type, payload } = message;
             const pc = webrtcService.peerConnection;
-            const signalingState = pc?.signalingState || 'no-pc';
-            const connectionState = pc?.connectionState || 'no-pc';
 
 
 
             if (message.type === 'webrtc_offer') {
-
                 const state = get().callState;
-                const currentUser = get().user?.username;
 
 
                 const isGlaring = state.isCalling || state.incomingCall;
                 const isRenegotiation = state.isCalling && state.activeChatId === message.chat_id;
 
                 if (isGlaring && !isRenegotiation) {
-
-                    const chat = get().chats.find(c => c.id === message.chat_id);
-                    const remoteUsername = chat?.name;
 
 
                     stopRingtone();
@@ -637,7 +617,7 @@ export const useStore = create<AppState>((set, get) => {
             } else if (message.type === 'webrtc_answer') {
 
                 if (!pc || pc.signalingState !== 'have-local-offer') {
-                    console.warn(`[Signaling] ⚠️ Unexpected Answer! PC state is ${signalingState}. Expected 'have-local-offer'. Ignoring.`);
+                    console.warn(`[Signaling] ⚠️ Unexpected Answer! PC state is ${pc?.signalingState || 'no-pc'}. Expected 'have-local-offer'. Ignoring.`);
                     return;
                 }
 
@@ -659,9 +639,7 @@ export const useStore = create<AppState>((set, get) => {
                     }));
                 }
             } else if (message.type === 'webrtc_ice_candidate') {
-
                 const pc = webrtcService.peerConnection;
-                const signalingState = pc?.signalingState || 'no-pc';
 
                 if (pc && pc.remoteDescription) {
 
@@ -753,7 +731,7 @@ export const useStore = create<AppState>((set, get) => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         },
         sendFileMessage: async (chatId, file, text = '', replyToId) => {
-            const { token, user } = get();
+            const { token } = get();
             if (!token) {
                 console.error('No token available for file upload');
                 throw new Error('Authentication required. Please log in again.');
@@ -1252,8 +1230,7 @@ export const useStore = create<AppState>((set, get) => {
 
                             if (fullMediaUrl) {
                                 // Check if file already exists locally first
-                                const { getLocalMediaUri } = require('@/utils/media');
-                                const existingLocalUri = getLocalMediaUri(msg.id.toString());
+                                const existingLocalUri = await getLocalMediaUri(msg.id.toString());
 
                                 if (existingLocalUri) {
                                     // File already downloaded, use local URI immediately
@@ -1369,7 +1346,7 @@ export const useStore = create<AppState>((set, get) => {
         },
 
         fetchCalls: async (loadMore = false) => {
-            const { token, calls, callsOffset, hasMoreCalls } = get();
+            const { token, callsOffset, hasMoreCalls } = get();
             if (!token) return;
 
             // If loading more and no more data, stop
