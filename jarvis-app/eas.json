@@ -12,7 +12,7 @@
                 "EXPO_PUBLIC_BACKEND_URL": "https://jarvis-chat-nhi5.onrender.com",
                 "EXPO_PUBLIC_WS_URL": "wss://jarvis-chat-nhi5.onrender.com/ws/chat",
                 "EXPO_PUBLIC_APP_DOWNLOAD_LINK": "https://jarvis-chat.app/download",
-                "EXPO_PUBLIC_PROJECT_ID": "a51c6b97-eece-4ad5-896b-7825ea991232"
+                "EXPO_PUBLIC_PROJECT_ID": "abf592b6-38a4-4cf0-bf50-9fa366456abd"
             }
         },
         "preview": {
@@ -22,7 +22,7 @@
                 "EXPO_PUBLIC_BACKEND_URL": "https://jarvis-chat-nhi5.onrender.com",
                 "EXPO_PUBLIC_WS_URL": "wss://jarvis-chat-nhi5.onrender.com/ws/chat",
                 "EXPO_PUBLIC_APP_DOWNLOAD_LINK": "https://jarvis-chat.app/download",
-                "EXPO_PUBLIC_PROJECT_ID": "a51c6b97-eece-4ad5-896b-7825ea991232"
+                "EXPO_PUBLIC_PROJECT_ID": "abf592b6-38a4-4cf0-bf50-9fa366456abd"
             }
         },
         "production": {
@@ -32,7 +32,7 @@
                 "EXPO_PUBLIC_BACKEND_URL": "https://jarvis-chat-nhi5.onrender.com",
                 "EXPO_PUBLIC_WS_URL": "wss://jarvis-chat-nhi5.onrender.com/ws/chat",
                 "EXPO_PUBLIC_APP_DOWNLOAD_LINK": "https://jarvis-chat.app/download",
-                "EXPO_PUBLIC_PROJECT_ID": "a51c6b97-eece-4ad5-896b-7825ea991232"
+                "EXPO_PUBLIC_PROJECT_ID": "abf592b6-38a4-4cf0-bf50-9fa366456abd"
             }
         }
     },

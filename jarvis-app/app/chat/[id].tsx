@@ -541,11 +541,11 @@ export default function ChatDetailScreen() {
                                 exiting={FadeOut.duration(200)}
                                 style={[styles.chatOptionsContainer, { 
                                     top: insets.top + (Platform.OS === 'ios' ? 60 : 70), 
-                                    backgroundColor: isDark ? 'rgba(28, 28, 30, 0.8)' : 'rgba(255, 255, 255, 0.8)',
-                                    borderColor: colors.cardBorder
+                                    backgroundColor: isDark ? 'rgba(30, 30, 32, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+                                    borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
                                 }]}
                             >
-                                <BlurView intensity={Platform.OS === 'ios' ? 80 : 100} tint={isDark ? 'dark' : 'light'} style={styles.menuBlur}>
+                                <BlurView intensity={Platform.OS === 'ios' ? 90 : 120} tint={isDark ? 'dark' : 'light'} style={styles.menuBlur}>
                                     <View style={styles.menuGroup}>
                                         {/* View Contact Profile */}
                                         <TouchableOpacity onPress={() => {
@@ -961,15 +961,16 @@ const styles = StyleSheet.create({
         letterSpacing: 0.2,
     },
     menuBlur: {
-        padding: 10,
+        padding: 6,
     },
     menuGroup: {
-        paddingVertical: 4,
+        paddingVertical: 2,
     },
     menuDivider: {
         height: 1,
-        marginVertical: 6,
-        marginHorizontal: 16,
+        marginVertical: 8,
+        marginHorizontal: 12,
+        opacity: 0.5,
     },
     searchBar: {
         flexDirection: 'row',
@@ -986,15 +987,15 @@ const styles = StyleSheet.create({
     chatOptionsContainer: {
         position: 'absolute',
         right: 16,
-        width: 250,
-        borderRadius: 24,
+        width: 220,
+        borderRadius: 28,
         overflow: 'hidden',
         borderWidth: 1,
-        elevation: 25,
+        elevation: 15,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.35,
-        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 15 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
     },
     selectionToolbar: {
         flexDirection: 'row',
