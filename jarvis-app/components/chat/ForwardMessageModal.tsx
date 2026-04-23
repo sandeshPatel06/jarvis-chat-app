@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Modal, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, StyleSheet, FlatList, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -17,10 +17,23 @@ export const ForwardMessageModal = ({ visible, onClose, message, chats, onForwar
     const { colors } = useAppTheme();
     const [selectedChats, setSelectedChats] = useState<string[]>([]);
 
-    // Reset selected chats when modal closes
+    const [searchQuery, setSearchQuery] = useState('');
+
+    // Filtered chats based on name or phone number
+    const filteredChats = chats.filter(chat => {
+        const query = searchQuery.toLowerCase();
+        return (
+            (chat.name && chat.name.toLowerCase().includes(query)) ||
+            (chat.phoneNumber && chat.phoneNumber.toLowerCase().includes(query)) ||
+            (chat.lastMessage && chat.lastMessage.toLowerCase().includes(query))
+        );
+    });
+
+    // Reset selected chats and search query when modal closes
     useEffect(() => {
         if (!visible) {
             setSelectedChats([]);
+            setSearchQuery('');
         }
     }, [visible]);
 
@@ -36,12 +49,14 @@ export const ForwardMessageModal = ({ visible, onClose, message, chats, onForwar
         if (selectedChats.length > 0) {
             onForward(selectedChats);
             setSelectedChats([]);
+            setSearchQuery('');
             onClose();
         }
     };
 
     const handleClose = () => {
         setSelectedChats([]);
+        setSearchQuery('');
         onClose();
     };
 
@@ -94,6 +109,25 @@ export const ForwardMessageModal = ({ visible, onClose, message, chats, onForwar
                     <View style={styles.placeholder} />
                 </View>
 
+                {/* Search Bar */}
+                <View style={styles.searchContainer}>
+                    <View style={[styles.searchInputContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <MaterialCommunityIcons name="magnify" size={20} color={colors.tabIconDefault} />
+                        <TextInput
+                            style={[styles.searchInput, { color: colors.text }]}
+                            placeholder="Search chats..."
+                            placeholderTextColor={colors.tabIconDefault}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                <MaterialCommunityIcons name="close-circle" size={18} color={colors.tabIconDefault} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+
                 {/* Selected Count */}
                 {selectedChats.length > 0 && (
                     <View style={[styles.selectedBanner, { backgroundColor: colors.primary + '20' }]}>
@@ -105,10 +139,17 @@ export const ForwardMessageModal = ({ visible, onClose, message, chats, onForwar
 
                 {/* Chat List */}
                 <FlatList
-                    data={chats}
+                    data={filteredChats}
                     keyExtractor={(item) => item.id}
                     renderItem={renderChatItem}
                     style={styles.list}
+                    ListEmptyComponent={() => (
+                        <View style={styles.emptyContainer}>
+                            <Text style={[styles.emptyText, { color: colors.tabIconDefault }]}>
+                                {searchQuery ? 'No chats found' : 'No recent chats'}
+                            </Text>
+                        </View>
+                    )}
                 />
 
                 {/* Forward Button */}
@@ -156,6 +197,24 @@ const styles = StyleSheet.create({
     },
     placeholder: {
         width: 32,
+    },
+    searchContainer: {
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+    },
+    searchInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 10,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderWidth: 1,
+    },
+    searchInput: {
+        flex: 1,
+        marginLeft: 8,
+        fontSize: 15,
+        height: 36,
     },
     selectedBanner: {
         paddingVertical: 12,
@@ -241,5 +300,15 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 16,
         fontWeight: '600',
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingTop: 100,
+    },
+    emptyText: {
+        fontSize: 16,
+        opacity: 0.7,
     },
 });

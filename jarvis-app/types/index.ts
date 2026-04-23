@@ -55,6 +55,7 @@ export interface Chat {
     last_seen?: string | Date;
     is_online?: boolean;
     user_id?: number; // ID of the other user in 1-on-1 chats
+    phoneNumber?: string | null;
     is_deleted?: boolean;
 }
 

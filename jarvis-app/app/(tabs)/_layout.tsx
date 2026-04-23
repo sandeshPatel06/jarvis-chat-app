@@ -1,7 +1,8 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs, useRouter } from 'expo-router';
 import React from 'react';
-import { View, TouchableOpacity, Platform, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
@@ -23,24 +24,26 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: colors.background,
           borderTopWidth: 0,
-          elevation: 10,
-          height: 60,
+          elevation: 15,
+          height: 68,
           position: 'absolute',
-          bottom: 25,
-          left: 40,
-          right: 40,
-          borderRadius: 30,
-          shadowColor: colors.primary,
-          shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: 0.15,
-          shadowRadius: 15,
-          paddingHorizontal: 10,
-          paddingTop: Platform.OS === 'ios' ? 0 : 0,
+          bottom: 30,
+          left: 20,
+          right: 20,
+          borderRadius: 24,
+          paddingHorizontal: 15,
+          paddingBottom: 0,
+          paddingTop: 0,
           borderWidth: 1,
-          borderColor: colors.backgroundSecondary,
+          borderColor: colors.cardBorder,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.2,
+          shadowRadius: 20,
         },
         tabBarItemStyle: {
-          height: 60,
+          height: 68,
+          paddingVertical: 10,
         },
         tabBarIconStyle: {
           marginTop: 0,
@@ -56,9 +59,9 @@ export default function TabLayout() {
         },
         headerTitleStyle: {
           color: colors.text,
-          fontSize: 32,
-          fontWeight: '900',
-          letterSpacing: -1,
+          fontSize: 28,
+          fontWeight: '800',
+          letterSpacing: 0.5,
         },
         headerTitleAlign: 'left',
         headerStatusBarHeight: insets.top,
@@ -66,16 +69,22 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          headerTitle: 'Jarvis',
+          headerTitle: 'Chats',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && { backgroundColor: colors.backgroundSecondary }]}>
-              <FontAwesome name="flash" size={22} color={color} />
+              <MaterialCommunityIcons name={focused ? "chat" : "chat-outline"} size={26} color={color} />
             </View>
           ),
           headerRight: () => (
             <View style={styles.headerRight}>
-              <TouchableOpacity onPress={() => router.setParams({ triggerSearch: Date.now().toString() })}>
-                <FontAwesome name="search" size={22} color={colors.textSecondary} />
+              <TouchableOpacity 
+                style={styles.headerIconButton}
+                onPress={() => router.setParams({ triggerSearch: Date.now().toString() })}
+              >
+                <FontAwesome name="search" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.headerIconButton}>
+                <FontAwesome name="ellipsis-v" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
           ),
@@ -84,10 +93,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="people"
         options={{
-          headerTitle: 'Circles',
+          headerTitle: 'Contacts',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && { backgroundColor: colors.backgroundSecondary }]}>
-              <FontAwesome name="circle-o-notch" size={22} color={color} />
+              <MaterialCommunityIcons name={focused ? "account-group" : "account-group-outline"} size={26} color={color} />
             </View>
           ),
         }}
@@ -95,10 +104,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="calls"
         options={{
-          headerTitle: 'Pulse',
+          headerTitle: 'Calls',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && { backgroundColor: colors.backgroundSecondary }]}>
-              <FontAwesome name="dot-circle-o" size={22} color={color} />
+              <MaterialCommunityIcons name={focused ? "phone" : "phone-outline"} size={26} color={color} />
             </View>
           ),
         }}
@@ -106,10 +115,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          headerTitle: 'Space',
+          headerTitle: 'Settings',
           tabBarIcon: ({ color, focused }) => (
             <View style={[styles.iconContainer, focused && { backgroundColor: colors.backgroundSecondary }]}>
-              <FontAwesome name="sliders" size={22} color={color} />
+              <MaterialCommunityIcons name={focused ? "cog" : "cog-outline"} size={26} color={color} />
             </View>
           ),
         }}
@@ -120,13 +129,21 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerRight: {
-    paddingRight: 20,
+    paddingRight: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   }
 });

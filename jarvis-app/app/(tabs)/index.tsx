@@ -38,7 +38,8 @@ export default function ChatsScreen() {
     return chats.filter(chat =>
       (chat.name && chat.name.toLowerCase().includes(query)) ||
       (chat.lastMessage && chat.lastMessage.toLowerCase().includes(query)) ||
-      (chat.id && chat.id.toLowerCase().includes(query)) // ID usually contains the phone number
+      (chat.phoneNumber && chat.phoneNumber.toLowerCase().includes(query)) ||
+      (chat.id && chat.id.toLowerCase().includes(query))
     );
   }, [chats, searchQuery]);
 

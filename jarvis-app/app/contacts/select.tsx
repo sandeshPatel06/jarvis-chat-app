@@ -143,7 +143,11 @@ export default function SelectContactScreen() {
     const handleSelectContact = useCallback(async (contact: Contact) => {
         if (!token || !contact.has_account) return;
 
-        const existingChat = useStore.getState().chats.find(chat => chat.name === contact.username);
+        // Try to find an existing 1-1 chat with this user
+        const existingChat = useStore.getState().chats.find(chat => 
+            (chat.user_id && chat.user_id.toString() === contact.id) || 
+            chat.name === contact.username
+        );
 
         if (existingChat) {
             router.replace(`/chat/${existingChat.id}`);
@@ -153,7 +157,12 @@ export default function SelectContactScreen() {
         try {
             setLoading(true);
             const conversation = await api.chat.createConversation(token, contact.username);
+            
+            // Fetch chats to ensure it's in the store
             await useStore.getState().fetchChats();
+            
+            // Add a small delay to allow store update to propagate if needed, 
+            // though fetchChats is awaited, sometimes navigation happens too fast for some observers
             router.replace(`/chat/${conversation.id}`);
         } catch (error) {
             console.error(error);
@@ -244,16 +253,28 @@ export default function SelectContactScreen() {
                 </View>
             </View>
 
-            {contacts.filter(c => c.username.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
-                <View style={styles.emptyContainer}>
-                    <FontAwesome name="users" size={60} color={colors.textSecondary} style={{ opacity: 0.3 }} />
-                    <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                        {searchQuery ? 'No contacts found' : 'No contacts yet'}
-                    </Text>
-                </View>
-            ) : (
-                <FlatList
-                    data={contacts.filter(c => c.username.toLowerCase().includes(searchQuery.toLowerCase()))}
+            {(() => {
+                const filtered = contacts.filter(c => {
+                    const query = searchQuery.toLowerCase();
+                    const nameMatch = c.username.toLowerCase().includes(query);
+                    const phoneMatch = c.phone ? c.phone.toLowerCase().includes(query) : false;
+                    return nameMatch || phoneMatch;
+                });
+
+                if (filtered.length === 0) {
+                    return (
+                        <View style={styles.emptyContainer}>
+                            <FontAwesome name="users" size={60} color={colors.textSecondary} style={{ opacity: 0.3 }} />
+                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                                {searchQuery ? 'No contacts found' : 'No contacts yet'}
+                            </Text>
+                        </View>
+                    );
+                }
+
+                return (
+                    <FlatList
+                        data={filtered}
                     keyExtractor={(item) => item.id}
                     renderItem={({ item }) => {
                         const hasJarvisAccount = item.has_account === true;
@@ -303,7 +324,8 @@ export default function SelectContactScreen() {
                     }}
                     contentContainerStyle={styles.listContent}
                 />
-            )}
+            );
+        })()}
         </ScreenWrapper>
     );
 }

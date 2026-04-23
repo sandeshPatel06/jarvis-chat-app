@@ -1426,7 +1426,8 @@ export const useStore = create<AppState>((set, get) => {
                         lastMessageTime: c.last_message ? new Date(c.last_message.timestamp) : new Date(),
                         unreadCount: c.unread_count || 0,
                         messages: [],
-                        user_id: c.other_user_id || participant?.id // Add user_id from backend
+                        user_id: c.other_user_id || participant?.id, // Add user_id from backend
+                        phoneNumber: participant?.phone_number || null // Add phone number for search
                     };
                 });
 

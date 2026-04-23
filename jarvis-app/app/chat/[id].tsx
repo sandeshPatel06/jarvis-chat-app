@@ -19,6 +19,8 @@ import {
     ActivityIndicator,
     LayoutAnimation
 } from 'react-native';
+import { BlurView } from 'expo-blur';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
@@ -91,6 +93,11 @@ export default function ChatDetailScreen() {
     const flatListRef = useRef<FlatList>(null);
     const lastTypingSent = useRef<number>(0);
 
+    const fetchChats = useStore(useCallback((state: any) => state.fetchChats, []));
+    const [isRetrying, setIsRetrying] = useState(false);
+
+    const hasRetried = useRef<string | null>(null);
+
     /* -------------------- lifecycle -------------------- */
     useEffect(() => {
         if (id) {
@@ -102,6 +109,22 @@ export default function ChatDetailScreen() {
             useStore.getState().setActiveChat(null);
         };
     }, [id, fetchMessages, connectWebSocket]);
+
+    // Separate effect for syncing chats if ID is missing
+    useEffect(() => {
+        if (id && !chat && hasRetried.current !== id) {
+            const syncChats = async () => {
+                setIsRetrying(true);
+                hasRetried.current = id;
+                try {
+                    await fetchChats();
+                } finally {
+                    setIsRetrying(false);
+                }
+            };
+            syncChats();
+        }
+    }, [id, chat, fetchChats]);
 
     useEffect(() => {
         const show = Keyboard.addListener('keyboardDidShow', () => {
@@ -464,7 +487,11 @@ export default function ChatDetailScreen() {
 
             {!chat ? (
                 <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                    <Text style={{ color: colors.text }}>Chat not found</Text>
+                    {isRetrying ? (
+                        <ActivityIndicator size="large" color={colors.primary} />
+                    ) : (
+                        <Text style={{ color: colors.text }}>Chat not found</Text>
+                    )}
                 </View>
             ) : (
                 <>
@@ -505,191 +532,180 @@ export default function ChatDetailScreen() {
                     <Modal
                         transparent={true}
                         visible={chatOptionsVisible}
-                        animationType="fade"
+                        animationType="none"
                         onRequestClose={() => setChatOptionsVisible(false)}
                     >
                         <Pressable style={styles.modalOverlay} onPress={() => setChatOptionsVisible(false)}>
-                            <View style={[styles.chatOptionsContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                {/* View Contact Profile */}
-                                <TouchableOpacity onPress={() => {
-                                    setChatOptionsVisible(false);
-                                    if (chat.user_id) {
-                                        router.push(`/user/${chat.user_id}`);
-                                    } else {
-                                        router.push(`/contact/${chat.id}`);
-                                    }
-                                }} style={styles.menuOption}>
-                                    <Text style={{ color: colors.text, fontSize: 16 }}>View Profile</Text>
-                                    <MaterialCommunityIcons name="account-outline" size={20} color={colors.text} />
-                                </TouchableOpacity>
+                            <Animated.View 
+                                entering={FadeIn.duration(200)}
+                                exiting={FadeOut.duration(200)}
+                                style={[styles.chatOptionsContainer, { 
+                                    top: insets.top + (Platform.OS === 'ios' ? 60 : 70), 
+                                    backgroundColor: isDark ? 'rgba(28, 28, 30, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+                                    borderColor: colors.cardBorder
+                                }]}
+                            >
+                                <BlurView intensity={Platform.OS === 'ios' ? 80 : 100} tint={isDark ? 'dark' : 'light'} style={styles.menuBlur}>
+                                    <View style={styles.menuGroup}>
+                                        {/* View Contact Profile */}
+                                        <TouchableOpacity onPress={() => {
+                                            setChatOptionsVisible(false);
+                                            if (chat.user_id) {
+                                                router.push(`/user/${chat.user_id}`);
+                                            } else {
+                                                router.push(`/contact/${chat.id}`);
+                                            }
+                                        }} style={styles.menuOption}>
+                                            <Text style={[styles.menuText, { color: colors.text }]}>View Profile</Text>
+                                            <MaterialCommunityIcons name="account-outline" size={20} color={colors.text} />
+                                        </TouchableOpacity>
 
-                                {/* Search in Chat */}
-                                <TouchableOpacity onPress={() => {
-                                    setChatOptionsVisible(false);
-                                    setSearchVisible(true);
-                                }} style={styles.menuOption}>
-                                    <Text style={{ color: colors.text, fontSize: 16 }}>Search</Text>
-                                    <MaterialCommunityIcons name="magnify" size={20} color={colors.text} />
-                                </TouchableOpacity>
+                                        {/* Search in Chat */}
+                                        <TouchableOpacity onPress={() => {
+                                            setChatOptionsVisible(false);
+                                            setSearchVisible(true);
+                                        }} style={styles.menuOption}>
+                                            <Text style={[styles.menuText, { color: colors.text }]}>Search</Text>
+                                            <MaterialCommunityIcons name="magnify" size={20} color={colors.text} />
+                                        </TouchableOpacity>
+                                    </View>
 
-                                {/* Mute Notifications */}
-                                <TouchableOpacity onPress={() => {
-                                    setChatOptionsVisible(false);
-                                    const isMuted = isChatMuted(chat.id);
-                                    if (isMuted) {
-                                        unmuteChat(chat.id);
-                                        showToast('success', 'Unmuted', `Notifications for ${chat.name} are now enabled`);
-                                    } else {
-                                        muteChat(chat.id);
-                                        showToast('success', 'Muted', `Notifications for ${chat.name} are now disabled`);
-                                    }
-                                }} style={styles.menuOption}>
-                                    <Text style={{ color: colors.text, fontSize: 16 }}>
-                                        {isChatMuted(chat.id) ? 'Unmute' : 'Mute'} Notifications
-                                    </Text>
-                                    <MaterialCommunityIcons
-                                        name={isChatMuted(chat.id) ? "bell" : "bell-off-outline"}
-                                        size={20}
-                                        color={colors.text}
-                                    />
-                                </TouchableOpacity>
+                                    <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
 
-                                {/* Wallpaper */}
-                                <TouchableOpacity onPress={() => {
-                                    setChatOptionsVisible(false);
-                                    router.push('/settings/wallpaper');
-                                }} style={styles.menuOption}>
-                                    <Text style={{ color: colors.text, fontSize: 16 }}>Wallpaper</Text>
-                                    <MaterialCommunityIcons name="image-outline" size={20} color={colors.text} />
-                                </TouchableOpacity>
+                                    <View style={styles.menuGroup}>
+                                        {/* Mute Notifications */}
+                                        <TouchableOpacity onPress={() => {
+                                            setChatOptionsVisible(false);
+                                            const isMuted = isChatMuted(chat.id);
+                                            if (isMuted) {
+                                                unmuteChat(chat.id);
+                                                showToast('success', 'Unmuted', `Notifications for ${chat.name} are now enabled`);
+                                            } else {
+                                                muteChat(chat.id);
+                                                showToast('success', 'Muted', `Notifications for ${chat.name} are now disabled`);
+                                            }
+                                        }} style={styles.menuOption}>
+                                            <Text style={[styles.menuText, { color: colors.text }]}>
+                                                {isChatMuted(chat.id) ? 'Unmute' : 'Mute'} Notifications
+                                            </Text>
+                                            <MaterialCommunityIcons
+                                                name={isChatMuted(chat.id) ? "bell" : "bell-off-outline"}
+                                                size={20}
+                                                color={colors.text}
+                                            />
+                                        </TouchableOpacity>
 
-                                {/* Export Chat */}
-                                <TouchableOpacity onPress={async () => {
-                                    setChatOptionsVisible(false);
-                                    try {
-                                        const Share = await import('react-native').then((m: any) => m.Share);
-                                        const messageText = chat.messages
-                                            .map((m: any) => `[${new Date(m.timestamp).toLocaleString()}] ${m.sender}: ${m.text}`)
-                                            .reverse()
-                                            .join('\n');
-                                        await Share.share({
-                                            message: `Chat with ${chat.name}\n\n${messageText}`,
-                                            title: `Chat with ${chat.name}`
-                                        });
-                                    } catch (error) {
-                                        console.error('Export error:', error);
-                                        showAlert('Error', 'Failed to export chat');
-                                    }
-                                }} style={styles.menuOption}>
-                                    <Text style={{ color: colors.text, fontSize: 16 }}>Export Chat</Text>
-                                    <MaterialCommunityIcons name="export" size={20} color={colors.text} />
-                                </TouchableOpacity>
+                                        {/* Wallpaper */}
+                                        <TouchableOpacity onPress={() => {
+                                            setChatOptionsVisible(false);
+                                            router.push('/settings/wallpaper');
+                                        }} style={styles.menuOption}>
+                                            <Text style={[styles.menuText, { color: colors.text }]}>Wallpaper</Text>
+                                            <MaterialCommunityIcons name="image-outline" size={20} color={colors.text} />
+                                        </TouchableOpacity>
 
-                                {/* Clear Chat History */}
-                                <TouchableOpacity onPress={() => {
-                                    setChatOptionsVisible(false);
-                                    showAlert(
-                                        'Clear Chat',
-                                        'Are you sure you want to clear all messages in this chat? This cannot be undone.',
-                                        [
-                                            { text: 'Cancel', style: 'cancel' },
-                                            {
-                                                text: 'Clear',
-                                                style: 'destructive',
-                                                onPress: async () => {
-                                                    try {
-                                                        await clearChatMessages(chat.id);
-                                                        showToast('success', 'Chat Cleared', 'All messages have been deleted');
-                                                    } catch {
-                                                        showAlert('Error', 'Failed to clear chat. Please try again.');
-                                                    }
-                                                },
-                                            },
-                                        ]
-                                    );
-                                }} style={styles.menuOption}>
-                                    <Text style={{ color: colors.text, fontSize: 16 }}>Clear Chat</Text>
-                                    <MaterialCommunityIcons name="broom" size={20} color={colors.text} />
-                                </TouchableOpacity>
+                                        {/* Export Chat */}
+                                        <TouchableOpacity onPress={async () => {
+                                            setChatOptionsVisible(false);
+                                            try {
+                                                const Share = await import('react-native').then((m: any) => m.Share);
+                                                const messageText = chat.messages
+                                                    .map((m: any) => `[${new Date(m.timestamp).toLocaleString()}] ${m.sender}: ${m.text}`)
+                                                    .reverse()
+                                                    .join('\n');
+                                                await Share.share({
+                                                    message: `Chat with ${chat.name}\n\n${messageText}`,
+                                                    title: `Chat with ${chat.name}`
+                                                });
+                                            } catch (error) {
+                                                console.error('Export error:', error);
+                                                showAlert('Error', 'Failed to export chat');
+                                            }
+                                        }} style={styles.menuOption}>
+                                            <Text style={[styles.menuText, { color: colors.text }]}>Export Chat</Text>
+                                            <MaterialCommunityIcons name="export-variant" size={20} color={colors.text} />
+                                        </TouchableOpacity>
+                                    </View>
 
-                                {/* Divider */}
-                                <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+                                    <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
 
-                                {/* Send SMS */}
-                                <TouchableOpacity onPress={async () => {
-                                    setChatOptionsVisible(false);
-                                    try {
-                                        // Get user phone number from chat.user_id
-                                        if (!chat.user_id) {
-                                            showAlert('Error', 'Cannot send SMS: User information not available');
-                                            return;
-                                        }
+                                    <View style={styles.menuGroup}>
+                                        {/* Send SMS */}
+                                        <TouchableOpacity onPress={async () => {
+                                            setChatOptionsVisible(false);
+                                            try {
+                                                if (!chat.user_id) {
+                                                    showAlert('Error', 'Cannot send SMS: User information not available');
+                                                    return;
+                                                }
+                                                const token = useStore.getState().token;
+                                                if (!token) {
+                                                    showAlert('Error', 'Authentication required');
+                                                    return;
+                                                }
+                                                const userProfile = await api.auth.getUserProfile(token, chat.user_id);
+                                                if (!userProfile.phone_number) {
+                                                    showAlert('No Phone Number', 'This user does not have a phone number registered');
+                                                    return;
+                                                }
+                                                const SMS = await import('expo-sms');
+                                                const isAvailable = await SMS.isAvailableAsync();
+                                                if (!isAvailable) {
+                                                    showAlert('SMS Not Available', 'SMS is not available on this device');
+                                                    return;
+                                                }
+                                                await SMS.sendSMSAsync([userProfile.phone_number], `Hi ${chat.name}! Let's chat on Jarvis.`);
+                                            } catch (error) {
+                                                console.error('SMS error:', error);
+                                                showAlert('Error', 'Failed to send SMS');
+                                            }
+                                        }} style={styles.menuOption}>
+                                            <Text style={[styles.menuText, { color: colors.text }]}>Send SMS</Text>
+                                            <MaterialCommunityIcons name="message-text-outline" size={20} color={colors.text} />
+                                        </TouchableOpacity>
+                                    </View>
 
-                                        const token = useStore.getState().token;
-                                        if (!token) {
-                                            showAlert('Error', 'Authentication required');
-                                            return;
-                                        }
+                                    <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
 
-                                        // Fetch user profile to get phone number
-                                        const userProfile = await api.auth.getUserProfile(token, chat.user_id);
+                                    <View style={styles.menuGroup}>
+                                        {/* Clear Chat History */}
+                                        <TouchableOpacity onPress={() => {
+                                            setChatOptionsVisible(false);
+                                            showAlert(
+                                                'Clear Chat',
+                                                'Are you sure you want to clear all messages? This cannot be undone.',
+                                                [
+                                                    { text: 'Cancel', style: 'cancel' },
+                                                    {
+                                                        text: 'Clear',
+                                                        style: 'destructive',
+                                                        onPress: () => clearChatMessages(chat.id),
+                                                    },
+                                                ]
+                                            );
+                                        }} style={styles.menuOption}>
+                                            <Text style={[styles.menuText, { color: colors.error }]}>Clear Chat</Text>
+                                            <MaterialCommunityIcons name="broom" size={20} color={colors.error} />
+                                        </TouchableOpacity>
 
-                                        if (!userProfile.phone_number) {
-                                            showAlert('No Phone Number', 'This user does not have a phone number registered');
-                                            return;
-                                        }
-
-                                        // Check if SMS is available on device
-                                        const isAvailable = await import('expo-sms').then(m => m.isAvailableAsync());
-                                        if (!isAvailable) {
-                                            showAlert('SMS Not Available', 'SMS is not available on this device');
-                                            return;
-                                        }
-
-                                        // Open SMS with pre-filled phone number and message
-                                        const SMS = await import('expo-sms');
-                                        const result = await SMS.sendSMSAsync(
-                                            [userProfile.phone_number],
-                                            `Hi ${chat.name}! Let's chat on Jarvis.`
-                                        );
-
-                                        // If SMS was sent successfully, you could optionally notify backend
-                                        // For now, just show success feedback
-                                        if (result.result === 'sent') {
-                                            console.log('SMS sent successfully to', userProfile.phone_number);
-                                        }
-                                    } catch (error) {
-                                        console.error('SMS error:', error);
-                                        showAlert('Error', 'Failed to send SMS');
-                                    }
-                                }} style={styles.menuOption}>
-                                    <Text style={{ color: colors.text, fontSize: 16 }}>Send SMS</Text>
-                                    <MaterialCommunityIcons name="message-text-outline" size={20} color={colors.text} />
-                                </TouchableOpacity>
-
-                                {/* Divider */}
-                                <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-
-                                {/* Delete Chat */}
-                                <TouchableOpacity onPress={() => {
-                                    setChatOptionsVisible(false);
-                                    showAlert(
-                                        'Delete Chat',
-                                        'Are you sure you want to delete this chat?',
-                                        [
-                                            { text: 'Cancel', style: 'cancel' },
-                                            {
-                                                text: 'Delete',
-                                                style: 'destructive',
-                                                onPress: handleDeleteChat,
-                                            },
-                                        ]
-                                    );
-                                }} style={styles.menuOption}>
-                                    <Text style={{ color: colors.error, fontSize: 16 }}>Delete Chat</Text>
-                                    <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
-                                </TouchableOpacity>
-                            </View>
+                                        {/* Delete Chat */}
+                                        <TouchableOpacity onPress={() => {
+                                            setChatOptionsVisible(false);
+                                            showAlert(
+                                                'Delete Chat',
+                                                'Are you sure you want to delete this chat?',
+                                                [
+                                                    { text: 'Cancel', style: 'cancel' },
+                                                    { text: 'Delete', style: 'destructive', onPress: handleDeleteChat },
+                                                ]
+                                            );
+                                        }} style={styles.menuOption}>
+                                            <Text style={[styles.menuText, { color: colors.error }]}>Delete Chat</Text>
+                                            <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
+                                        </TouchableOpacity>
+                                    </View>
+                                </BlurView>
+                            </Animated.View>
                         </Pressable>
                     </Modal>
 
@@ -934,11 +950,26 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 16,
+        marginBottom: 2,
+    },
+    menuText: {
+        fontSize: 16,
+        fontWeight: '500',
+        letterSpacing: 0.2,
+    },
+    menuBlur: {
+        padding: 10,
+    },
+    menuGroup: {
+        paddingVertical: 4,
     },
     menuDivider: {
         height: 1,
-        marginVertical: 8,
+        marginVertical: 6,
+        marginHorizontal: 16,
     },
     searchBar: {
         flexDirection: 'row',
@@ -954,13 +985,16 @@ const styles = StyleSheet.create({
     },
     chatOptionsContainer: {
         position: 'absolute',
-        top: 60,
-        right: 10,
-        width: 150,
-        borderRadius: 10,
-        padding: 10,
-        elevation: 5,
+        right: 16,
+        width: 250,
+        borderRadius: 24,
+        overflow: 'hidden',
         borderWidth: 1,
+        elevation: 25,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.35,
+        shadowRadius: 24,
     },
     selectionToolbar: {
         flexDirection: 'row',

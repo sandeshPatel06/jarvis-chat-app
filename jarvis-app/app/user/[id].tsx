@@ -77,12 +77,21 @@ export default function UserProfileScreen() {
     // Find the chat with this user to navigate back to it
     const chat = chats.find((c) => c.user_id === parseInt(id));
 
-    const handleMessage = () => {
+    const handleMessage = async () => {
         if (chat) {
             router.push(`/chat/${chat.id}`);
-        } else {
-            showToast('info', 'Info', 'Start a conversation from contacts');
-            router.back();
+        } else if (userProfile && token) {
+            try {
+                setLoading(true);
+                const conversation = await api.chat.createConversation(token, userProfile.username);
+                await useStore.getState().fetchChats();
+                router.push(`/chat/${conversation.id}`);
+            } catch (error) {
+                console.error(error);
+                showToast('error', 'Error', 'Failed to start conversation');
+            } finally {
+                setLoading(false);
+            }
         }
     };
 
