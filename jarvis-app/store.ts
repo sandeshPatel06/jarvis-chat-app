@@ -46,6 +46,7 @@ interface CallState {
     isMinimized: boolean;
     isVideo?: boolean;
     isRequestingPermissions: boolean;
+    connectionState: string;
 }
 
 
@@ -257,6 +258,7 @@ export const useStore = create<AppState>((set, get) => {
             bufferedCandidates: [],
             isMinimized: false,
             isRequestingPermissions: false,
+            connectionState: 'new',
         },
         callsOffset: 0,
         hasMoreCalls: true,
@@ -308,12 +310,20 @@ export const useStore = create<AppState>((set, get) => {
                 webrtcService.createPeerConnection();
 
                 webrtcService.onRemoteStream = (stream) => {
-
-                    // Create a new stream object to force RTCView to re-render
                     const freshStream = new MediaStream(stream);
                     set((state) => ({
                         callState: { ...state.callState, remoteStream: freshStream }
                     }));
+                };
+
+                webrtcService.onConnectionStateChange = (connState) => {
+                    console.log('[Store] Connection state changed:', connState);
+                    set((state) => ({
+                        callState: { ...state.callState, connectionState: connState }
+                    }));
+                    if (connState === 'connected') {
+                        stopRingtone();
+                    }
                 };
 
                 webrtcService.onIceCandidate = (candidate) => {
@@ -399,6 +409,7 @@ export const useStore = create<AppState>((set, get) => {
                     bufferedCandidates: [],
                     isMinimized: false,
                     isRequestingPermissions: false,
+                    connectionState: 'new',
                 }
             }));
         },
@@ -448,15 +459,20 @@ export const useStore = create<AppState>((set, get) => {
                 webrtcService.createPeerConnection();
 
                 webrtcService.onRemoteStream = (stream) => {
-                    console.log('[Store] Remote stream received in acceptCall, updating state. Tracks:', stream.getTracks().length);
-                    stream.getTracks().forEach(track => {
-                        console.log(`[Store] Remote track (acceptCall): Kind=${track.kind}, ID=${track.id}, Enabled=${track.enabled}, Muted=${track.muted}`);
-                    });
-                    // Create a new stream object to force RTCView to re-render
                     const freshStream = new MediaStream(stream);
                     set((state) => ({
                         callState: { ...state.callState, remoteStream: freshStream }
                     }));
+                };
+
+                webrtcService.onConnectionStateChange = (connState) => {
+                    console.log('[Store] Receiver connection state changed:', connState);
+                    set((state) => ({
+                        callState: { ...state.callState, connectionState: connState }
+                    }));
+                    if (connState === 'connected') {
+                        stopRingtone();
+                    }
                 };
 
                 webrtcService.onIceCandidate = (candidate) => {
@@ -669,6 +685,7 @@ export const useStore = create<AppState>((set, get) => {
                             bufferedCandidates: [],
                             isMinimized: false,
                             isRequestingPermissions: false,
+                            connectionState: 'new',
                         }
                     }));
                 }

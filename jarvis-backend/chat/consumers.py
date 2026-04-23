@@ -35,7 +35,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
         await self.update_user_status(False)
 
-    # Receive message from WebSocket
+    # WebRTC Signaling
     async def receive(self, text_data):
         text_data_json = json.loads(text_data)
         message_type = text_data_json.get('type', 'chat_message')
@@ -254,7 +254,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return
 
         # WebRTC Signaling
-        # WebRTC Signaling
         if message_type in ['webrtc_offer', 'webrtc_answer', 'webrtc_ice_candidate']:
             logger.info(f"[WS] 🔵 WebRTC {message_type} received: {text_data_json}")
             chat_id = text_data_json.get('chat_id')
@@ -275,20 +274,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
                 # Send FCM Notification for Incoming Call (Offer)
                 if message_type == 'webrtc_offer':
-                    from utils.notifications import send_fcm_notification
-                    logger.info(f"[WS] 📲 Sending FCM for Incoming Call to user_{recipient_id}")
-                    send_fcm_notification(
-                        user=User.objects.get(id=recipient_id),
-                        title="Incoming Call",
-                        body="Incoming video call...",
-                        ttl=0, # Now or never for calls
-                        data={
-                            "type": "incoming_call",
-                            "chatId": chat_id,
-                            "callerName": self.user.username,
-                            "uuid": text_data_json.get('offer', {}).get('sdp', '')[:10] # Unique-ish ID
-                        }
-                    )
+                    await self.trigger_call_notification(recipient_id, chat_id, text_data_json)
             else:
                 logger.warning(f"[WS] ❌ Could not find recipient for WebRTC signal in chat {chat_id}")
             return
@@ -336,6 +322,31 @@ class ChatConsumer(AsyncWebsocketConsumer):
                             'message': saved_message_data
                         }
                     )
+
+    @database_sync_to_async
+    def trigger_call_notification(self, recipient_id, chat_id, text_data_json):
+        from utils.notifications import send_fcm_notification
+        try:
+            recipient_user = User.objects.get(id=recipient_id)
+            logger.info(f"[WS] 📲 Sending FCM for Incoming Call to user_{recipient_id}")
+            send_fcm_notification(
+                user=recipient_user,
+                title="Incoming Call",
+                body="Incoming video call...",
+                ttl=0, # Now or never for calls
+                data={
+                    "type": "incoming_call",
+                    "chatId": str(chat_id),
+                    "callerName": self.user.username,
+                    "callerAvatar": str(self.user.profile_picture.url) if self.user.profile_picture else None,
+                    "isVideo": "true" if text_data_json.get('is_video') else "false",
+                    "uuid": text_data_json.get('offer', {}).get('sdp', '')[:10] # Unique-ish ID
+                }
+            )
+        except User.DoesNotExist:
+            logger.error(f"[WS] Recipient user {recipient_id} not found for call notification")
+        except Exception as e:
+            logger.error(f"[WS] Error triggering call notification: {e}")
 
     async def user_typing(self, event):
         await self.send(text_data=json.dumps({
@@ -612,4 +623,3 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'type': 'call_ended',
             'chat_id': event['chat_id']
         }))
-

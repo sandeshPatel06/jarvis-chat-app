@@ -17,7 +17,8 @@ export default function CallScreen() {
     const localStream = useStore((state: any) => state.callState.localStream);
     const remoteStream = useStore((state: any) => state.callState.remoteStream);
     const isCalling = useStore((state: any) => state.callState.isCalling);
-    const isVideo = useStore((state: any) => state.callState.isVideo) ?? true; // Default to video if not set
+    const isVideo = useStore((state: any) => state.callState.isVideo) ?? true;
+    const connectionState = useStore((state: any) => state.callState.connectionState);
     const endCall = useStore((state: any) => state.endCall);
     const setIsMinimized = useStore((state: any) => state.setIsMinimized);
     const chat = useStore(useCallback((state: any) => state.chats.find((c: any) => c.id === id) || null, [id]));
@@ -140,7 +141,9 @@ export default function CallScreen() {
                         />
                         <Text style={styles.callerName}>{chat?.name || 'Unknown'}</Text>
                         <Text style={styles.callStatus}>
-                            {remoteStream ? 'Connected' : 'Connecting...'}
+                            {connectionState === 'connected' ? 'Connected' :
+                             connectionState === 'connecting' ? 'Connecting...' :
+                             remoteStream ? 'Connected' : 'Ringing...'}
                         </Text>
                     </View>
                 )}

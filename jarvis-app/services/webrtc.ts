@@ -14,11 +14,16 @@ class WebRTCService {
     onRemoteStream: ((stream: MediaStream) => void) | null = null;
     onIceCandidate: ((candidate: RTCIceCandidate) => void) | null = null;
     onIceRestart: ((offer: RTCSessionDescription) => void) | null = null;
+    onConnectionStateChange: ((state: string) => void) | null = null;
 
     configuration: RTCConfiguration = {
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            { urls: 'stun:global.stun.twilio.com:3478' },
             { urls: 'stun:stun.ekiga.net' },
             { urls: 'stun:stun.ideasip.com' },
             // Public TURN servers for better connectivity
@@ -32,9 +37,6 @@ class WebRTCService {
                 username: 'openrelayproject',
                 credential: 'openrelayproject',
             },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' },
         ],
         iceTransportPolicy: 'all' as RTCIceTransportPolicy,
         bundlePolicy: 'max-bundle' as RTCBundlePolicy,
@@ -80,8 +82,12 @@ class WebRTCService {
         };
 
         (this.peerConnection as any).onconnectionstatechange = async (event: any) => {
-            console.log('[WebRTC] 🌐 Connection State:', this.peerConnection?.connectionState);
-            if (this.peerConnection?.connectionState === 'failed') {
+            const state = this.peerConnection?.connectionState;
+            console.log('[WebRTC] 🌐 Connection State:', state);
+            if (this.onConnectionStateChange && state) {
+                this.onConnectionStateChange(state);
+            }
+            if (state === 'failed') {
                 console.warn('[WebRTC] ⚠️ Connection failed, attempting ICE restart...');
                 const offer = await this.restartIce();
                 if (offer && this.onIceRestart) {
@@ -248,6 +254,7 @@ class WebRTCService {
         this.onRemoteStream = null;
         this.onIceCandidate = null;
         this.onIceRestart = null;
+        this.onConnectionStateChange = null;
     }
 
     toggleAudio(enabled: boolean) {
