@@ -1,14 +1,14 @@
-import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, Animated } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { Chat } from '@/types';
 import { useStore } from '@/store';
 import { useRouter } from 'expo-router';
-// import { getMediaUrl } from '@/utils/media';
 import { formatLastSeen } from '@/utils/date';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/Avatar';
+import { BlurView } from 'expo-blur';
 
 interface ChatHeaderProps {
     chat: Chat;
@@ -20,7 +20,7 @@ interface ChatHeaderProps {
 }
 
 export const ChatHeader = ({ chat, typingUser, onOptionsPress, onPinnedPress, onSMSPress, style }: ChatHeaderProps) => {
-    const { colors } = useAppTheme();
+    const { colors, theme } = useAppTheme();
     const router = useRouter();
     const startCall = useStore((state) => state.startCall);
     const insets = useSafeAreaInsets();
@@ -35,134 +35,174 @@ export const ChatHeader = ({ chat, typingUser, onOptionsPress, onPinnedPress, on
         router.push(`/call/${chat.id}`);
     };
 
-
-
-
-
     return (
-        <View
+        <BlurView
+            intensity={theme === 'dark' ? 30 : 60}
+            tint={theme === 'dark' ? 'dark' : 'light'}
             style={[
-                styles.header,
-                {
-                    backgroundColor: colors.background, // Clean background
-                    borderBottomColor: "transparent",
-                    paddingTop: insets.top + 10,
-                },
+                styles.headerContainer,
+                { paddingTop: insets.top + 8 },
                 style
             ]}
         >
-            <TouchableOpacity
-                onPress={() => router.back()}
-                style={styles.backButton}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-                <FontAwesome
-                    name="chevron-left"
-                    size={20}
-                    color={colors.primary} // Tint color for back button
-                />
-            </TouchableOpacity>
+            <View style={styles.headerContent}>
+                <TouchableOpacity
+                    onPress={() => router.back()}
+                    style={styles.backButton}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                    <FontAwesome
+                        name="chevron-left"
+                        size={18}
+                        color={colors.primary}
+                    />
+                </TouchableOpacity>
 
-            <TouchableOpacity
-                style={styles.profileContainer}
-                activeOpacity={0.7}
-                onPress={() => {
-                    const profileId = chat.user_id || (typeof chat.id === 'number' ? chat.id : null);
-                    if (profileId) {
-                        router.push(`/user/${profileId}`);
-                    }
-                }}
-            >
-                <Avatar
-                    source={chat.avatar}
-                    size={42}
-                    style={styles.headerAvatar}
-                />
+                <TouchableOpacity
+                    style={styles.profileContainer}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                        const profileId = chat.user_id || (typeof chat.id === 'number' ? chat.id : null);
+                        if (profileId) {
+                            router.push(`/user/${profileId}`);
+                        }
+                    }}
+                >
+                    <View style={styles.avatarWrapper}>
+                        <Avatar
+                            source={chat.avatar}
+                            size={40}
+                            style={styles.headerAvatar}
+                        />
+                        {chat.is_online && (
+                            <View style={[styles.onlineIndicator, { borderColor: colors.background }]} />
+                        )}
+                    </View>
 
-                <View style={styles.headerInfo}>
-                    <Text
-                        numberOfLines={1}
-                        style={[
-                            styles.headerName,
-                            { color: colors.text },
-                        ]}
+                    <View style={styles.headerInfo}>
+                        <Text
+                            numberOfLines={1}
+                            style={[
+                                styles.headerName,
+                                { color: colors.text },
+                            ]}
+                        >
+                            {chat.name}
+                        </Text>
+                        <Text
+                            style={[
+                                styles.headerStatus,
+                                { color: typingUser ? colors.primary : colors.tabIconDefault },
+                            ]}
+                        >
+                            {typingUser
+                                ? 'typing...'
+                                : chat.is_online
+                                    ? 'Online'
+                                    : formatLastSeen(chat.last_seen)}
+                        </Text>
+                    </View>
+                </TouchableOpacity>
+
+                <View style={styles.actionsContainer}>
+                    <TouchableOpacity 
+                        onPress={handleAudioCall} 
+                        style={[styles.iconButton, { backgroundColor: `${colors.primary}15` }]}
                     >
-                        {chat.name}
-                    </Text>
-                    <Text
-                        style={[
-                            styles.headerStatus,
-                            { color: typingUser ? colors.primary : colors.tabIconDefault },
-                        ]}
+                        <MaterialCommunityIcons name="phone" size={20} color={colors.primary} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        onPress={handleVideoCall} 
+                        style={[styles.iconButton, { backgroundColor: `${colors.primary}15`, marginHorizontal: 6 }]}
                     >
-                        {typingUser
-                            ? 'typing...'
-                            : chat.is_online
-                                ? 'Online'
-                                : formatLastSeen(chat.last_seen)}
-                    </Text>
+                        <MaterialCommunityIcons name="video" size={20} color={colors.primary} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        onPress={onPinnedPress} 
+                        style={[styles.iconButton, { backgroundColor: `${colors.secondary}10` }]}
+                    >
+                        <MaterialCommunityIcons name="pin-outline" size={20} color={colors.textSecondary} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        onPress={onOptionsPress} 
+                        style={[styles.iconButton, { marginLeft: 6 }]}
+                    >
+                        <MaterialCommunityIcons name="dots-vertical" size={22} color={colors.textSecondary} />
+                    </TouchableOpacity>
                 </View>
-            </TouchableOpacity>
-
-            <View style={{ flex: 1 }} />
-
-            <TouchableOpacity onPress={handleAudioCall} style={styles.actionButton}>
-                <MaterialCommunityIcons name="phone" size={24} color={colors.primary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={handleVideoCall} style={[styles.actionButton, { marginRight: 5 }]}>
-                <MaterialCommunityIcons name="video" size={24} color={colors.primary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={onPinnedPress} style={styles.actionButton}>
-                <MaterialCommunityIcons name="pin" size={24} color={colors.primary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={onOptionsPress} style={styles.actionButton}>
-                <MaterialCommunityIcons name="dots-vertical" size={24} color={colors.primary} />
-            </TouchableOpacity>
-        </View>
+            </View>
+        </BlurView>
     );
 };
 
 const styles = StyleSheet.create({
-    header: {
+    headerContainer: {
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: 'rgba(150,150,150,0.1)',
+        overflow: 'hidden',
+        zIndex: 100,
+    },
+    headerContent: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 12, // More vertical padding
-        borderBottomWidth: 0.5, // Hairline border
-        elevation: 0, // Remove heavy shadow
-        shadowOpacity: 0, // Remove iOS shadow
+        paddingHorizontal: 12,
+        paddingBottom: 10,
     },
     backButton: {
-        paddingRight: 12,
+        width: 32,
+        height: 32,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 4,
     },
     profileContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        flex: 1, // Allow clicking name to open profile
+        flex: 1,
+    },
+    avatarWrapper: {
+        position: 'relative',
     },
     headerAvatar: {
-        width: 42, // Slightly larger
-        height: 42,
-        borderRadius: 21,
+        borderRadius: 20,
+    },
+    onlineIndicator: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: '#4CAF50',
+        borderWidth: 2,
     },
     headerInfo: {
         marginLeft: 10,
         justifyContent: 'center',
     },
     headerName: {
-        fontSize: 17, // Standard nav bar title size
-        fontWeight: '600',
-        letterSpacing: 0.3,
+        fontSize: 16,
+        fontWeight: 'bold',
+        letterSpacing: -0.2,
     },
     headerStatus: {
-        fontSize: 10,
-        marginTop: 2,
+        fontSize: 11,
+        marginTop: 1,
+        fontWeight: '500',
     },
-    actionButton: {
-        padding: 8,
-        marginLeft: 4,
+    actionsContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginLeft: 8,
+    },
+    iconButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
     }
 });

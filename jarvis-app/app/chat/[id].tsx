@@ -48,6 +48,7 @@ export default function ChatDetailScreen() {
 
     const chat = useStore(useCallback((state: any) => state.chats.find((c: any) => c.id === id) || null, [id]));
     const sendMessage = useStore(useCallback((state: any) => state.sendMessage, []));
+    const fetchChats = useStore(useCallback((state: any) => state.fetchChats, []));
     const fetchMessages = useStore(useCallback((state: any) => state.fetchMessages, []));
     const loadMoreMessages = useStore(useCallback((state: any) => state.loadMoreMessages, []));
     const connectWebSocket = useStore(useCallback((state: any) => state.connectWebSocket, []));
@@ -107,12 +108,6 @@ export default function ChatDetailScreen() {
     const flatListRef = useRef<FlatList>(null);
     const lastTypingSent = useRef<number>(0);
 
-    const fetchChats = useStore(useCallback((state: any) => state.fetchChats, []));
-    const [isRetrying, setIsRetrying] = useState(false);
-    const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
-
-    const hasRetried = useRef<string | null>(null);
-    
     const displayMessages = useMemo(() => {
         if (!searchQuery) return chat?.messages || [];
         const query = searchQuery.toLowerCase();
@@ -125,32 +120,21 @@ export default function ChatDetailScreen() {
     useEffect(() => {
         if (id) {
             useStore.getState().setActiveChat(id);
-            fetchMessages(id);
             connectWebSocket();
+            
+            const syncChatData = async () => {
+                if (!chat) {
+                    await fetchChats();
+                }
+                await fetchMessages(id);
+            };
+            
+            syncChatData();
         }
         return () => {
             useStore.getState().setActiveChat(null);
         };
-    }, [id, fetchMessages, connectWebSocket, chat?.messages?.length, editingMessageId]);
-
-    // Separate effect for syncing chats if ID is missing
-    useEffect(() => {
-        if (id && !chat && !hasAttemptedFetch && hasRetried.current !== id) {
-            const syncChats = async () => {
-                setIsRetrying(true);
-                hasRetried.current = id;
-                try {
-                    await fetchChats();
-                    setHasAttemptedFetch(true);
-                } catch (error) {
-                    console.error('Initial chat fetch failed:', error);
-                } finally {
-                    setIsRetrying(false);
-                }
-            };
-            syncChats();
-        }
-    }, [id, chat, fetchChats, hasAttemptedFetch]);
+    }, [id, chat, connectWebSocket, fetchChats, fetchMessages, markRead]); // Keep it minimal to avoid re-fetch loops
 
     useEffect(() => {
         const show = Keyboard.addListener('keyboardDidShow', () => {
@@ -168,8 +152,10 @@ export default function ChatDetailScreen() {
     }, [animationsEnabled]);
 
     useEffect(() => {
-        if (animationsEnabled && chats) LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    }, [chats, animationsEnabled]);
+        if (animationsEnabled && chat?.messages?.length) {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        }
+    }, [chat?.messages?.length, animationsEnabled]);
 
     useEffect(() => {
         if (chat?.messages) {
@@ -178,14 +164,8 @@ export default function ChatDetailScreen() {
                     markRead(chat.id, msg.id);
                 }
             });
-            
-            // Scroll to end (bottom of inverted list) on new local message
-            if (chat.messages.length > 0 && !editingMessageId) {
-                // LayoutAnimation can cause jumpiness if called too often, 
-                // but for new messages it's usually desired
-            }
         }
-    }, [chat?.messages, markRead, chat?.id, editingMessageId]); // Added missing dependencies to satisfy linter
+    }, [chat?.messages?.length, markRead, chat?.id, chat?.messages]);
 
 
 
@@ -592,9 +572,9 @@ export default function ChatDetailScreen() {
                                 entering={FadeIn.duration(200)}
                                 exiting={FadeOut.duration(200)}
                                 style={[styles.chatOptionsContainer, { 
-                                    top: insets.top + (Platform.OS === 'ios' ? 60 : 70), 
-                                    backgroundColor: isDark ? 'rgba(30, 30, 32, 0.7)' : 'rgba(255, 255, 255, 0.7)',
-                                    borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
+                                    top: insets.top + (Platform.OS === 'ios' ? 70 : 60), 
+                                    backgroundColor: isDark ? 'rgba(30, 30, 32, 0.85)' : 'rgba(255, 255, 255, 0.85)',
+                                    borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)'
                                 }]}
                             >
                                 <BlurView intensity={Platform.OS === 'ios' ? 90 : 120} tint={isDark ? 'dark' : 'light'} style={styles.menuBlur}>
@@ -608,8 +588,10 @@ export default function ChatDetailScreen() {
                                                 router.push(`/contact/${chat.id}`);
                                             }
                                         }} style={styles.menuOption}>
-                                            <Text style={[styles.menuText, { color: colors.text }]}>View Profile</Text>
-                                            <MaterialCommunityIcons name="account-outline" size={20} color={colors.text} />
+                                            <View style={styles.menuOptionLeft}>
+                                                <MaterialCommunityIcons name="account-outline" size={22} color={colors.text} />
+                                                <Text style={[styles.menuText, { color: colors.text }]}>View Profile</Text>
+                                            </View>
                                         </TouchableOpacity>
 
                                         {/* Search in Chat */}
@@ -617,8 +599,10 @@ export default function ChatDetailScreen() {
                                             setChatOptionsVisible(false);
                                             setSearchVisible(true);
                                         }} style={styles.menuOption}>
-                                            <Text style={[styles.menuText, { color: colors.text }]}>Search</Text>
-                                            <MaterialCommunityIcons name="magnify" size={20} color={colors.text} />
+                                            <View style={styles.menuOptionLeft}>
+                                                <MaterialCommunityIcons name="magnify" size={22} color={colors.text} />
+                                                <Text style={[styles.menuText, { color: colors.text }]}>Search</Text>
+                                            </View>
                                         </TouchableOpacity>
                                     </View>
 
@@ -637,14 +621,16 @@ export default function ChatDetailScreen() {
                                                 showToast('success', 'Muted', `Notifications for ${chat.name} are now disabled`);
                                             }
                                         }} style={styles.menuOption}>
-                                            <Text style={[styles.menuText, { color: colors.text }]}>
-                                                {isChatMuted(chat.id) ? 'Unmute' : 'Mute'} Notifications
-                                            </Text>
-                                            <MaterialCommunityIcons
-                                                name={isChatMuted(chat.id) ? "bell" : "bell-off-outline"}
-                                                size={20}
-                                                color={colors.text}
-                                            />
+                                            <View style={styles.menuOptionLeft}>
+                                                <MaterialCommunityIcons
+                                                    name={isChatMuted(chat.id) ? "bell-outline" : "bell-off-outline"}
+                                                    size={22}
+                                                    color={colors.text}
+                                                />
+                                                <Text style={[styles.menuText, { color: colors.text }]}>
+                                                    {isChatMuted(chat.id) ? 'Unmute' : 'Mute'} Notifications
+                                                </Text>
+                                            </View>
                                         </TouchableOpacity>
 
                                         {/* Wallpaper */}
@@ -652,8 +638,10 @@ export default function ChatDetailScreen() {
                                             setChatOptionsVisible(false);
                                             router.push('/settings/wallpaper');
                                         }} style={styles.menuOption}>
-                                            <Text style={[styles.menuText, { color: colors.text }]}>Wallpaper</Text>
-                                            <MaterialCommunityIcons name="image-outline" size={20} color={colors.text} />
+                                            <View style={styles.menuOptionLeft}>
+                                                <MaterialCommunityIcons name="image-outline" size={22} color={colors.text} />
+                                                <Text style={[styles.menuText, { color: colors.text }]}>Wallpaper</Text>
+                                            </View>
                                         </TouchableOpacity>
 
                                         {/* Export Chat */}
@@ -662,8 +650,10 @@ export default function ChatDetailScreen() {
                                             const allMessages = chat.messages || [];
                                             await exportChatAsEmail(allMessages, chat.name);
                                         }} style={styles.menuOption}>
-                                            <Text style={[styles.menuText, { color: colors.text }]}>Export Chat</Text>
-                                            <MaterialCommunityIcons name="export-variant" size={20} color={colors.text} />
+                                            <View style={styles.menuOptionLeft}>
+                                                <MaterialCommunityIcons name="export-variant" size={22} color={colors.text} />
+                                                <Text style={[styles.menuText, { color: colors.text }]}>Export Chat</Text>
+                                            </View>
                                         </TouchableOpacity>
                                     </View>
 
@@ -700,8 +690,10 @@ export default function ChatDetailScreen() {
                                                 showAlert('Error', 'Failed to send SMS');
                                             }
                                         }} style={styles.menuOption}>
-                                            <Text style={[styles.menuText, { color: colors.text }]}>Send SMS</Text>
-                                            <MaterialCommunityIcons name="message-text-outline" size={20} color={colors.text} />
+                                            <View style={styles.menuOptionLeft}>
+                                                <MaterialCommunityIcons name="message-text-outline" size={22} color={colors.text} />
+                                                <Text style={[styles.menuText, { color: colors.text }]}>Send SMS</Text>
+                                            </View>
                                         </TouchableOpacity>
                                     </View>
 
@@ -724,8 +716,10 @@ export default function ChatDetailScreen() {
                                                 ]
                                             );
                                         }} style={styles.menuOption}>
-                                            <Text style={[styles.menuText, { color: colors.error }]}>Clear Chat</Text>
-                                            <MaterialCommunityIcons name="broom" size={20} color={colors.error} />
+                                            <View style={styles.menuOptionLeft}>
+                                                <MaterialCommunityIcons name="broom" size={22} color={colors.error} />
+                                                <Text style={[styles.menuText, { color: colors.error }]}>Clear Chat</Text>
+                                            </View>
                                         </TouchableOpacity>
 
                                         {/* Delete Chat */}
@@ -740,8 +734,10 @@ export default function ChatDetailScreen() {
                                                 ]
                                             );
                                         }} style={styles.menuOption}>
-                                            <Text style={[styles.menuText, { color: colors.error }]}>Delete Chat</Text>
-                                            <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
+                                            <View style={styles.menuOptionLeft}>
+                                                <MaterialCommunityIcons name="trash-can-outline" size={22} color={colors.error} />
+                                                <Text style={[styles.menuText, { color: colors.error }]}>Delete Chat</Text>
+                                            </View>
                                         </TouchableOpacity>
                                     </View>
                                 </BlurView>
@@ -929,29 +925,33 @@ const styles = StyleSheet.create({
     },
     menuOption: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: 14,
-        paddingHorizontal: 16,
-        borderRadius: 16,
-        marginBottom: 2,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderRadius: 12,
+        marginVertical: 1,
+    },
+    menuOptionLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
     },
     menuText: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '500',
-        letterSpacing: 0.2,
+        marginLeft: 12,
     },
     menuBlur: {
-        padding: 6,
+        padding: 8,
     },
     menuGroup: {
-        paddingVertical: 2,
+        paddingVertical: 4,
     },
     menuDivider: {
-        height: 1,
-        marginVertical: 8,
+        height: StyleSheet.hairlineWidth,
+        marginVertical: 4,
         marginHorizontal: 12,
-        opacity: 0.5,
+        opacity: 0.2,
     },
     searchBar: {
         flexDirection: 'row',
@@ -968,15 +968,15 @@ const styles = StyleSheet.create({
     chatOptionsContainer: {
         position: 'absolute',
         right: 16,
-        width: 220,
-        borderRadius: 28,
+        width: 240,
+        borderRadius: 24,
         overflow: 'hidden',
         borderWidth: 1,
-        elevation: 15,
+        elevation: 20,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 15 },
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.2,
+        shadowRadius: 15,
     },
     selectionToolbar: {
         flexDirection: 'row',
