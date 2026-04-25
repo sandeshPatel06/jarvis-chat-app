@@ -1,137 +1,38 @@
-# ==============================================================================
-# Jarvis Chat - Master Makefile
-# ==============================================================================
-# This Makefile provides a unified interface for managing both the Django 
-# backend and the Expo/React Native frontend.
+# Pradesh App Automation Makefile
 
-.PHONY: help venv install install-backend install-app migrate run run-backend run-app shell clean cleanup
+.PHONY: lint doctor type-check check prebuild clean install build-preview
 
-# Variables
-PYTHON := python3
-PIP := pip
-BACKEND_DIR := jarvis-backend
-APP_DIR := jarvis-app
-VENV := $(BACKEND_DIR)/.venv
-VENV_PYTHON := $(VENV)/bin/python
-VENV_PIP := $(VENV)/bin/pip
-MANAGE_PY := $(BACKEND_DIR)/manage.py
+# Paths
+APP_DIR=jarvis-app
 
-help:
-	@echo "----------------------------------------------------------------"
-	@echo "Jarvis Chat Management Commands"
-	@echo "----------------------------------------------------------------"
-	@echo "Setup Commands:"
-	@echo "  make setup            - Full initial setup (venv, deps, migrate)"
-	@echo "  make install          - Install dependencies for both Backend and App"
-	@echo "  make venv             - Create Python virtual environment"
-	@echo ""
-	@echo "Backend Commands:"
-	@echo "  make migrate          - Run database migrations"
-	@echo "  make static           - Collect static files"
-	@echo "  make migrations       - Create new database migrations"
-	@echo "  make run-backend      - Start Django development server"
-	@echo "  make superuser        - Create a Django admin superuser"
-	@echo "  make shell            - Open Django shell"
-	@echo "  make cleanup          - Run user cleanup script"
-	@echo ""
-	@echo "App (Frontend) Commands:"
-	@echo "  make run-app          - Start Expo development server (Android/iOS)"
-	@echo "  make run-web          - Start Expo web server"
-	@echo "  make build-android    - Build Android app (local)"
-	@echo ""
-	@echo "Combined Commands:"
-	@echo "  make run              - Start both Backend and App (Web)"
-	@echo "  make clean            - Remove cache and temporary files"
-	@echo ""
-	@echo "Docker Commands:"
-	@echo "  make docker-up        - Start all services with Docker Compose"
-	@echo "  make docker-down      - Stop all Docker services"
-	@echo "  make docker-build     - Rebuild all Docker images"
-	@echo "----------------------------------------------------------------"
+# 🔍 Fast Checks
+lint:
+	@echo "🔍 Running Linting..."
+	cd $(APP_DIR) && npm run lint
 
-# --- Setup & Installation ---
+doctor:
+	@echo "🩺 Running Expo Doctor..."
+	cd $(APP_DIR) && npx expo-doctor
 
-setup: venv install migrate static
+# 🏗️ Hard Tasks
+type-check:
+	@echo "🏗️ Running TypeScript Logic Check..."
+	cd $(APP_DIR) && npx tsc --noEmit
 
-venv:
-	@echo "Creating virtual environment..."
-	$(PYTHON) -m venv $(VENV)
-	@echo "Virtual environment created at $(VENV)"
+# 🚀 Combined Commands
+check: lint doctor type-check
+	@echo "✅ All local quality checks passed!"
 
-install: install-backend install-app
+prebuild:
+	@echo "🛠️ Running Expo Prebuild (local native sync)..."
+	cd $(APP_DIR) && npx expo prebuild
 
-install-backend: venv
-	@echo "Installing backend dependencies..."
-	$(VENV_PIP) install --upgrade pip
-	$(VENV_PIP) install -r $(BACKEND_DIR)/requirements.txt
+# 📦 EAS Commands
+build-preview:
+	@echo "📦 Triggering EAS Preview Build (Android)..."
+	cd $(APP_DIR) && eas build --profile preview --platform android
 
-install-app:
-	@echo "Installing app dependencies..."
-	cd $(APP_DIR) && npm install
-
-# --- Backend Operations ---
-
-migrate:
-	@echo "Running migrations..."
-	$(VENV_PYTHON) $(MANAGE_PY) migrate
-
-static:
-	@echo "Collecting static files..."
-	mkdir -p $(BACKEND_DIR)/staticfiles
-	$(VENV_PYTHON) $(MANAGE_PY) collectstatic --noinput
-
-migrations:
-	@echo "Making migrations..."
-	$(VENV_PYTHON) $(MANAGE_PY) makemigrations
-
-run-backend:
-	@echo "Starting Django server..."
-	$(VENV_PYTHON) $(MANAGE_PY) runserver 0.0.0.0:8000
-
-superuser:
-	@echo "Creating superuser..."
-	$(VENV_PYTHON) $(MANAGE_PY) createsuperuser
-
-shell:
-	$(VENV_PYTHON) $(MANAGE_PY) shell
-
-cleanup:
-	@echo "Running user cleanup..."
-	$(VENV_PYTHON) $(BACKEND_DIR)/cleanup_users.py
-
-# --- App Operations ---
-
-run-app:
-	@echo "Starting Expo..."
-	cd $(APP_DIR) && npx expo start
-
-run-web:
-	@echo "Starting Expo Web..."
-	cd $(APP_DIR) && npx expo start --web
-
-build-android:
-	@echo "Building Android..."
-	cd $(APP_DIR) && npx expo run:android
-
-# --- Combined ---
-
-run:
-	@echo "Starting both services (Press Ctrl+C to stop)..."
-	make -j2 run-backend run-web
-
+# 🧹 Cleanup
 clean:
-	find . -type d -name "__pycache__" -exec rm -rf {} +
-	find . -type f -name "*.py[co]" -delete
-	rm -rf $(BACKEND_DIR)/staticfiles
-	@echo "Cleaned up Python cache and static files."
-
-# --- Docker ---
-
-docker-up:
-	docker compose up -d
-
-docker-down:
-	docker compose down
-
-docker-build:
-	docker compose build
+	@echo "🧹 Cleaning up native directories..."
+	rm -rf $(APP_DIR)/android $(APP_DIR)/ios

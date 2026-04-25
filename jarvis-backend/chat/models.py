@@ -3,8 +3,13 @@ from django.conf import settings
 
 class Conversation(models.Model):
     participants = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='conversations')
-    created_at = models.DateTimeField(auto_now_add=True)
     is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['is_deleted', 'created_at']),
+        ]
 
     def __str__(self):
         return f"Conversation {self.id}"
@@ -42,6 +47,14 @@ class Message(models.Model):
     reply_to = models.ForeignKey('self', null=True, blank=True, related_name='replies', on_delete=models.SET_NULL)
     deleted_at = models.DateTimeField(null=True, blank=True)
     is_pinned = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['conversation', 'timestamp']),
+            models.Index(fields=['sender', 'timestamp']),
+            models.Index(fields=['message_type']),
+        ]
+        ordering = ['-timestamp']
 
     def __str__(self):
         return f"{self.sender.username}: {self.text[:20]}"

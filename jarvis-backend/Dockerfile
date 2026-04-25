@@ -10,15 +10,21 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies (needed for some python packages like Pillow or cffi)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast package management
+RUN pip install uv
 
 # Install python dependencies
 COPY requirements.txt /app/
-RUN pip install uv && uv venv $VIRTUAL_ENV && uv pip install --upgrade pip && uv pip install -r requirements.txt
+RUN uv venv $VIRTUAL_ENV && \
+    uv pip install --upgrade pip && \
+    uv pip install -r requirements.txt
 
 # Copy project
 COPY . /app/
@@ -26,9 +32,8 @@ COPY . /app/
 # Expose port 8000
 EXPOSE 8000
 
-# Run migrations and start daphne
-CMD ["sh", "-c", "python manage.py makemigrations && \
-                   python manage.py migrate && \
+# Default command (Web Server)
+# Note: In production, it's better to run migrations as a separate step
+CMD ["sh", "-c", "python manage.py migrate --noinput && \
                    python manage.py collectstatic --noinput && \
-                   python manage.py shell -c \"import os; from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.filter(username=os.environ.get('DJANGO_SUPERUSER_USERNAME')).exists() or User.objects.create_superuser(username=os.environ.get('DJANGO_SUPERUSER_USERNAME'), email=os.environ.get('DJANGO_SUPERUSER_EMAIL'), password=os.environ.get('DJANGO_SUPERUSER_PASSWORD'))\" && \
                    daphne -b 0.0.0.0 -p 8000 chat_backend.asgi:application"]
