@@ -17,22 +17,39 @@ import {
     TextInput,
     Image,
     ActivityIndicator,
-    LayoutAnimation
+    LayoutAnimation,
+    KeyboardAvoidingView
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
-import { ChatHeader, ChatInput, MessageItem, ForwardMessageModal } from '@/components/chat';
+import { ChatHeader } from '@/components/chat/ChatHeader';
+import { ChatInput } from '@/components/chat/ChatInput';
+import { MessageItem } from '@/components/chat/MessageItem';
+import { ForwardMessageModal } from '@/components/chat/ForwardMessageModal';
+import { PinnedMessagesModal } from '@/components/chat/PinnedMessagesModal';
+import { ReactionPicker } from '@/components/chat/ReactionPicker';
+import { MessageOptionsModal } from '@/components/modals/MessageOptionsModal';
 import * as Clipboard from 'expo-clipboard';
-import * as MediaLibrary from 'expo-media-library';
 import { cacheDirectory, documentDirectory, downloadAsync } from 'expo-file-system/legacy';
 import { getMediaUrl } from '@/utils/media';
 import { api } from '@/services/api';
+import { exportChatAsEmail } from '@/utils/chatExport';
 
 
 export default function ChatDetailScreen() {
+    console.log('[DEBUG] ChatHeader:', !!ChatHeader);
+    console.log('[DEBUG] ChatInput:', !!ChatInput);
+    console.log('[DEBUG] MessageItem:', !!MessageItem);
+    console.log('[DEBUG] ForwardMessageModal:', !!ForwardMessageModal);
+    console.log('[DEBUG] PinnedMessagesModal:', !!PinnedMessagesModal);
+    console.log('[DEBUG] ReactionPicker:', !!ReactionPicker);
+    console.log('[DEBUG] MessageOptionsModal:', !!MessageOptionsModal);
+    console.log('[DEBUG] ScreenWrapper:', !!ScreenWrapper);
+    console.log('[DEBUG] KeyboardAvoidingView:', !!KeyboardAvoidingView);
+    console.log('[DEBUG] BlurView:', !!BlurView);
+    console.log('[DEBUG] Animated:', !!Animated);
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
     const insets = useSafeAreaInsets();
@@ -89,6 +106,7 @@ export default function ChatDetailScreen() {
     // Message Selection State
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
+    const [pinnedModalVisible, setPinnedModalVisible] = useState(false);
 
     const flatListRef = useRef<FlatList>(null);
     const lastTypingSent = useRef<number>(0);
@@ -261,16 +279,6 @@ export default function ChatDetailScreen() {
             setCustomEmoji('');
         }
     }, [chat, selectedMessage, reactToMessage]);
-
-    const handleOpenEmojiPicker = () => {
-        setShowEmojiPicker(true);
-    };
-
-    const handleCustomEmojiSubmit = () => {
-        if (customEmoji.trim()) {
-            handleReact(customEmoji.trim());
-        }
-    };
 
     const handleReplyOption = () => {
         if (selectedMessage) {
@@ -498,6 +506,7 @@ export default function ChatDetailScreen() {
                     <ChatHeader
                         chat={chat}
                         typingUser={typingUser}
+                        onPinnedPress={() => setPinnedModalVisible(true)}
                         onOptionsPress={() => setChatOptionsVisible(true)}
                         style={{ backgroundColor: backgroundSource ? 'transparent' : colors.background }}
                     />
@@ -607,20 +616,8 @@ export default function ChatDetailScreen() {
                                         {/* Export Chat */}
                                         <TouchableOpacity onPress={async () => {
                                             setChatOptionsVisible(false);
-                                            try {
-                                                const Share = await import('react-native').then((m: any) => m.Share);
-                                                const messageText = chat.messages
-                                                    .map((m: any) => `[${new Date(m.timestamp).toLocaleString()}] ${m.sender}: ${m.text}`)
-                                                    .reverse()
-                                                    .join('\n');
-                                                await Share.share({
-                                                    message: `Chat with ${chat.name}\n\n${messageText}`,
-                                                    title: `Chat with ${chat.name}`
-                                                });
-                                            } catch (error) {
-                                                console.error('Export error:', error);
-                                                showAlert('Error', 'Failed to export chat');
-                                            }
+                                            const allMessages = chat.messages || [];
+                                            await exportChatAsEmail(allMessages, chat.name);
                                         }} style={styles.menuOption}>
                                             <Text style={[styles.menuText, { color: colors.text }]}>Export Chat</Text>
                                             <MaterialCommunityIcons name="export-variant" size={20} color={colors.text} />
@@ -710,111 +707,44 @@ export default function ChatDetailScreen() {
                     </Modal>
 
                     {/* Message Options Modal */}
-                    <Modal
-                        transparent={true}
+                    <MessageOptionsModal
                         visible={modalVisible}
-                        animationType="fade"
-                        onRequestClose={() => setModalVisible(false)}
-                    >
-                        <Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)}>
-                            <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-                                {selectedMessage && (
-                                    <>
-                                        {!showEmojiPicker ? (
-                                            <View style={styles.reactionRow}>
-                                                {['👍', '❤️', '😂', '😮', '😢'].map((emoji) => (
-                                                    <TouchableOpacity key={emoji} onPress={() => handleReact(emoji)} style={styles.reactionButton}>
-                                                        <Text style={{ fontSize: 24 }}>{emoji}</Text>
-                                                    </TouchableOpacity>
-                                                ))}
-                                                <TouchableOpacity onPress={handleOpenEmojiPicker} style={styles.reactionButton}>
-                                                    <Text style={{ fontSize: 24 }}>➕</Text>
-                                                </TouchableOpacity>
-                                            </View>
-                                        ) : (
-                                            <View style={styles.emojiPickerContainer}>
-                                                <TextInput
-                                                    style={[styles.emojiInput, { color: colors.text, borderColor: colors.border }]}
-                                                    placeholder="Type or paste emoji..."
-                                                    placeholderTextColor={colors.tabIconDefault}
-                                                    value={customEmoji}
-                                                    onChangeText={setCustomEmoji}
-                                                    autoFocus
-                                                    onSubmitEditing={handleCustomEmojiSubmit}
-                                                />
-                                                <TouchableOpacity onPress={handleCustomEmojiSubmit} style={[styles.emojiSubmitButton, { backgroundColor: colors.primary }]}>
-                                                    <MaterialCommunityIcons name="send" size={20} color="white" />
-                                                </TouchableOpacity>
-                                                <TouchableOpacity onPress={() => { setShowEmojiPicker(false); setCustomEmoji(''); }} style={styles.emojiCancelButton}>
-                                                    <MaterialCommunityIcons name="close" size={20} color={colors.text} />
-                                                </TouchableOpacity>
-                                            </View>
-                                        )}
+                        message={selectedMessage}
+                        onClose={() => {
+                            setModalVisible(false);
+                            setSelectedMessage(null);
+                        }}
+                        onReply={handleReplyOption}
+                        onCopy={handleCopyOption}
+                        onEdit={handleEditOption}
+                        onDelete={handleDeleteOption}
+                        onPin={(msg) => pinMessage(chat.id, msg.id)}
+                        onUnpin={(msg) => unpinMessage(chat.id, msg.id)}
+                        onReact={() => setShowEmojiPicker(true)}
+                        onSaveToGallery={handleSaveToGallery}
+                    />
 
-                                        <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 10 }} />
+                    {/* Enhanced Reaction Picker */}
+                    <ReactionPicker 
+                        visible={showEmojiPicker}
+                        onClose={() => setShowEmojiPicker(false)}
+                        onSelectReaction={handleReact}
+                    />
 
-                                        <TouchableOpacity onPress={handleReplyOption} style={styles.menuOption}>
-                                            <Text style={{ color: colors.text, fontSize: 16 }}>Reply</Text>
-                                            <MaterialCommunityIcons name="reply" size={20} color={colors.text} />
-                                        </TouchableOpacity>
-
-                                        <TouchableOpacity onPress={handleCopyOption} style={styles.menuOption}>
-                                            <Text style={{ color: colors.text, fontSize: 16 }}>Copy</Text>
-                                            <MaterialCommunityIcons name="content-copy" size={20} color={colors.text} />
-                                        </TouchableOpacity>
-
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                if (selectedMessage) {
-                                                    if (selectedMessage.is_pinned) {
-                                                        unpinMessage(chat.id, selectedMessage.id);
-                                                    } else {
-                                                        pinMessage(chat.id, selectedMessage.id);
-                                                    }
-                                                    setModalVisible(false);
-                                                    setSelectedMessage(null);
-                                                }
-                                            }}
-                                            style={styles.menuOption}
-                                        >
-                                            <Text style={{ color: colors.text, fontSize: 16 }}>
-                                                {selectedMessage?.is_pinned ? 'Unpin' : 'Pin'}
-                                            </Text>
-                                            <MaterialCommunityIcons
-                                                name={selectedMessage?.is_pinned ? 'pin-off' : 'pin'}
-                                                size={20}
-                                                color={colors.text}
-                                            />
-                                        </TouchableOpacity>
-
-                                        {selectedMessage.file && (
-                                            <TouchableOpacity onPress={handleSaveToGallery} style={styles.menuOption}>
-                                                <Text style={{ color: colors.text, fontSize: 16 }}>Save to Gallery</Text>
-                                                <MaterialCommunityIcons name="download" size={20} color={colors.text} />
-                                            </TouchableOpacity>
-                                        )}
-
-                                        {selectedMessage.sender === 'me' && (
-                                            <>
-                                                <TouchableOpacity onPress={handleEditOption} style={styles.menuOption}>
-                                                    <Text style={{ color: colors.text, fontSize: 16 }}>Edit</Text>
-                                                    <MaterialCommunityIcons name="pencil-outline" size={20} color={colors.text} />
-                                                </TouchableOpacity>
-                                                <TouchableOpacity onPress={handleDeleteOption} style={styles.menuOption}>
-                                                    <Text style={{ color: colors.error, fontSize: 16 }}>Delete</Text>
-                                                    <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
-                                                </TouchableOpacity>
-                                            </>
-                                        )}
-
-                                        <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.menuOption}>
-                                            <Text style={{ color: colors.text, fontSize: 16 }}>Cancel</Text>
-                                        </TouchableOpacity>
-                                    </>
-                                )}
-                            </View>
-                        </Pressable>
-                    </Modal>
+                    {/* Pinned Messages Modal */}
+                    <PinnedMessagesModal 
+                        visible={pinnedModalVisible}
+                        onClose={() => setPinnedModalVisible(false)}
+                        pinnedMessages={chat?.messages?.filter((m: any) => m.is_pinned) || []}
+                        onUnpin={(msgId) => unpinMessage(chat.id, msgId)}
+                        onJumpTo={(msgId) => {
+                            // Find index and scroll
+                            const index = chat.messages.findIndex((m: any) => m.id === msgId);
+                            if (index !== -1) {
+                                flatListRef.current?.scrollToIndex({ index, animated: true });
+                            }
+                        }}
+                    />
 
                     <KeyboardAvoidingView
                         style={{ flex: 1 }}

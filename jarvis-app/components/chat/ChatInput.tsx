@@ -11,6 +11,7 @@ import { useStore } from '@/store';
 import { Message } from '@/types';
 import * as Haptics from 'expo-haptics';
 import { ImageEditor } from './ImageEditor';
+import { VoiceRecorder } from './VoiceRecorder';
 
 interface ChatInputProps {
     text: string;
@@ -43,6 +44,7 @@ export const ChatInput = ({
     const [showAttachMenu, setShowAttachMenu] = React.useState(false);
     const [selectedFile, setSelectedFile] = React.useState<any>(null);
     const [showImageEditor, setShowImageEditor] = React.useState(false);
+    const [isRecording, setIsRecording] = React.useState(false);
 
     const isExpoGo = Constants.appOwnership === 'expo';
 
@@ -348,6 +350,30 @@ export const ChatInput = ({
 
     return (
         <View style={{ backgroundColor: colors.background, paddingBottom: !keyboardVisible ? Math.max(insets.bottom, 20) : 10, zIndex: 10 }}>
+            {isRecording ? (
+                <VoiceRecorder
+                    onSend={async (uri, duration) => {
+                        setIsRecording(false);
+                        const file = {
+                            uri,
+                            name: `voice_${Date.now()}.m4a`,
+                            mimeType: 'audio/m4a',
+                            size: 0, // Duration is more important for voice
+                        };
+                        try {
+                            setUploading(true);
+                            await sendFileMessage(chatId, file, '', replyingToMessage?.id, duration);
+                            setReplyingToMessage(null);
+                        } catch (error) {
+                            console.error('Send voice error', error);
+                        } finally {
+                            setUploading(false);
+                        }
+                    }}
+                    onCancel={() => setIsRecording(false)}
+                />
+            ) : (
+                <>
             <Modal
                 transparent={true}
                 visible={showAttachMenu}
@@ -482,33 +508,46 @@ export const ChatInput = ({
                     maxLength={1000}
                 />
 
-                <TouchableOpacity
-                    onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        if (selectedFile) {
-                            handleSendFile();
-                        } else {
-                            handleSend();
-                        }
-                    }}
-                    disabled={!selectedFile && !text.trim()}
-                    style={styles.sendButtonContainer}
-                >
-                    <LinearGradient
-                        colors={[colors.primary, colors.secondary]}
-                        style={styles.sendButton}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
+                {text.trim() || selectedFile ? (
+                    <TouchableOpacity
+                        onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                            if (selectedFile) {
+                                handleSendFile();
+                            } else {
+                                handleSend();
+                            }
+                        }}
+                        style={styles.sendButtonContainer}
                     >
-                        <FontAwesome
-                            name={editingMessageId ? "check" : "paper-plane"}
-                            size={18}
-                            color="white"
-                            style={{ marginLeft: editingMessageId ? 0 : -2 }} // Adjust icon center
-                        />
-                    </LinearGradient>
-                </TouchableOpacity>
+                        <LinearGradient
+                            colors={[colors.primary, colors.secondary]}
+                            style={styles.sendButton}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                            <FontAwesome
+                                name={editingMessageId ? "check" : "paper-plane"}
+                                size={18}
+                                color="white"
+                                style={{ marginLeft: editingMessageId ? 0 : -2 }}
+                            />
+                        </LinearGradient>
+                    </TouchableOpacity>
+                ) : (
+                    <TouchableOpacity
+                        onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setIsRecording(true);
+                        }}
+                        style={[styles.attachButton, { backgroundColor: colors.messageBubbleThem, marginRight: 0, marginLeft: 8 }]}
+                    >
+                        <FontAwesome name="microphone" size={20} color={colors.text} />
+                    </TouchableOpacity>
+                )}
             </View>
+                </>
+            )}
 
             {/* Image Editor Modal */}
             <Modal

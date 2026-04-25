@@ -46,6 +46,10 @@ class WebRTCService {
         iceCandidatePoolSize: 0, // Disable early candidate pooling to stabilize trickle
     };
 
+    getLocalStream(isVideo: boolean = true) {
+        return this.startLocalStream(isVideo);
+    }
+
     async startLocalStream(isVideo: boolean = true) {
         try {
             const stream = await mediaDevices.getUserMedia({
@@ -161,11 +165,18 @@ class WebRTCService {
         }
     }
 
+    isRemoteDescriptionSet() {
+        return !!this.peerConnection?.remoteDescription;
+    }
+
     async createOffer() {
         console.log('[WebRTC] Creating offer...');
         if (!this.peerConnection) {
+            this.createPeerConnection();
+        }
+        if (!this.peerConnection) {
             console.error('[WebRTC] Peer connection missing in createOffer');
-            throw new Error('Peer connection not created. Call createPeerConnection() first.');
+            throw new Error('Peer connection failed to initialize.');
         }
 
         try {
@@ -183,9 +194,20 @@ class WebRTCService {
         }
     }
 
-    async createAnswer() {
+    async createAnswer(offer?: any) {
+        if (offer) {
+            console.log('[WebRTC] Setting remote description from offer in createAnswer...');
+            await this.setRemoteDescription(offer);
+        }
+
+        console.log('[WebRTC] Current signaling state before creating answer:', this.peerConnection?.signalingState);
+
         if (!this.peerConnection) {
-            throw new Error('Peer connection not created. Call createPeerConnection() first.');
+            this.createPeerConnection();
+        }
+
+        if (!this.peerConnection) {
+            throw new Error('Peer connection not created.');
         }
 
         try {
@@ -199,17 +221,26 @@ class WebRTCService {
         }
     }
 
-    async setRemoteDescription(sdp: RTCSessionDescription) {
+    async setRemoteDescription(sdp: RTCSessionDescription | any) {
         if (!this.peerConnection) {
-            throw new Error('Peer connection not created. Call createPeerConnection() first.');
+            this.createPeerConnection();
+        }
+        if (!this.peerConnection) {
+            throw new Error('Peer connection not created.');
         }
         try {
-            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
-            console.log('[WebRTC] Remote description set successfully');
+            const description = sdp instanceof RTCSessionDescription ? sdp : new RTCSessionDescription(sdp);
+            console.log('[WebRTC] Setting remote description, type:', description.type);
+            await this.peerConnection.setRemoteDescription(description);
+            console.log('[WebRTC] Remote description set successfully, new state:', this.peerConnection?.signalingState);
         } catch (error) {
             console.error("Error setting remote description:", error);
             throw error;
         }
+    }
+
+    async handleAnswer(answer: any) {
+        return await this.setRemoteDescription(answer);
     }
 
     async addIceCandidate(candidate: RTCIceCandidate) {
@@ -255,6 +286,10 @@ class WebRTCService {
         this.onIceCandidate = null;
         this.onIceRestart = null;
         this.onConnectionStateChange = null;
+    }
+
+    closeConnection() {
+        this.endCall();
     }
 
     toggleAudio(enabled: boolean) {

@@ -3,3 +3,7 @@ export * from './ChatInput';
 export * from './ChatHeader';
 export * from './ForwardMessageModal';
 export * from './MediaViewer';
+export * from './VoicePlayer';
+export * from './VoiceRecorder';
+export * from './PinnedMessagesModal';
+export * from './ReactionPicker';

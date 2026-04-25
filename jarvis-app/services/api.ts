@@ -442,7 +442,7 @@ export const api = {
             return uri;
         },
 
-        uploadFile: async (token: string, conversationId: string | null, recipientUsername: string | null, file: any, text: string = '', replyToId?: string) => {
+        uploadFile: async (token: string, conversationId: string | null, recipientUsername: string | null, file: any, text: string = '', replyToId?: string, duration?: number) => {
             const url = `${API_URL}/chat/messages/upload/`;
             const formData = new FormData();
 
@@ -450,6 +450,7 @@ export const api = {
             if (recipientUsername) formData.append('recipient_username', recipientUsername);
             formData.append('text', text);
             if (replyToId) formData.append('reply_to_id', replyToId);
+            if (duration) formData.append('duration', duration.toString());
 
             if (file) {
                 // Validate file before upload

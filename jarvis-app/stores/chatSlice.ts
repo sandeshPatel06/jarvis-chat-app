@@ -7,6 +7,7 @@ import { getMediaUrl, getLocalMediaUri, downloadMedia } from '@/utils/media';
 import { scheduleLocalNotification } from '@/utils/notifications';
 import { downloadManager } from '@/services/downloadManager';
 import { AppState } from '@/store';
+import { handleWebSocketMessage } from '@/utils/websocket';
 
 export interface ChatSlice {
     chats: Chat[];
@@ -20,7 +21,7 @@ export interface ChatSlice {
     connectWebSocket: () => void;
     addMessage: (message: any) => void;
     sendMessage: (chatId: string, text: string, replyToId?: string) => Promise<void>;
-    sendFileMessage: (chatId: string, file: any, text?: string, replyToId?: string) => Promise<void>;
+    sendFileMessage: (chatId: string, file: any, text?: string, replyToId?: string, duration?: number) => Promise<void>;
     syncMessages: () => Promise<void>;
     fetchChats: () => Promise<void>;
     fetchMessages: (chatId: string) => Promise<void>;
@@ -29,14 +30,17 @@ export interface ChatSlice {
     editMessage: (chatId: string, messageId: string, newText: string) => void;
     deleteMessage: (chatId: string, messageId: string) => void;
     reactToMessage: (chatId: string, messageId: string, reaction: string) => void;
+    muteChat: (chatId: string) => void;
+    unmuteChat: (chatId: string) => void;
     isChatMuted: (chatId: string) => boolean;
     fetchCalls: (loadMore?: boolean) => Promise<void>;
     loadMoreMessages: (chatId: string) => Promise<void>;
     forwardMessage: (message: Message, chatIds: string[]) => Promise<void>;
     clearChat: (chatId: string) => Promise<void>;
     callsOffset: number;
-    hasMoreCalls: boolean;
     calls: any[];
+    updateMessageRead: (messageId: string, chatId?: string) => void;
+    updateMessageDelivered: (messageId: string, chatId?: string) => void;
 }
 
 let reconnectTimeout: any = null;
@@ -76,14 +80,25 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
         };
 
         ws.onmessage = async (e) => {
-            try {
-                const data = JSON.parse(e.data);
-                // Handle various message types...
-                // (Most logic will be delegated to specialized handlers to keep slice clean)
-                handleWsMessage(data, set, get);
-            } catch (err) {
-                console.error('[WS] Parse error:', err);
+            const state = get() as any;
+            const signalingTypes = ['webrtc_offer', 'webrtc_answer', 'webrtc_ice_candidate', 'call_ended'];
+            const data = JSON.parse(e.data);
+            
+            if (signalingTypes.includes(data.type)) {
+                return state.handleSignalingMessage(data);
             }
+
+            await handleWebSocketMessage(e as any, {
+                setTyping: state.setTyping,
+                updateMessageRead: state.updateMessageRead,
+                updateMessageDelivered: state.updateMessageDelivered,
+                markDelivered: state.markDelivered,
+                addMessage: state.addMessage,
+                getActiveChatId: () => state.activeChatId,
+                getChats: () => state.chats,
+                setChats: (chats) => set({ chats } as any),
+                getCurrentUser: () => state.user,
+            });
         };
 
         ws.onclose = () => {
@@ -172,13 +187,13 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
         }
     },
 
-    sendFileMessage: async (chatId, file, text, replyToId) => {
+    sendFileMessage: async (chatId, file, text, replyToId, duration) => {
         // Implementation remains similar but moved to slice
         const { token, addMessage } = get() as any;
         if (!token) return;
         
         try {
-            const result = await api.chat.uploadFile(token, file, chatId, text, replyToId);
+            const result = await api.chat.uploadFile(token, chatId, null, file, text, replyToId, duration);
             addMessage({ ...result, conversation_id: chatId });
         } catch (e) {
             console.error('File upload failed', e);
@@ -361,59 +376,33 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
         }));
         await database.clearChatMessages(chatId);
     },
+
+    updateMessageRead: (messageId, chatId) => {
+        set((state: any) => ({
+            chats: state.chats.map((c: any) => {
+                if (chatId ? c.id === chatId : true) {
+                    return {
+                        ...c,
+                        messages: c.messages.map((m: any) => m.id === messageId ? { ...m, isRead: true } : m)
+                    };
+                }
+                return c;
+            })
+        }));
+    },
+
+    updateMessageDelivered: (messageId, chatId) => {
+        set((state: any) => ({
+            chats: state.chats.map((c: any) => {
+                if (chatId ? c.id === chatId : true) {
+                    return {
+                        ...c,
+                        messages: c.messages.map((m: any) => m.id === messageId ? { ...m, isDelivered: true } : m)
+                    };
+                }
+                return c;
+            })
+        }));
+    },
 });
 
-// WS Message Handler delegated to reduce slice size
-const handleWsMessage = async (data: any, set: any, get: any) => {
-    const { addMessage, handleSignalingMessage, activeChatId } = get();
-    
-    if (data.type?.startsWith('webrtc_') || data.type === 'call_ended') {
-        return handleSignalingMessage(data);
-    }
-
-    if (data.type === 'user_typing') {
-        const { conversation_id, sender_username } = data;
-        get().setTyping(conversation_id, sender_username);
-        setTimeout(() => get().setTyping(conversation_id, null), 3000);
-    } else if (data.type === 'message_reaction') {
-        const { message_id, conversation_id, reactions } = data;
-        set((state: any) => ({
-            chats: state.chats.map((c: any) => c.id === conversation_id ? {
-                ...c,
-                messages: c.messages.map((m: any) => m.id === message_id ? { ...m, reactions } : m)
-            } : c)
-        }));
-    } else if (data.message) {
-        const msg = data.message;
-        msg.id = msg.id.toString();
-        
-        // Use download manager if file present
-        if (msg.file) {
-            const url = getMediaUrl(msg.file);
-            if (url) {
-                downloadManager.enqueue(url, msg.id, (localUri) => {
-                    set((state: any) => ({
-                        chats: state.chats.map((c: any) => 
-                            c.id === msg.conversation_id ? {
-                                ...c,
-                                messages: c.messages.map((m: any) => m.id === msg.id ? { ...m, file: localUri } : m)
-                            } : c
-                        )
-                    }));
-                }, () => {});
-            }
-        }
-
-        addMessage(msg);
-        
-        if (msg.sender?.username !== get().user?.username) {
-            get().markDelivered(msg.conversation_id, msg.id);
-            if (activeChatId === msg.conversation_id?.toString()) {
-                get().markRead(msg.conversation_id, msg.id);
-            } else {
-                scheduleLocalNotification(`Jarvis - ${msg.sender?.username || 'New Message'}`, msg.text, { chatId: msg.conversation_id });
-            }
-        }
-        database.saveMessage(msg, msg.conversation_id);
-    }
-};

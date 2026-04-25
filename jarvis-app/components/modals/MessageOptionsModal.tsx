@@ -1,7 +1,6 @@
 import React from 'react';
 import { Modal, View, TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { Message } from '@/types';
@@ -10,39 +9,35 @@ interface MessageOptionsModalProps {
     visible: boolean;
     onClose: () => void;
     message: Message | null;
+    onReply?: (message: Message) => void;
+    onCopy?: (message: Message) => void;
+    onEdit?: (message: Message) => void;
+    onDelete?: (message: Message) => void;
+    onPin?: (message: Message) => void;
+    onUnpin?: (message: Message) => void;
+    onReact?: (message: Message) => void;
+    onSaveToGallery?: (message: Message) => void;
 }
 
-export const MessageOptionsModal: React.FC<MessageOptionsModalProps> = ({ visible, onClose, message }) => {
+export const MessageOptionsModal: React.FC<MessageOptionsModalProps> = ({ 
+    visible, 
+    onClose, 
+    message,
+    onReply,
+    onCopy,
+    onEdit,
+    onDelete,
+    onPin,
+    onUnpin,
+    onReact,
+    onSaveToGallery
+}) => {
     const { colors } = useAppTheme();
 
-    const handleSaveToGallery = async () => {
-        if (!message?.file || !message.file.startsWith('file://')) {
-            Alert.alert('Error', 'No local file available to save');
-            return;
-        }
-
-        try {
-            const { status } = await MediaLibrary.requestPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert(
-                    'Permission Required',
-                    'Please grant photo library access to save images.',
-                    [{ text: 'OK' }]
-                );
-                return;
-            }
-
-            await MediaLibrary.saveToLibraryAsync(message.file);
-            Alert.alert('Success', 'Saved to gallery!');
-            onClose();
-        } catch (error) {
-            console.error('Save to gallery error:', error);
-            Alert.alert('Error', 'Failed to save to gallery');
-        }
-    };
+    if (!message) return null;
 
     const handleShare = async () => {
-        if (!message?.file || !message.file.startsWith('file://')) {
+        if (!message.file || !message.file.startsWith('file://')) {
             Alert.alert('Error', 'No local file available to share');
             return;
         }
@@ -62,7 +57,8 @@ export const MessageOptionsModal: React.FC<MessageOptionsModalProps> = ({ visibl
         }
     };
 
-    const isMediaMessage = message?.file_type?.startsWith('image/') || message?.file_type?.startsWith('video/');
+    const isMediaMessage = message.file_type?.startsWith('image/') || message.file_type?.startsWith('video/');
+    const isMe = message.sender === 'me';
 
     return (
         <Modal
@@ -77,20 +73,64 @@ export const MessageOptionsModal: React.FC<MessageOptionsModalProps> = ({ visibl
                 onPress={onClose}
             >
                 <View style={[styles.menu, { backgroundColor: colors.card }]}>
-                    {isMediaMessage && (
-                        <>
-                            <TouchableOpacity
-                                style={styles.menuItem}
-                                onPress={handleSaveToGallery}
-                            >
-                                <FontAwesome name="download" size={20} color={colors.text} />
-                                <Text style={[styles.menuText, { color: colors.text }]}>
-                                    Save to Gallery
-                                </Text>
-                            </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => { onReact?.(message); }}
+                    >
+                        <FontAwesome name="smile-o" size={20} color={colors.text} />
+                        <Text style={[styles.menuText, { color: colors.text }]}>React</Text>
+                    </TouchableOpacity>
 
-                            <View style={[styles.separator, { backgroundColor: colors.border }]} />
-                        </>
+                    <View style={[styles.separator, { backgroundColor: colors.border }]} />
+
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => { onReply?.(message); onClose(); }}
+                    >
+                        <FontAwesome name="reply" size={20} color={colors.text} />
+                        <Text style={[styles.menuText, { color: colors.text }]}>Reply</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => { onCopy?.(message); onClose(); }}
+                    >
+                        <FontAwesome name="copy" size={20} color={colors.text} />
+                        <Text style={[styles.menuText, { color: colors.text }]}>Copy</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => { 
+                            if (message.is_pinned) onUnpin?.(message); 
+                            else onPin?.(message);
+                            onClose();
+                        }}
+                    >
+                        <FontAwesome name="thumb-tack" size={20} color={colors.text} />
+                        <Text style={[styles.menuText, { color: colors.text }]}>
+                            {message.is_pinned ? 'Unpin' : 'Pin'}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {isMe && (
+                        <TouchableOpacity
+                            style={styles.menuItem}
+                            onPress={() => { onEdit?.(message); onClose(); }}
+                        >
+                            <FontAwesome name="edit" size={20} color={colors.text} />
+                            <Text style={[styles.menuText, { color: colors.text }]}>Edit</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {isMediaMessage && (
+                        <TouchableOpacity
+                            style={styles.menuItem}
+                            onPress={() => { onSaveToGallery?.(message); onClose(); }}
+                        >
+                            <FontAwesome name="download" size={20} color={colors.text} />
+                            <Text style={[styles.menuText, { color: colors.text }]}>Save to Gallery</Text>
+                        </TouchableOpacity>
                     )}
 
                     <TouchableOpacity
@@ -98,21 +138,17 @@ export const MessageOptionsModal: React.FC<MessageOptionsModalProps> = ({ visibl
                         onPress={handleShare}
                     >
                         <FontAwesome name="share" size={20} color={colors.text} />
-                        <Text style={[styles.menuText, { color: colors.text }]}>
-                            Share
-                        </Text>
+                        <Text style={[styles.menuText, { color: colors.text }]}>Share</Text>
                     </TouchableOpacity>
 
                     <View style={[styles.separator, { backgroundColor: colors.border }]} />
 
                     <TouchableOpacity
                         style={styles.menuItem}
-                        onPress={onClose}
+                        onPress={() => { onDelete?.(message); onClose(); }}
                     >
-                        <FontAwesome name="times" size={20} color={colors.text} />
-                        <Text style={[styles.menuText, { color: colors.text }]}>
-                            Cancel
-                        </Text>
+                        <FontAwesome name="trash" size={20} color={colors.error} />
+                        <Text style={[styles.menuText, { color: colors.error }]}>Delete</Text>
                     </TouchableOpacity>
                 </View>
             </TouchableOpacity>

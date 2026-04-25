@@ -2,51 +2,66 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs, useRouter } from 'expo-router';
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
+import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
 // You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const router = useRouter();
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.tabIconDefault,
-        headerShown: useClientOnlyValue(false, true),
+        tabBarInactiveTintColor: colors.textSecondary,
+        headerShown: true,
+        tabBarButton: (props) => (
+          <TouchableOpacity
+            {...props}
+            activeOpacity={0.7}
+            onPress={(e) => {
+              Haptics.selectionAsync();
+              props.onPress?.(e);
+            }}
+          />
+        ),
+        tabBarBackground: () => (
+          <BlurView
+            intensity={Platform.OS === 'ios' ? 80 : 100}
+            tint={isDark ? 'dark' : 'light'}
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.7)',
+              }
+            ]}
+          />
+        ),
         tabBarStyle: {
-          backgroundColor: colors.background,
-          borderTopWidth: 0,
-          elevation: 15,
-          height: 68,
+          backgroundColor: 'transparent',
+          borderTopWidth: 1,
+          borderTopColor: colors.cardBorder,
+          height: 60 + insets.bottom,
           position: 'absolute',
-          bottom: 30,
-          left: 20,
-          right: 20,
-          borderRadius: 24,
-          paddingHorizontal: 15,
-          paddingBottom: 0,
-          paddingTop: 0,
-          borderWidth: 1,
-          borderColor: colors.cardBorder,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: 0.2,
-          shadowRadius: 20,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          paddingBottom: insets.bottom,
+          elevation: 0,
         },
         tabBarItemStyle: {
-          height: 68,
-          paddingVertical: 10,
-        },
-        tabBarIconStyle: {
-          marginTop: 0,
+          height: 60,
+          justifyContent: 'center',
+          alignItems: 'center',
         },
         tabBarLabelStyle: {
           display: 'none',
@@ -59,20 +74,26 @@ export default function TabLayout() {
         },
         headerTitleStyle: {
           color: colors.text,
-          fontSize: 28,
+          fontSize: 32,
           fontWeight: '800',
-          letterSpacing: 0.5,
+          letterSpacing: -0.5,
         },
         headerTitleAlign: 'left',
         headerStatusBarHeight: insets.top,
+        headerLeftContainerStyle: { paddingLeft: 20 },
+        headerRightContainerStyle: { paddingRight: 20 },
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          headerTitle: 'Chats',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconContainer, focused && { backgroundColor: colors.backgroundSecondary }]}>
-              <MaterialCommunityIcons name={focused ? "chat" : "chat-outline"} size={26} color={color} />
+            <View style={styles.iconContainer}>
+              <MaterialCommunityIcons 
+                name={focused ? "chat" : "chat-outline"} 
+                size={28} 
+                color={color} 
+              />
+              {focused && <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />}
             </View>
           ),
           headerRight: () => (
@@ -93,10 +114,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="people"
         options={{
-          headerTitle: 'Contacts',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconContainer, focused && { backgroundColor: colors.backgroundSecondary }]}>
-              <MaterialCommunityIcons name={focused ? "account-group" : "account-group-outline"} size={26} color={color} />
+            <View style={styles.iconContainer}>
+              <MaterialCommunityIcons 
+                name={focused ? "account-group" : "account-group-outline"} 
+                size={28} 
+                color={color} 
+              />
+              {focused && <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />}
             </View>
           ),
         }}
@@ -104,10 +129,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="calls"
         options={{
-          headerTitle: 'Calls',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconContainer, focused && { backgroundColor: colors.backgroundSecondary }]}>
-              <MaterialCommunityIcons name={focused ? "phone" : "phone-outline"} size={26} color={color} />
+            <View style={styles.iconContainer}>
+              <MaterialCommunityIcons 
+                name={focused ? "phone" : "phone-outline"} 
+                size={28} 
+                color={color} 
+              />
+              {focused && <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />}
             </View>
           ),
         }}
@@ -115,10 +144,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          headerTitle: 'Settings',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconContainer, focused && { backgroundColor: colors.backgroundSecondary }]}>
-              <MaterialCommunityIcons name={focused ? "cog" : "cog-outline"} size={26} color={color} />
+            <View style={styles.iconContainer}>
+              <MaterialCommunityIcons 
+                name={focused ? "cog" : "cog-outline"} 
+                size={28} 
+                color={color} 
+              />
+              {focused && <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />}
             </View>
           ),
         }}
@@ -129,20 +162,27 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   iconContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 60,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  activeDot: {
+    position: 'absolute',
+    bottom: 4,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
   headerRight: {
-    paddingRight: 10,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   headerIconButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
   }

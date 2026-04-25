@@ -14,11 +14,12 @@ interface ChatHeaderProps {
     chat: Chat;
     typingUser: string | null;
     onOptionsPress: () => void;
+    onPinnedPress: () => void;
     onSMSPress?: () => void;
     style?: ViewStyle;
 }
 
-export const ChatHeader = ({ chat, typingUser, onOptionsPress, onSMSPress, style }: ChatHeaderProps) => {
+export const ChatHeader = ({ chat, typingUser, onOptionsPress, onPinnedPress, onSMSPress, style }: ChatHeaderProps) => {
     const { colors } = useAppTheme();
     const router = useRouter();
     const startCall = useStore((state) => state.startCall);
@@ -111,6 +112,10 @@ export const ChatHeader = ({ chat, typingUser, onOptionsPress, onSMSPress, style
 
             <TouchableOpacity onPress={handleVideoCall} style={[styles.actionButton, { marginRight: 5 }]}>
                 <MaterialCommunityIcons name="video" size={24} color={colors.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={onPinnedPress} style={styles.actionButton}>
+                <MaterialCommunityIcons name="pin" size={24} color={colors.primary} />
             </TouchableOpacity>
 
             <TouchableOpacity onPress={onOptionsPress} style={styles.actionButton}>

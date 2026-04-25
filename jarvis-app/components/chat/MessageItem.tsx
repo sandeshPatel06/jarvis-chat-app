@@ -8,6 +8,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { MediaViewer } from './MediaViewer';
 
 import { getMediaUrl } from '@/utils/media';
+import { VoicePlayer } from './VoicePlayer';
 
 interface MessageItemProps {
     item: Message;
@@ -212,6 +213,11 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
                                                     <Text style={styles.videoDurationText}>0:30</Text> {/* Placeholder duration */}
                                                 </LinearGradient>
                                             </TouchableOpacity>
+                                        ) : item.file_type?.startsWith('audio/') ? (
+                                            <VoicePlayer 
+                                                audioUri={getMediaUrl(item.file)!} 
+                                                duration={parseInt((item as any).duration || '0')} 
+                                            />
                                         ) : (
                                             <View style={[styles.documentPreview, { backgroundColor: colors.backgroundSecondary }]}>
                                                 <View style={[styles.fileIconBubble, { backgroundColor: colors.background }]}>
@@ -312,6 +318,11 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
                                                     <Text style={styles.videoDurationText}>0:30</Text>
                                                 </LinearGradient>
                                             </TouchableOpacity>
+                                        ) : item.file_type?.startsWith('audio/') ? (
+                                            <VoicePlayer 
+                                                audioUri={getMediaUrl(item.file)!} 
+                                                duration={parseInt((item as any).duration || '0')} 
+                                            />
                                         ) : (
                                             <View style={[styles.documentPreview, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
                                                 <View style={[styles.fileIconBubble, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>

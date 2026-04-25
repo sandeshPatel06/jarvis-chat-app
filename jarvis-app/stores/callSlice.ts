@@ -27,6 +27,7 @@ export interface CallSlice {
     acceptCall: () => Promise<void>;
     handleSignalingMessage: (message: any) => Promise<void>;
     setIsMinimized: (isMinimized: boolean) => void;
+    setupWebRTCListeners: (chatId: string) => void;
 }
 
 // These would normally be inside the component or a dedicated service, but kept for parity
@@ -88,6 +89,37 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
     setIsMinimized: (isMinimized) => set((state) => ({
         callState: { ...state.callState, isMinimized }
     })),
+    setupWebRTCListeners: (chatId: string) => {
+        const { socket } = get() as any;
+
+        webrtcService.onRemoteStream = (stream) => {
+            console.log('[CallSlice] 📺 Remote stream received, tracks:', stream.getTracks().length);
+            set((state) => ({
+                callState: { ...state.callState, remoteStream: stream }
+            }));
+        };
+
+        webrtcService.onIceCandidate = (candidate) => {
+            if (socket) {
+                socket.send(JSON.stringify({
+                    type: 'webrtc_ice_candidate',
+                    conversation_id: chatId,
+                    candidate
+                }));
+            }
+        };
+
+        webrtcService.onConnectionStateChange = (state) => {
+            console.log('[CallSlice] 🌐 Connection State:', state);
+            set((s) => ({
+                callState: { ...s.callState, connectionState: state }
+            }));
+            
+            if (state === 'connected') {
+                stopRingtone();
+            }
+        };
+    },
     startCall: async (chatId, isVideo = true) => {
         set((state) => ({
             callState: { ...state.callState, isCalling: true, activeChatId: chatId, isMinimized: false, bufferedCandidates: [], isVideo, isRequestingPermissions: true }
@@ -116,7 +148,9 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
             set((state) => ({
                 callState: { ...state.callState, localStream: stream }
             }));
-            const offer = await webrtcService.createOffer(stream);
+            
+            (get() as any).setupWebRTCListeners(chatId);
+            const offer = await webrtcService.createOffer();
             const { socket } = get() as any;
             if (socket) {
                 socket.send(JSON.stringify({
@@ -132,9 +166,12 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
     },
     acceptCall: async () => {
         const { callState } = get();
-        if (!callState.incomingCall) return;
+        if (!callState.incomingCall) {
+            console.warn('[AcceptCall] No incoming call found in state');
+            return;
+        }
         const { chatId, offer, isVideo } = callState.incomingCall;
-        console.log('[AcceptCall] Accepting from:', chatId);
+        console.log('[AcceptCall] Accepting from:', chatId, 'isVideo:', isVideo, 'offerPrefix:', offer?.sdp?.substring(0, 50));
         stopRingtone();
         set((state) => ({
             callState: { ...state.callState, isCalling: true, activeChatId: chatId, isVideo, isRequestingPermissions: true }
@@ -161,7 +198,9 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
             set((state) => ({
                 callState: { ...state.callState, localStream: stream }
             }));
-            const answer = await webrtcService.createAnswer(offer, stream);
+            
+            (get() as any).setupWebRTCListeners(chatId);
+            const answer = await webrtcService.createAnswer(offer);
             const { socket } = get() as any;
             if (socket) {
                 socket.send(JSON.stringify({
@@ -171,7 +210,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 }));
             }
             if (callState.bufferedCandidates.length > 0) {
-                console.log('[AcceptCall] Draining', callState.bufferedCandidates.length, 'buffered candidates');
+                console.log('[AcceptCall] 🚰 Draining', callState.bufferedCandidates.length, 'buffered candidates');
                 for (const candidate of callState.bufferedCandidates) {
                     await webrtcService.addIceCandidate(candidate);
                 }
@@ -214,7 +253,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
         const { callState } = get();
         switch (data.type) {
             case 'webrtc_offer':
-                console.log('[Signaling] Received offer');
+                console.log('[Signaling] Received offer from:', data.conversation_id);
                 if (callState.isCalling) {
                     console.log('[Signaling] Busy, rejecting offer');
                     return;
