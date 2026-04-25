@@ -66,7 +66,8 @@ const stopRingtone = async () => {
     try {
         ringtoneActive = false;
         if (callSound) {
-            callSound.pause();
+            // expo-audio uses .pause() or .stop() - safely handling cleanup
+            if (typeof callSound.pause === 'function') callSound.pause();
             callSound = null;
         }
     } catch (e) {
@@ -101,9 +102,10 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
 
         webrtcService.onIceCandidate = (candidate) => {
             if (socket) {
+                console.log(`[CallSlice] 🧊 Sending ICE Candidate for chat: ${chatId}`);
                 socket.send(JSON.stringify({
                     type: 'webrtc_ice_candidate',
-                    conversation_id: chatId,
+                    chat_id: chatId, // Changed from conversation_id
                     candidate
                 }));
             }
@@ -137,13 +139,12 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
             }
             KeepAwake.activateKeepAwakeAsync();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             playRingtone(false);
-            await Audio.setAudioModeAsync({
-                playsInSilentMode: true,
-                allowsRecording: true,
-                interruptionMode: 'doNotMix',
-                shouldRouteThroughEarpiece: !isVideo,
-            });
+            
+            // Note: Modern expo-audio manages sessions automatically; setAudioModeAsync is deprecated/removed in expo-audio
+            // We only keep functional routing if strictly needed.
+            
             const stream = await webrtcService.getLocalStream(isVideo);
             set((state) => ({
                 callState: { ...state.callState, localStream: stream }
@@ -153,14 +154,16 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
             const offer = await webrtcService.createOffer();
             const { socket } = get() as any;
             if (socket) {
+                console.log(`[CallSlice] 📡 Sending webrtc_offer for chat: ${chatId}, Video: ${isVideo}`);
                 socket.send(JSON.stringify({
                     type: 'webrtc_offer',
-                    conversation_id: chatId,
-                    offer
+                    chat_id: chatId, // Changed from conversation_id
+                    offer,
+                    is_video: isVideo // Added missing field
                 }));
             }
         } catch (e) {
-            console.error('Start call failed', e);
+            console.error('[CallSlice] ❌ Start call failed:', e);
             get().endCall();
         }
     },
@@ -219,10 +222,12 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
             const answer = await webrtcService.createAnswer(offer);
             const { socket } = get() as any;
             if (socket) {
+                console.log(`[CallSlice] ✅ Sending webrtc_answer for chat: ${chatId}`);
                 socket.send(JSON.stringify({
                     type: 'webrtc_answer',
-                    conversation_id: chatId,
-                    answer
+                    chat_id: chatId, // Changed from conversation_id
+                    answer,
+                    is_video: isVideo // Consistent with offer
                 }));
             }
             if (callState.bufferedCandidates.length > 0) {
@@ -246,9 +251,10 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
         webrtcService.closeConnection();
         KeepAwake.deactivateKeepAwake();
         if (socket && callState.activeChatId) {
+            console.log(`[CallSlice] 🔴 Sending call_ended for chat: ${callState.activeChatId}`);
             socket.send(JSON.stringify({
                 type: 'call_ended',
-                conversation_id: callState.activeChatId
+                chat_id: callState.activeChatId // Changed from conversation_id
             }));
         }
         set((state) => ({
@@ -269,16 +275,17 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
         const { callState } = get();
         switch (data.type) {
             case 'webrtc_offer':
-                console.log('[Signaling] Received offer from:', data.conversation_id);
+                console.log('[Signaling] Received offer from chat:', data.chat_id || data.conversation_id);
                 if (callState.isCalling) {
                     console.log('[Signaling] Busy, rejecting offer');
+                    // Optional: send busy signal
                     return;
                 }
                 set((state) => ({
                     callState: { 
                         ...state.callState, 
                         incomingCall: { 
-                            chatId: data.conversation_id, 
+                            chatId: data.chat_id || data.conversation_id, // Fallback for safety
                             offer: data.offer, 
                             isVideo: !!data.is_video,
                             callerName: data.caller_name || '',
@@ -305,7 +312,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 }
                 break;
             case 'call_ended':
-                console.log('[Signaling] Call ended by remote');
+                console.log('[Signaling] Call ended by remote for chat:', data.chat_id || data.conversation_id);
                 get().endCall();
                 break;
         }

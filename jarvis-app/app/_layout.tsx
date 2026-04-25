@@ -9,7 +9,7 @@ import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as SystemUI from 'expo-system-ui';
-import { AppState, BackHandler, useColorScheme } from 'react-native';
+import { AppState, BackHandler, useColorScheme, Platform } from 'react-native';
 
 import Colors from '@/constants/Colors';
 import { useStore } from '@/store';

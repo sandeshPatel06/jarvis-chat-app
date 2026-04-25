@@ -1,4 +1,3 @@
-import { useAppTheme } from '@/hooks/useAppTheme';
 import { useStore } from '@/store';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -37,7 +36,6 @@ const PulseCircle = ({ delay = 0 }: { delay?: number }) => {
 export default function IncomingCallModal() {
     const { callState, acceptCall, endCall, chats } = useStore();
     const { incomingCall } = callState;
-    const { colors, isDark } = useAppTheme();
     const router = useRouter();
 
     const chat = incomingCall ? chats.find(c => String(c.id) === String(incomingCall.chatId)) : null;

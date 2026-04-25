@@ -65,10 +65,10 @@ export default function CallScreen() {
                 ])
             ).start();
         } else {
+            pulseAnim.stopAnimation();
             pulseAnim.setValue(1);
-            Animated.timing(pulseAnim).stop();
         }
-    }, [isCalling, remoteStream, connectionState, isEnding]);
+    }, [isCalling, remoteStream, connectionState, isEnding, pulseAnim]);
 
     useEffect(() => {
         const backAction = () => {

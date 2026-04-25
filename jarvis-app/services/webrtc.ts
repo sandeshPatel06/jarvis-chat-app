@@ -86,7 +86,8 @@ class WebRTCService {
         };
 
         (this.peerConnection as any).onconnectionstatechange = async (event: any) => {
-            const state = this.peerConnection?.connectionState;
+            // connectionState might be undefined on some react-native-webrtc versions, fallback to iceConnectionState
+            const state = this.peerConnection?.connectionState || (this.peerConnection as any)?.iceConnectionState;
             console.log('[WebRTC] 🌐 Connection State:', state);
             if (this.onConnectionStateChange && state) {
                 this.onConnectionStateChange(state);
@@ -315,13 +316,13 @@ class WebRTCService {
 
     async toggleSpeaker(enabled: boolean) {
         try {
-            await Audio.setAudioModeAsync({
-                allowsRecording: true,
-                playsInSilentMode: true,
-                interruptionMode: 'doNotMix',
-                shouldRouteThroughEarpiece: !enabled,
-                shouldPlayInBackground: true,
-            });
+            // Note: Modern expo-audio manages this differently; 
+            // In case expo-av is not present, we log that we are attempting a route change.
+            console.log(`[WebRTC] Toggling speaker: ${enabled}`);
+            
+            // If the user wants to keep global audio mode, they might need expo-av
+            // or use specific platform native modules for routing.
+            // For now, we remove the crashing setAudioModeAsync call.
         } catch (e) {
             console.error("Error toggling speaker", e);
         }
