@@ -122,7 +122,7 @@ export const deleteUnsentMessage = async (id: string) => {
     }
 };
 
-export const markMessageSent = async (id: string, newId: string, timestamp: Date) => {
+const markMessageSent = async (id: string, newId: string, timestamp: Date) => {
     const db = await getDb();
     try {
         await db.runAsync(

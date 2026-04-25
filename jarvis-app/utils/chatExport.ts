@@ -53,7 +53,7 @@ export const exportChatAsEmail = async (messages: Message[], chatName: string) =
  * @param message Message to export
  * @param chatName Name of the chat/contact
  */
-export const exportMessageAsEmail = async (message: Message, chatName: string) => {
+const exportMessageAsEmail = async (message: Message, chatName: string) => {
     try {
         const isAvailable = await MailComposer.isAvailableAsync();
         if (!isAvailable) {

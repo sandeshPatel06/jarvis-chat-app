@@ -18,7 +18,7 @@ interface StoreActions {
 }
 
 export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actions: StoreActions) => {
-    console.log('[WS] Message received:', event.data);
+    // console.log('[WS] Message received:', event.data);
     try {
         const data = JSON.parse(event.data);
         if (data.type === 'user_typing') {

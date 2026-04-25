@@ -64,16 +64,13 @@ export const downloadMedia = async (remoteUrl: string, messageId: string): Promi
         // Check if file already exists locally
         const file = new File(mediaDir, filename);
         if (file.exists) {
-            console.log('[Media] File already exists locally:', file.uri);
             return file.uri;
         }
 
         try {
             // Use the legacy downloadAsync for now as the new API is different
-            console.log('[Media] Downloading from:', remoteUrl, 'to:', file.uri);
             const result = await FileSystem.downloadAsync(remoteUrl, file.uri);
             if (result.status === 200) {
-                console.log('[Media] Download successful:', file.uri);
                 return file.uri;
             } else {
                 console.error('[Media] Download failed with status:', result.status);
@@ -116,7 +113,7 @@ export const getLocalMediaUri = async (messageId: string, extension: string = 'j
  * @param messageId - The message ID
  * @param extension - File extension
  */
-export const deleteLocalMedia = async (messageId: string, extension: string = 'jpg'): Promise<void> => {
+const deleteLocalMedia = async (messageId: string, extension: string = 'jpg'): Promise<void> => {
     try {
         const mediaDir = new Directory(Paths.document, 'media');
         const filename = `${messageId}.${extension}`;
@@ -124,7 +121,6 @@ export const deleteLocalMedia = async (messageId: string, extension: string = 'j
 
         if (file.exists) {
             await file.delete();
-            console.log('[Media] Deleted local file:', file.uri);
         }
     } catch (error) {
         console.error('[Media] Error deleting local file:', error);

@@ -5,14 +5,13 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Message } from '@/types';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { MediaViewer } from './MediaViewer';
-
 import { getMediaUrl } from '@/utils/media';
 import { VoicePlayer } from './VoicePlayer';
 
 interface MessageItemProps {
     item: Message;
     onLongPress: (message: Message) => void;
+    onMediaPress?: (uri: string, type: 'image' | 'video' | null, name?: string) => void;
     onSwipeReply?: (message: Message) => void;
     onSwipeForward?: (message: Message) => void;
     selectionMode?: boolean;
@@ -20,20 +19,20 @@ interface MessageItemProps {
     onPress?: (message: Message) => void;
 }
 
-export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeForward, selectionMode = false, isSelected = false, onPress }: MessageItemProps) => {
+const MessageItemComponent = ({ item, onLongPress, onMediaPress, onSwipeReply, onSwipeForward, selectionMode = false, isSelected = false, onPress }: MessageItemProps) => {
     const { colors } = useAppTheme();
     const isMe = item.sender === 'me';
     const reactions = item.reactions || [];
     const swipeableRef = React.useRef<Swipeable>(null);
     const [imageError, setImageError] = React.useState(false);
-    const [viewerVisible, setViewerVisible] = React.useState(false);
     const isUploading = (item as any).isUploading;
     const hasError = (item as any).error;
 
     const handleMediaPress = () => {
         if (item.file && item.file_type) {
-            if (item.file_type.startsWith('image/') || item.file_type.startsWith('video/')) {
-                setViewerVisible(true);
+            const type = getMediaType();
+            if (type === 'image' || type === 'video') {
+                onMediaPress?.(getMediaUrl(typeof item.file === 'string' ? item.file : (item.file as any)?.uri) || '', type, item.file_name ?? undefined);
             }
         }
     };
@@ -412,16 +411,24 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
                     )}
                 </TouchableOpacity>
             </View>
-
-            <MediaViewer
-                visible={viewerVisible}
-                mediaUri={getImageSource()?.uri || getMediaUrl(typeof item.file === 'string' ? item.file : (item.file as any)?.uri) || null}
-                mediaType={getMediaType()}
-                onClose={() => setViewerVisible(false)}
-            />
         </Swipeable>
     );
 };
+
+MessageItemComponent.displayName = 'MessageItem';
+
+export const MessageItem = React.memo(MessageItemComponent, (prevProps, nextProps) => {
+    return (
+        prevProps.item.id === nextProps.item.id &&
+        prevProps.item.text === nextProps.item.text &&
+        prevProps.item.isRead === nextProps.item.isRead &&
+        prevProps.item.isDelivered === nextProps.item.isDelivered &&
+        prevProps.item.isUploading === nextProps.item.isUploading &&
+        prevProps.item.error === nextProps.item.error &&
+        prevProps.selectionMode === nextProps.selectionMode &&
+        prevProps.isSelected === nextProps.isSelected
+    );
+});
 
 const styles = StyleSheet.create({
     swipeLeftAction: {
@@ -655,4 +662,4 @@ const styles = StyleSheet.create({
     },
 });
 
-export const MessageItem = React.memo(MessageItemComponent);
+

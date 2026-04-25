@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TextInput, TouchableOpacity, StyleSheet, Text, ActivityIndicator, Image, Modal, Pressable } from 'react-native';
+import { View, TextInput, TouchableOpacity, StyleSheet, Text, ActivityIndicator, Image, Modal, Pressable, FlatList, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as DocumentPicker from 'expo-document-picker';
@@ -48,6 +48,10 @@ export const ChatInput = ({
     const [selectedFile, setSelectedFile] = React.useState<any>(null);
     const [showImageEditor, setShowImageEditor] = React.useState(false);
     const [isRecording, setIsRecording] = React.useState(false);
+    const [showContactPicker, setShowContactPicker] = React.useState(false);
+    const [contactsList, setContactsList] = React.useState<Contacts.Contact[]>([]);
+    const [contactSearch, setContactSearch] = React.useState('');
+    const [loadingContacts, setLoadingContacts] = React.useState(false);
 
     const isExpoGo = Constants.appOwnership === 'expo';
     const sendMessage = useStore(state => state.sendMessage);
@@ -62,29 +66,37 @@ export const ChatInput = ({
                 return;
             }
 
+            setLoadingContacts(true);
+            setShowContactPicker(true);
+            
             const { data } = await Contacts.getContactsAsync({
                 fields: [Contacts.Fields.Emails, Contacts.Fields.PhoneNumbers],
-                pageSize: 1, // We just want to pick one, but expo-contacts picker is better
             });
             
-            // Expo doesn't have a built-in cross-platform contact picker UI in the core library that works everywhere perfectly without separate UI
-            // But we can trigger the system picker if available or just show a message.
-            // For now, let's assume we want to just inform the user we are working on it or use the first contact for demo if they didn't specify.
-            // Actually, usually one would use a library for picker. Since I can't add more libs easily right now, I'll use a placeholder or the first contact found.
-            
-            if (data.length > 0) {
-                 const contact = data[0];
-                 const phone = contact.phoneNumbers?.[0]?.number || 'No number';
-                 await sendMessage(chatId, `👤 Shared Contact:\n${contact.name}\n${phone}`, replyingToMessage?.id);
-                 setReplyingToMessage(null);
-            } else {
-                 showAlert('No Contacts', 'No contacts found on your device.');
-            }
+            // Manual stable sort instead of SortOrder
+            const sortedData = data.sort((a, b) => a.name.localeCompare(b.name));
+            setContactsList(sortedData);
         } catch (error) {
             console.error('Contact sharing error', error);
-            showAlert('Error', 'Failed to share contact.');
+            showAlert('Error', 'Failed to load contacts.');
+            setShowContactPicker(false);
+        } finally {
+            setLoadingContacts(false);
         }
     };
+
+    const handlePickContact = async (contact: Contacts.Contact) => {
+        const phone = contact.phoneNumbers?.[0]?.number || 'No number';
+        await sendMessage(chatId, `👤 Shared Contact:\n${contact.name}\n${phone}`, replyingToMessage?.id);
+        setShowContactPicker(false);
+        setContactSearch('');
+        setReplyingToMessage(null);
+    };
+
+    const filteredContacts = contactsList.filter(c => 
+        c.name.toLowerCase().includes(contactSearch.toLowerCase()) ||
+        c.phoneNumbers?.some(p => p.number?.includes(contactSearch))
+    );
 
     // Warn about Expo Go limitations on mount
     React.useEffect(() => {
@@ -606,6 +618,92 @@ export const ChatInput = ({
                     />
                 )}
             </Modal>
+
+            {/* Contact Picker Modal */}
+            <Modal
+                visible={showContactPicker}
+                animationType="slide"
+                onRequestClose={() => setShowContactPicker(false)}
+            >
+                <View style={[styles.contactPickerContainer, { backgroundColor: colors.background }]}>
+                    <View style={[styles.contactPickerHeader, { borderBottomColor: colors.border }]}>
+                        <TouchableOpacity onPress={() => {
+                            setShowContactPicker(false);
+                            setContactSearch('');
+                        }} style={styles.closePickerButton}>
+                            <FontAwesome name="times" size={20} color={colors.text} />
+                        </TouchableOpacity>
+                        <Text style={[styles.pickerTitle, { color: colors.text }]}>Select Contact</Text>
+                        <View style={{ width: 40 }} />
+                    </View>
+
+                    <View style={styles.searchContainer}>
+                        <View style={[styles.searchBarContainer, { backgroundColor: colors.inputBackground }]}>
+                            <FontAwesome name="search" size={16} color={colors.tabIconDefault} style={{ marginRight: 10 }} />
+                            <TextInput
+                                style={[styles.contactSearchInput, { color: colors.text }]}
+                                placeholder="Search name or number..."
+                                placeholderTextColor={colors.tabIconDefault}
+                                value={contactSearch}
+                                onChangeText={setContactSearch}
+                            />
+                            {contactSearch.length > 0 && (
+                                <TouchableOpacity onPress={() => setContactSearch('')}>
+                                    <FontAwesome name="times-circle" size={16} color={colors.tabIconDefault} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+
+                    {loadingContacts ? (
+                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                            <ActivityIndicator size="large" color={colors.primary} />
+                            <Text style={{ marginTop: 10, color: colors.textSecondary }}>Loading contacts...</Text>
+                        </View>
+                    ) : (
+                        <View style={{ flex: 1 }}>
+                            {filteredContacts.length > 0 ? (
+                                <View style={{ flex: 1 }}>
+                                    {/* Using a simple map if list is small, but FlatList is better for large data */}
+                                    <View style={{ flex: 1 }}>
+                                        {/* Mocking FlatList behavior with mapped items for brevity, but real app uses FlatList */}
+                                        <View style={{ flex: 1 }}>
+                                            <FlatList 
+                                                data={filteredContacts}
+                                                keyExtractor={(item) => (item as any).id || (item as any).lookupKey || Math.random().toString()}
+                                                renderItem={({ item }) => (
+                                                    <TouchableOpacity 
+                                                        style={[styles.contactItem, { borderBottomColor: colors.border }]}
+                                                        onPress={() => handlePickContact(item)}
+                                                    >
+                                                        <View style={[styles.contactAvatar, { backgroundColor: colors.primary + '20' }]}>
+                                                            <Text style={{ color: colors.primary, fontWeight: 'bold' }}>
+                                                                {item.name.charAt(0).toUpperCase()}
+                                                            </Text>
+                                                        </View>
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={[styles.contactName, { color: colors.text }]}>{item.name}</Text>
+                                                            <Text style={[styles.contactPhone, { color: colors.textSecondary }]}>
+                                                                {item.phoneNumbers?.[0]?.number || 'No phone'}
+                                                            </Text>
+                                                        </View>
+                                                        <FontAwesome name="angle-right" size={20} color={colors.tabIconDefault} />
+                                                    </TouchableOpacity>
+                                                )}
+                                            />
+                                        </View>
+                                    </View>
+                                </View>
+                            ) : (
+                                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+                                    <FontAwesome name="users" size={64} color={colors.tabIconDefault} style={{ opacity: 0.3, marginBottom: 20 }} />
+                                    <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>No contacts found</Text>
+                                </View>
+                            )}
+                        </View>
+                    )}
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -765,5 +863,61 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.2,
         shadowRadius: 1,
+    },
+    contactPickerContainer: {
+        flex: 1,
+    },
+    contactPickerHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingTop: Platform.OS === 'ios' ? 60 : 20,
+        paddingBottom: 16,
+        borderBottomWidth: 0.5,
+    },
+    pickerTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+    },
+    closePickerButton: {
+        padding: 8,
+    },
+    searchContainer: {
+        padding: 16,
+    },
+    searchBarContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        height: 48,
+    },
+    contactSearchInput: {
+        flex: 1,
+        fontSize: 16,
+    },
+    contactItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderBottomWidth: 0.5,
+    },
+    contactAvatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+    },
+    contactName: {
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    contactPhone: {
+        fontSize: 13,
+        marginTop: 2,
     },
 });

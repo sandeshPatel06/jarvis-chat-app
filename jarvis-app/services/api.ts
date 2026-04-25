@@ -11,9 +11,6 @@ if (!BACKEND_URL) {
 const API_URL = `${BACKEND_URL}/api`;
 
 const log = (message: string, data?: any) => {
-    if (__DEV__) {
-        console.log(`[API] ${message}`, data || '');
-    }
 };
 
 const fetchWithTracking = async (url: string, options: any = {}) => {
@@ -55,61 +52,51 @@ export const api = {
         requestOTP: async (identifier: string) => {
             const url = `${API_URL}/auth/request-otp/`;
             try {
-                log(`POST ${url}`, { identifier });
                 const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ identifier }),
                 });
                 const json = await response.json();
-                log('Request OTP response', { status: response.status, json });
                 if (!response.ok) throw new Error(json.error || 'Failed to request OTP');
                 return json;
             } catch (error) {
-                log('Request OTP error', error);
                 throw error;
             }
         },
         verifyOTP: async (data: { session_id: string; otp_code: string }) => {
             const url = `${API_URL}/auth/verify-otp/`;
             try {
-                log(`POST ${url}`, data);
                 const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data),
                 });
                 const json = await response.json();
-                log('Verify OTP response', { status: response.status, json });
                 if (!response.ok) throw new Error(json.error || 'Verification failed');
                 return json;
             } catch (error) {
-                log('Verify OTP error', error);
                 throw error;
             }
         },
         completeSignup: async (data: any) => {
             const url = `${API_URL}/auth/complete-signup/`;
             try {
-                log(`POST ${url}`, data);
                 const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data),
                 });
                 const json = await response.json();
-                log('Complete Signup response', { status: response.status, json });
                 if (!response.ok) throw new Error(json.error || 'Signup failed');
                 return json;
             } catch (error) {
-                log('Complete Signup error', error);
                 throw error;
             }
         },
         login: async (data: any) => {
             const url = `${API_URL}/auth/login/`;
             try {
-                log(`POST ${url}`, data);
                 const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -119,11 +106,9 @@ export const api = {
                     }),
                 });
                 const json = await response.json();
-                log('Login response', { status: response.status, json });
                 if (!response.ok) throw new Error(json.error || 'Login failed');
                 return json;
             } catch (error) {
-                log('Login error', error);
                 throw error;
             }
         },
@@ -131,7 +116,6 @@ export const api = {
             const url = `${API_URL}/auth/profile/`;
             try {
                 const isFormData = data instanceof FormData;
-                log(`PATCH ${url}`, isFormData ? 'FormData' : data);
                 const response = await fetchWithTracking(url, {
                     method: 'PATCH',
                     headers: {
@@ -141,18 +125,15 @@ export const api = {
                     body: isFormData ? data : JSON.stringify(data),
                 });
                 const json = await response.json();
-                log('Profile update response', { status: response.status, json });
                 if (!response.ok) throw new Error(JSON.stringify(json) || 'Update failed');
                 return json;
             } catch (error) {
-                log('Profile update error', error);
                 throw error;
             }
         },
         updateFCMToken: async (token: string, fcmToken: string) => {
             const url = `${API_URL}/auth/fcm-token/`;
             try {
-                log(`POST ${url}`, { fcm_token: fcmToken });
                 const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: {
@@ -162,18 +143,15 @@ export const api = {
                     body: JSON.stringify({ fcm_token: fcmToken }),
                 });
                 const json = await response.json();
-                log('Update FCM Token response', { status: response.status, json });
                 if (!response.ok) throw new Error(JSON.stringify(json) || 'Failed to update FCM token');
                 return json;
             } catch (error) {
-                log('Update FCM Token error', error);
                 throw error;
             }
         },
         deleteAccount: async (token: string) => {
             const url = `${API_URL}/auth/profile/`;
             try {
-                log(`DELETE ${url}`);
                 const response = await fetchWithTracking(url, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Token ${token}` },
@@ -183,14 +161,12 @@ export const api = {
                 if (!response.ok) throw new Error(JSON.stringify(json) || 'Delete failed');
                 return json;
             } catch (error) {
-                log('Delete account error', error);
                 throw error;
             }
         },
         getUserProfile: async (token: string, userId: number) => {
             const url = `${API_URL}/auth/users/${userId}/`;
             try {
-                log(`GET ${url}`);
                 const response = await fetchWithTracking(url, {
                     method: 'GET',
                     headers: {
@@ -199,18 +175,15 @@ export const api = {
                     },
                 });
                 const json = await response.json();
-                log('Get user profile response', { status: response.status, json });
                 if (!response.ok) throw new Error(JSON.stringify(json) || 'Failed to fetch user profile');
                 return json;
             } catch (error) {
-                log('Get user profile error', error);
                 throw error;
             }
         },
         blockUser: async (token: string, userId: number) => {
             const url = `${API_URL}/auth/block/`;
             try {
-                log(`POST ${url}`, { userId });
                 const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: {
@@ -220,18 +193,15 @@ export const api = {
                     body: JSON.stringify({ user_id: userId }),
                 });
                 const json = await response.json();
-                log('Block user response', { status: response.status, json });
                 if (!response.ok) throw new Error(JSON.stringify(json) || 'Failed to block user');
                 return json;
             } catch (error) {
-                log('Block user error', error);
                 throw error;
             }
         },
         unblockUser: async (token: string, userId: number) => {
             const url = `${API_URL}/auth/block/`;
             try {
-                log(`DELETE ${url}`, { userId });
                 const response = await fetchWithTracking(url, {
                     method: 'DELETE',
                     headers: {
@@ -241,18 +211,15 @@ export const api = {
                     body: JSON.stringify({ user_id: userId }),
                 });
                 const json = await response.json();
-                log('Unblock user response', { status: response.status, json });
                 if (!response.ok) throw new Error(JSON.stringify(json) || 'Failed to unblock user');
                 return json;
             } catch (error) {
-                log('Unblock user error', error);
                 throw error;
             }
         },
         getBlockedUsers: async (token: string) => {
             const url = `${API_URL}/auth/block/`;
             try {
-                log(`GET ${url}`);
                 const response = await fetchWithTracking(url, {
                     method: 'GET',
                     headers: {
@@ -261,11 +228,9 @@ export const api = {
                     },
                 });
                 const json = await response.json();
-                log('Get blocked users response', { status: response.status, count: json.length });
                 if (!response.ok) throw new Error(JSON.stringify(json) || 'Failed to fetch blocked users');
                 return json;
             } catch (error) {
-                log('Get blocked users error', error);
                 return [];
             }
         },
@@ -274,7 +239,6 @@ export const api = {
         getContacts: async (token: string) => {
             const url = `${API_URL}/contacts/`;
             try {
-                log(`GET ${url}`);
                 const response = await fetchWithTracking(url, {
                     method: 'GET',
                     headers: {
@@ -283,11 +247,9 @@ export const api = {
                     },
                 });
                 const json = await response.json();
-                log('Get contacts response', { status: response.status, count: json.length });
                 if (!response.ok) throw new Error(JSON.stringify(json) || 'Failed to fetch contacts');
                 return json;
             } catch (error) {
-                log('Get contacts error', error);
                 return [];
             }
         },
@@ -296,7 +258,6 @@ export const api = {
         markMessagesAsRead: async (token: string, conversationId: string) => {
             const url = `${API_URL}/chat/conversations/${conversationId}/read/`;
             try {
-                log(`POST ${url}`);
                 const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: {
@@ -309,14 +270,12 @@ export const api = {
                 if (!response.ok) throw new Error(JSON.stringify(json) || 'Failed to mark as read');
                 return json;
             } catch (error) {
-                log('Mark read error', error);
                 throw error;
             }
         },
         restoreChats: async (token: string, conversationIds: number[], restoreDate?: string) => {
             const url = `${API_URL}/chat/restore/`;
             try {
-                log(`POST ${url}`, { conversationIds, restoreDate });
                 const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: {
@@ -329,18 +288,15 @@ export const api = {
                     })
                 });
                 const json = await response.json();
-                log('Restore chats response', { status: response.status, json });
                 if (!response.ok) throw new Error(JSON.stringify(json) || 'Failed to restore chats');
                 return json;
             } catch (error) {
-                log('Restore chats error', error);
                 throw error;
             }
         },
         getConversations: async (token: string, deleted: boolean = false) => {
             const url = `${API_URL}/chat/conversations/?deleted=${deleted}`;
             try {
-                log(`GET ${url}`);
                 const response = await fetchWithTracking(url, {
                     method: 'GET',
                     headers: {
@@ -349,19 +305,15 @@ export const api = {
                     },
                 });
                 const json = await response.json();
-                log(`Conversations fetched from ${url}`, { count: json.length });
                 if (!response.ok) throw new Error('Failed to fetch conversations');
                 return json;
             } catch (error) {
-                log(`Fetch conversations error from ${url}`, error);
-                console.error(error);
                 return [];
             }
         },
         getMessages: async (token: string, conversationId: string, limit: number = 20, offset: number = 0) => {
             const url = `${API_URL}/chat/messages/${conversationId}/?limit=${limit}&offset=${offset}`;
             try {
-                log(`GET ${url}`);
                 const response = await fetchWithTracking(url, {
                     method: 'GET',
                     headers: {
@@ -374,19 +326,15 @@ export const api = {
                 // Keep backward compatibility if backend returns dict with 'results'
                 const results = Array.isArray(json) ? json : (json.results || []);
 
-                log(`Messages fetched from ${url}`, { count: results.length });
                 if (!response.ok) throw new Error('Failed to fetch messages');
                 return results;
             } catch (error) {
-                log(`Fetch messages error from ${url}`, error);
-                console.error(error);
                 return [];
             }
         },
         checkContacts: async (token: string, phoneNumbers: string[]) => {
             const url = `${API_URL}/auth/check-contacts/`;
             try {
-                log(`POST ${url}`, { count: phoneNumbers.length });
                 const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: {
@@ -396,19 +344,15 @@ export const api = {
                     body: JSON.stringify({ phone_numbers: phoneNumbers }),
                 });
                 const json = await response.json();
-                log(`Contacts checked from ${url}`, { matches: json.length });
                 if (!response.ok) throw new Error('Failed to check contacts');
                 return json;
             } catch (error) {
-                log(`Check contacts error from ${url}`, error);
-                console.error(error);
                 return [];
             }
         },
         createConversation: async (token: string, recipientUsername: string) => {
             const url = `${API_URL}/chat/conversations/`;
             try {
-                log(`POST ${url}`, { recipient: recipientUsername });
                 const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: {
@@ -418,18 +362,15 @@ export const api = {
                     body: JSON.stringify({ recipient: recipientUsername }),
                 });
                 const json = await response.json();
-                log(`Conversation created`, { id: json.id });
                 if (!response.ok) throw new Error('Failed to create conversation');
                 return json;
             } catch (error) {
-                log(`Create conversation error`, error);
                 throw error;
             }
         },
         deleteConversation: async (token: string, conversationId: string) => {
             const url = `${API_URL}/chat/conversations/${conversationId}/`;
             try {
-                log(`DELETE ${url}`);
                 const response = await fetchWithTracking(url, {
                     method: 'DELETE',
                     headers: {
@@ -439,14 +380,12 @@ export const api = {
                 });
 
                 if (response.status === 204) {
-                    log(`Conversation deleted`, { id: conversationId });
                     return true;
                 }
 
                 const text = await response.text();
                 try {
                     const json = JSON.parse(text);
-                    log(`Delete conversation response`, { status: response.status, json });
                     if (!response.ok) throw new Error(JSON.stringify(json) || 'Failed to delete conversation');
                     return json;
                 } catch {

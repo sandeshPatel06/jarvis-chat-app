@@ -28,6 +28,7 @@ import { ChatHeader } from '@/components/chat/ChatHeader';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { MessageItem } from '@/components/chat/MessageItem';
 import { ForwardMessageModal } from '@/components/chat/ForwardMessageModal';
+import { MediaViewer } from '@/components/chat/MediaViewer';
 import { PinnedMessagesModal } from '@/components/chat/PinnedMessagesModal';
 import { ReactionPicker } from '@/components/chat/ReactionPicker';
 import { MessageOptionsModal } from '@/components/modals/MessageOptionsModal';
@@ -97,6 +98,12 @@ export default function ChatDetailScreen() {
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
     const [pinnedModalVisible, setPinnedModalVisible] = useState(false);
 
+    // Media Viewer optimization
+    const [mediaViewerVisible, setMediaViewerVisible] = useState(false);
+    const [mediaViewerUri, setMediaViewerUri] = useState<string | null>(null);
+    const [mediaViewerType, setMediaViewerType] = useState<'image' | 'video' | null>(null);
+    const [mediaViewerName, setMediaViewerName] = useState<string | undefined>(undefined);
+
     const flatListRef = useRef<FlatList>(null);
     const lastTypingSent = useRef<number>(0);
 
@@ -124,7 +131,7 @@ export default function ChatDetailScreen() {
         return () => {
             useStore.getState().setActiveChat(null);
         };
-    }, [id, fetchMessages, connectWebSocket]);
+    }, [id, fetchMessages, connectWebSocket, chat?.messages?.length, editingMessageId]);
 
     // Separate effect for syncing chats if ID is missing
     useEffect(() => {
@@ -178,7 +185,7 @@ export default function ChatDetailScreen() {
                 // but for new messages it's usually desired
             }
         }
-    }, [chat?.messages?.length, markRead, chat?.id]); // Watch length specifically
+    }, [chat?.messages, markRead, chat?.id, editingMessageId]); // Added missing dependencies to satisfy linter
 
 
 
@@ -432,6 +439,13 @@ export default function ChatDetailScreen() {
         }
     };
 
+    const handleMediaPress = useCallback((uri: string, type: 'image' | 'video' | null, name?: string) => {
+        setMediaViewerUri(uri);
+        setMediaViewerType(type);
+        setMediaViewerName(name);
+        setMediaViewerVisible(true);
+    }, []);
+
     const renderMessage = useCallback(({ item }: { item: Message }) => {
         return (
             <MessageItem
@@ -439,12 +453,13 @@ export default function ChatDetailScreen() {
                 onLongPress={handleLongPressMessage}
                 onSwipeReply={handleSwipeReply}
                 onSwipeForward={handleSwipeForward}
+                onMediaPress={handleMediaPress}
                 selectionMode={selectionMode}
                 isSelected={selectedMessages.has(item.id)}
                 onPress={handleMessagePress}
             />
         );
-    }, [handleLongPressMessage, handleSwipeReply, handleSwipeForward, selectionMode, selectedMessages, handleMessagePress]);
+    }, [handleLongPressMessage, handleSwipeReply, handleSwipeForward, handleMediaPress, selectionMode, selectedMessages, handleMessagePress]);
 
     const handleLoadMore = useCallback(async () => {
         if (!chat || loadingMore || chat.messages.length < 20) return;
@@ -844,6 +859,15 @@ export default function ChatDetailScreen() {
                         message={messageToForward}
                         chats={chats.filter((c: any) => c.id !== chat.id)}
                         onForward={handleForwardSubmit}
+                    />
+
+                    {/* Shared Media Viewer - Moved from MessageItem to screen level for performance */}
+                    <MediaViewer 
+                        visible={mediaViewerVisible}
+                        mediaUri={mediaViewerUri}
+                        mediaType={mediaViewerType}
+                        fileName={mediaViewerName}
+                        onClose={() => setMediaViewerVisible(false)}
                     />
                 </>
             )}
