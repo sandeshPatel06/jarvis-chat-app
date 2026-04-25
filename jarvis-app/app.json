@@ -44,7 +44,6 @@
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.jarvischat.app",
       "googleServicesFile": "./google-services.json",
-      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.ANSWER_PHONE_CALLS",
@@ -102,11 +101,11 @@
       ],
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
-      "./plugins/withNotificationFixed",
       "expo-mail-composer",
       "expo-contacts",
       "expo-media-library",
-      "expo-image-picker"
+      "expo-image-picker",
+      "./plugins/withNotificationFixed"
     ],
     "experiments": {
       "typedRoutes": true
