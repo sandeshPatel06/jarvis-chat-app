@@ -21,6 +21,7 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = ['id', 'conversation', 'sender', 'text', 'file', 'file_type', 'file_name', 'timestamp', 'is_read', 'is_delivered', 'reactions', 'reply_to', 'deleted_at']
 
     def to_representation(self, instance):
+        # Pass context to PublicUserSerializer for privacy masking
         representation = super().to_representation(instance)
         if instance.reply_to:
             representation['reply_to'] = {
@@ -41,12 +42,23 @@ class ConversationSerializer(serializers.ModelSerializer):
         fields = ['id', 'participants', 'last_message', 'unread_count', 'other_user_id', 'is_deleted']
 
     def get_last_message(self, obj):
+        # Optimization: check if we already prefetched messages
+        if hasattr(obj, '_prefetched_messages'):
+            messages = obj._prefetched_messages
+            if messages:
+                return MessageSerializer(messages[0]).data
+            return None
+            
         message = obj.messages.order_by('-timestamp').first()
         if message:
-            return MessageSerializer(message).data
+            return MessageSerializer(message, context=self.context).data
         return None
 
     def get_unread_count(self, obj):
+        # Check for annotated value first
+        if hasattr(obj, 'unread_count_annotated'):
+            return obj.unread_count_annotated or 0
+            
         user = self.context['request'].user
         return obj.messages.exclude(sender=user).filter(is_read=False).count()
     

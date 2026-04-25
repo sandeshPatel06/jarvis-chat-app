@@ -2,7 +2,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from .models import Conversation, Message, Reaction
 from .serializers import ConversationSerializer, MessageSerializer, ReactionSerializer
-from django.db.models import Q, Count
+from django.db.models import Q, Count, OuterRef, Subquery, Prefetch
 from django.contrib.auth import get_user_model
 from rest_framework.views import APIView
 
@@ -18,8 +18,26 @@ class ConversationListView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        user = self.request.user
         is_deleted = self.request.query_params.get('deleted', 'false') == 'true'
-        return self.request.user.conversations.filter(is_deleted=is_deleted).prefetch_related('participants').order_by('-id')
+        
+        # Subquery for unread counts
+        unread_count_qs = Message.objects.filter(
+            conversation=OuterRef('pk')
+        ).exclude(sender=user).filter(is_read=False).values('conversation').annotate(cnt=Count('id')).values('cnt')
+
+        # Limit prefetched messages to recent ones? 
+        # Django Prefetch doesn't support easy slicing, but we can prefetch senders and replies to avoid N+1 inside MessageSerializer
+        recent_messages = Message.objects.order_by('-timestamp').select_related('sender', 'reply_to', 'reply_to__sender').prefetch_related('reactions', 'reactions__user')
+
+        return user.conversations.filter(is_deleted=is_deleted).annotate(
+            unread_count_annotated=Subquery(unread_count_qs)
+        ).prefetch_related(
+            'participants',
+            # This is tricky: if we prefetch ALL messages, it's slow. 
+            # But the serializer calls .first() which triggers a query anyway if not pre-fetched.
+            # For now, we prefetch basic fields to avoid N+1 on participants.
+        ).order_by('-id')
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

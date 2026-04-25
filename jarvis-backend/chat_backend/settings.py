@@ -187,7 +187,8 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/day',
-        'user': '1000/day'
+        'user': '1000/day',
+        'otp': '5/hour'
     },
     'EXCEPTION_HANDLER': 'utils.exceptions.custom_exception_handler',
 }

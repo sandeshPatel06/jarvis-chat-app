@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.views import APIView
+from rest_framework.throttling import ScopedRateThrottle
 from .serializers import RegisterSerializer, UserSerializer
 from django.contrib.auth import get_user_model
 from chat.models import Message
@@ -40,6 +41,8 @@ def background_send_email(subject, message, recipient_list, html_message=None):
 
 class RequestOTPView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'otp'
 
     def post(self, request):
         import time
@@ -230,63 +233,55 @@ class UniversalLoginView(APIView):
         if user and user.check_password(password):
             token, _ = Token.objects.get_or_create(user=user)
             
-            # Send login notification email
+            # Send login notification in background to avoid blocking
             if user.email:
-                try:
-                    # Basic info
-                    import datetime
-                    login_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    
-                    # IP and Location
-                    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-                    if x_forwarded_for:
-                        ip = x_forwarded_for.split(',')[0]
-                    else:
-                        ip = request.META.get('REMOTE_ADDR')
-                    
-                    location = "Unknown"
-                    if ip and ip != '127.0.0.1':
-                        try:
-                            # Simple IP geolocation (using ipinfo.io or similar if available, or just log IP)
-                            # For now, we will just use the IP. 
-                            # In a real app, you might use a library like 'geoip2' or an external API.
-                            import requests
-                            resp = requests.get(f"https://ipinfo.io/{ip}/json", timeout=2)
-                            if resp.status_code == 200:
-                                data = resp.json()
-                                city = data.get('city', 'Unknown')
-                                region = data.get('region', '')
-                                country = data.get('country', '')
-                                location = f"{city}, {region}, {country} ({ip})"
-                            else:
+                def process_login_notification():
+                    try:
+                        import datetime
+                        login_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+                        ip = x_forwarded_for.split(',')[0] if x_forwarded_for else request.META.get('REMOTE_ADDR')
+                        
+                        location = "Unknown"
+                        if ip and ip != '127.0.0.1':
+                            try:
+                                import requests
+                                resp = requests.get(f"https://ipinfo.io/{ip}/json", timeout=2)
+                                if resp.status_code == 200:
+                                    data = resp.json()
+                                    location = f"{data.get('city', 'Unknown')}, {data.get('region', '')}, {data.get('country', '')} ({ip})"
+                                else:
+                                    location = f"IP: {ip}"
+                            except:
                                 location = f"IP: {ip}"
-                        except:
-                            location = f"IP: {ip}"
-                    else:
-                         location = "Localhost"
+                        else:
+                             location = "Localhost"
 
-                    # Device Info
-                    user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown Device')
-                    
-                    from django.template.loader import render_to_string
-                    from django.utils.html import strip_tags
+                        user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown Device')
+                        
+                        from django.template.loader import render_to_string
+                        from django.utils.html import strip_tags
 
-                    html_message = render_to_string('accounts/emails/login_notification.html', {
-                        'username': user.username,
-                        'time': login_time,
-                        'location': location,
-                        'device': user_agent
-                    })
-                    plain_message = strip_tags(html_message)
-                    
-                    background_send_email(
-                        'New Login to Jarvis',
-                        plain_message,
-                        [user.email],
-                        html_message=html_message
-                    )
-                except Exception as e:
-                    print(f"Failed to send login notification: {e}", flush=True)
+                        html_message = render_to_string('accounts/emails/login_notification.html', {
+                            'username': user.username,
+                            'time': login_time,
+                            'location': location,
+                            'device': user_agent
+                        })
+                        plain_message = strip_tags(html_message)
+                        
+                        background_send_email(
+                            'New Login to Jarvis',
+                            plain_message,
+                            [user.email],
+                            html_message=html_message
+                        )
+                    except Exception as e:
+                        print(f"Failed to process login notification thread: {e}", flush=True)
+
+                import threading
+                threading.Thread(target=process_login_notification).start()
 
             return Response({
                 'token': token.key,
@@ -307,14 +302,8 @@ class CheckContactsView(APIView):
         # Normalize incoming phone numbers
         normalized_phones = [normalize_phone(p) for p in phone_numbers if p]
         
-        # Get all users and filter by normalized phone numbers
-        all_users = User.objects.exclude(phone_number__isnull=True).exclude(phone_number='')
-        matched_users = []
-        
-        for user in all_users:
-            user_phone_normalized = normalize_phone(user.phone_number)
-            if user_phone_normalized in normalized_phones:
-                matched_users.append(user)
+        # Get matching users using optimized DB-level filtering
+        matched_users = User.objects.filter(normalized_phone_number__in=normalized_phones).exclude(id=request.user.id)
         
         serializer = UserSerializer(matched_users, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

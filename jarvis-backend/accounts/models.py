@@ -4,10 +4,19 @@ from django.db import models
 class User(AbstractUser):
     email = models.EmailField(unique=True)
     phone_number = models.CharField(max_length=15, blank=True, null=True, unique=True)
+    normalized_phone_number = models.CharField(max_length=15, blank=True, null=True, unique=True, db_index=True)
     profile_picture = models.ImageField(upload_to='profile_pics/', blank=True, null=True)
     bio = models.TextField(blank=True, null=True)
     last_seen = models.DateTimeField(null=True, blank=True)
     is_online = models.BooleanField(default=False)
+
+    def save(self, *args, **kwargs):
+        if self.phone_number:
+            from utils.formatting import normalize_phone
+            self.normalized_phone_number = normalize_phone(self.phone_number)
+        else:
+            self.normalized_phone_number = None
+        super().save(*args, **kwargs)
 
     # Privacy Settings
     PRIVACY_CHOICES = [
