@@ -7,7 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { webrtcService } from '@/services/webrtc';
 import { AppState } from '@/store';
 
-export interface CallState {
+interface CallState {
     isCalling: boolean;
     incomingCall: { chatId: string, offer: any, isVideo: boolean, callerName?: string, callerAvatar?: string } | null;
     remoteStream: MediaStream | null;
