@@ -61,7 +61,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         const { token } = get() as any;
         if (!token) return;
         try {
-            const blocked = await api.chat.getBlockedUsers(token);
+            const blocked = await api.auth.getBlockedUsers(token);
             set({ blockedUsers: blocked.map((u: any) => u.id) });
         } catch (e) {
             console.error('Fetch blocked users failed', e);
@@ -71,7 +71,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         const { token, fetchBlockedUsers } = get() as any;
         if (!token) return;
         try {
-            await api.chat.blockUser(token, userId);
+            await api.auth.blockUser(token, userId);
             await fetchBlockedUsers();
         } catch (e) {
             console.error('Block user failed', e);
@@ -81,7 +81,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         const { token, fetchBlockedUsers } = get() as any;
         if (!token) return;
         try {
-            await api.chat.unblockUser(token, userId);
+            await api.auth.unblockUser(token, userId);
             await fetchBlockedUsers();
         } catch (e) {
             console.error('Unblock user failed', e);

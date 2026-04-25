@@ -1,5 +1,6 @@
 import { StateCreator } from 'zustand';
 import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as database from '@/services/database';
 import { api } from '@/services/api';
 import { Chat, Message } from '@/types';
@@ -24,6 +25,7 @@ export interface ChatSlice {
     sendFileMessage: (chatId: string, file: any, text?: string, replyToId?: string, duration?: number) => Promise<void>;
     syncMessages: () => Promise<void>;
     fetchChats: () => Promise<void>;
+    restoreChats: (conversationIds: number[], restoreDate?: string) => Promise<void>;
     fetchMessages: (chatId: string) => Promise<void>;
     markRead: (chatId: string, messageId: string) => void;
     markDelivered: (chatId: string, messageId: string) => void;
@@ -33,13 +35,22 @@ export interface ChatSlice {
     muteChat: (chatId: string) => void;
     unmuteChat: (chatId: string) => void;
     isChatMuted: (chatId: string) => boolean;
+    pinMessage: (chatId: string, messageId: string) => void;
+    unpinMessage: (chatId: string, messageId: string) => void;
     fetchCalls: (loadMore?: boolean) => Promise<void>;
     loadMoreMessages: (chatId: string) => Promise<void>;
     forwardMessage: (message: Message, chatIds: string[]) => Promise<void>;
     clearChat: (chatId: string) => Promise<void>;
+    clearLocalMessages: (chatId: string) => void;
+    deleteChat: (chatId: string) => Promise<void>;
+    deleteChats: (chatIds: string[]) => Promise<void>;
+    toggleMessagePin: (chatId: string, messageId: string, isPinned: boolean) => void;
     callsOffset: number;
     hasMoreCalls: boolean;
     calls: any[];
+    deleteCall: (callId: number) => Promise<void>;
+    clearCallHistory: () => Promise<void>;
+    bulkDeleteCalls: (callIds: number[]) => Promise<void>;
     updateMessageRead: (messageId: string, chatId?: string) => void;
     updateMessageDelivered: (messageId: string, chatId?: string) => void;
 }
@@ -99,6 +110,8 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
                 getChats: () => state.chats,
                 setChats: (chats) => set({ chats } as any),
                 getCurrentUser: () => state.user,
+                toggleMessagePin: state.toggleMessagePin,
+                clearLocalMessages: state.clearLocalMessages,
             });
         };
 
@@ -244,6 +257,18 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
             console.error('Fetch chats failed', e);
         }
     },
+    
+    restoreChats: async (conversationIds, restoreDate) => {
+        const { token, fetchChats } = get() as any;
+        if (!token) return;
+        try {
+            await api.chat.restoreChats(token, conversationIds, restoreDate);
+            await fetchChats();
+        } catch (error) {
+            console.error('Error restoring chats:', error);
+            throw error;
+        }
+    },
 
     fetchMessages: async (chatId) => {
         const { token, user } = get() as any;
@@ -362,9 +387,19 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
     },
 
     forwardMessage: async (message, chatIds) => {
-        const { sendMessage } = get() as any;
+        const { sendMessage, sendFileMessage } = get() as any;
         for (const id of chatIds) {
-            await sendMessage(id, message.text); // Basic forwarding
+            if (message.file) {
+                const file = {
+                    uri: message.file,
+                    name: message.file_name || 'Forwarded File',
+                    mimeType: message.file_type || 'application/octet-stream',
+                    size: 0
+                };
+                await sendFileMessage(id, file, message.text || '');
+            } else {
+                await sendMessage(id, message.text);
+            }
         }
     },
 
@@ -372,10 +407,14 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
         const { token } = get() as any;
         if (!token) return;
         await api.chat.clearMessages(token, chatId);
+        get().clearLocalMessages(chatId);
+        await database.clearChatMessages(chatId);
+    },
+
+    clearLocalMessages: (chatId) => {
         set((state: any) => ({
             chats: state.chats.map((c: any) => c.id === chatId ? { ...c, messages: [], lastMessage: '' } : c)
         }));
-        await database.clearChatMessages(chatId);
     },
 
     updateMessageRead: (messageId, chatId) => {
@@ -404,6 +443,89 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
                 return c;
             })
         }));
+    },
+
+    deleteChat: async (chatId) => {
+        const { token } = get() as any;
+        if (!token) return;
+        try {
+            await api.chat.deleteConversation(token, chatId);
+            set((state: any) => ({
+                chats: state.chats.filter((c: any) => c.id !== chatId)
+            }));
+            await database.deleteConversation(chatId);
+        } catch (e) {
+            console.error('Delete chat failed', e);
+            throw e;
+        }
+    },
+
+    deleteChats: async (chatIds) => {
+        const { deleteChat } = get();
+        for (const id of chatIds) {
+            await deleteChat(id);
+        }
+    },
+
+    pinMessage: (chatId, messageId) => {
+        const { socket } = get() as any;
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'pin_message', message_id: messageId, conversation_id: chatId }));
+        }
+    },
+
+    unpinMessage: (chatId, messageId) => {
+        const { socket } = get() as any;
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'unpin_message', message_id: messageId, conversation_id: chatId }));
+        }
+    },
+
+    toggleMessagePin: (chatId, messageId, isPinned) => {
+        set((state: any) => ({
+            chats: state.chats.map((c: any) => {
+                if (c.id === chatId) {
+                    return {
+                        ...c,
+                        messages: c.messages.map((m: any) => 
+                            m.id === messageId ? { ...m, is_pinned: isPinned } : m
+                        )
+                    };
+                }
+                return c;
+            })
+        }));
+    },
+
+    deleteCall: async (callId) => {
+        const { token } = get() as any;
+        if (!token) return;
+        try {
+            await api.chat.deleteCall(token, callId);
+            set((state: any) => ({
+                calls: state.calls.filter((c: any) => c.id !== callId)
+            }));
+        } catch (e) { console.error(e); }
+    },
+
+    clearCallHistory: async () => {
+        const { token } = get() as any;
+        if (!token) return;
+        try {
+            await api.chat.clearCallHistory(token);
+            set({ calls: [] });
+        } catch (e) { console.error(e); }
+    },
+
+    bulkDeleteCalls: async (callIds) => {
+        const { token } = get() as any;
+        if (!token) return;
+        try {
+            await api.chat.bulkDeleteCalls(token, callIds);
+            set((state: any) => ({
+                calls: state.calls.filter((c: any) => !callIds.includes(c.id))
+            }));
+        } catch (e) { console.error(e); }
     },
 });
 

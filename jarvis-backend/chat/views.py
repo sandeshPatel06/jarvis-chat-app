@@ -162,13 +162,20 @@ class ReactionView(APIView):
             if not emoji:
                 return Response({"error": "Emoji required"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Replace existing reaction from this user
-            # First, delete any existing reactions from this user on this message
-            Reaction.objects.filter(message=message, user=request.user).delete()
+            # Check if same reaction exists
+            existing = Reaction.objects.filter(message=message, user=request.user, emoji=emoji).first()
+            if existing:
+                existing.delete()
+                status_code = status.HTTP_200_OK
+                msg = "removed"
+            else:
+                # Replace existing reaction from this user with DIFFERENT emoji
+                Reaction.objects.filter(message=message, user=request.user).delete()
+                Reaction.objects.create(message=message, user=request.user, emoji=emoji)
+                status_code = status.HTTP_201_CREATED
+                msg = "added"
             
-            # Then create the new reaction
-            Reaction.objects.create(message=message, user=request.user, emoji=emoji)
-            return Response({"status": "added"}, status=status.HTTP_201_CREATED)
+            return Response({"status": msg}, status=status_code)
 
         except Message.DoesNotExist:
             return Response({"error": "Message not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -308,4 +315,32 @@ class MessageUploadView(APIView):
             logger.error(f"Error in upload view: {e}", exc_info=True)
             return Response({"error": "Failed to upload message. Please try again."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class ClearMessagesView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
 
+    def post(self, request, pk):
+        try:
+            conversation = Conversation.objects.get(id=pk)
+            # Check if participant
+            if not conversation.participants.filter(id=request.user.id).exists():
+                return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Soft delete all messages in this conversation
+            from django.utils import timezone
+            now = timezone.now()
+            Message.objects.filter(conversation=conversation).update(deleted_at=now)
+            
+            # Broadcast to participants
+            channel_layer = get_channel_layer()
+            for participant in conversation.participants.all():
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{participant.id}",
+                    {
+                        'type': 'clear_chat',
+                        'conversation_id': pk
+                    }
+                )
+            
+            return Response({"status": "cleared"}, status=status.HTTP_200_OK)
+        except Conversation.DoesNotExist:
+            return Response({"error": "Conversation not found"}, status=status.HTTP_404_NOT_FOUND)

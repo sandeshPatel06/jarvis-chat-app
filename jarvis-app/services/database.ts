@@ -1,5 +1,6 @@
 import { getDb, initDatabase as initDb } from './db';
 import { Chat, Message } from '@/types';
+import * as FileSystem from 'expo-file-system';
 
 // Re-export initDatabase
 export const initDatabase = initDb;
@@ -131,9 +132,28 @@ export const markMessageSent = async (id: string, newId: string, timestamp: Date
 export const clearChatMessages = async (conversationId: string) => {
     const db = await getDb();
     try {
+        // Fetch all files for these messages first
+        const messages: any[] = await db.getAllAsync('SELECT file FROM messages WHERE conversation_id = ? AND file IS NOT NULL', [conversationId]);
+        for (const msg of messages) {
+            if (msg.file && (msg.file.startsWith('file://') || msg.file.startsWith('/'))) {
+                try {
+                    await FileSystem.deleteAsync(msg.file, { idempotent: true });
+                } catch {}
+            }
+        }
         await db.runAsync('DELETE FROM messages WHERE conversation_id = ?', [conversationId]);
     } catch (error) {
         console.error('Error clearing chat messages:', error);
+    }
+};
+
+export const deleteConversation = async (conversationId: string) => {
+    const db = await getDb();
+    try {
+        await clearChatMessages(conversationId);
+        await db.runAsync('DELETE FROM conversations WHERE id = ?', [conversationId]);
+    } catch (error) {
+        console.error('Error deleting conversation:', error);
     }
 };
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Vibration } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -55,14 +55,12 @@ export default function ChangePinScreen() {
     };
 
     return (
-        <ScreenWrapper style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-            <View style={[styles.header, { borderBottomColor: colors.itemSeparator }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <FontAwesome name="chevron-left" size={20} color={colors.primary} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>Set PIN</Text>
-                <View style={{ width: 40 }} />
-            </View>
+        <ScreenWrapper style={styles.container} edges={['left', 'right']} withExtraTopPadding={false}>
+            <Stack.Screen 
+                options={{
+                    headerTitle: 'Security PIN',
+                }}
+            />
 
             <View style={styles.content}>
                 <View style={styles.iconContainer}>
@@ -135,22 +133,9 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingBottom: 15,
-        borderBottomWidth: 0.5,
-    },
-    backButton: {
-        padding: 5,
-        width: 40,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        flex: 1,
-        textAlign: 'center',
+    scrollContent: {
+        paddingVertical: 20,
+        paddingHorizontal: 24,
     },
     content: {
         flex: 1,

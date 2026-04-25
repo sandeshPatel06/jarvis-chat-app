@@ -1,7 +1,6 @@
 import React, { useCallback } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Text } from 'react-native';
-import { useRouter } from 'expo-router';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { ScrollView, StyleSheet, View, Text } from 'react-native';
+import { Stack } from 'expo-router';
 import * as Localization from 'expo-localization';
 
 import { ScreenWrapper } from '@/components/ScreenWrapper';
@@ -14,7 +13,6 @@ export default function LanguageSettingsScreen() {
     const { colors } = useAppTheme();
     const user = useStore((state) => state.user);
     const updateSettings = useStore((state) => state.updateSettings);
-    const router = useRouter();
 
     const languages = [
         { code: 'en', name: 'English', native: 'English' },
@@ -34,21 +32,19 @@ export default function LanguageSettingsScreen() {
     }, [updateSettings]);
 
     return (
-        <ScreenWrapper style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-            <View style={[styles.header, { borderBottomColor: colors.itemSeparator }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <FontAwesome name="chevron-left" size={20} color={colors.primary} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>App Language</Text>
-                <View style={{ width: 40 }} />
-            </View>
+        <ScreenWrapper style={styles.container} edges={['left', 'right']} withExtraTopPadding={false}>
+            <Stack.Screen 
+                options={{
+                    headerTitle: 'App Language',
+                }}
+            />
 
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
                 <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.primary }]}>Device Language</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Device Language</Text>
                     <SettingCard>
                         <SettingRow
                             title="System Default"
@@ -61,7 +57,7 @@ export default function LanguageSettingsScreen() {
                 </View>
 
                 <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.primary }]}>Available Languages</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Available Languages</Text>
                     <SettingCard>
                         {languages.map((lang, index) => (
                             <SettingRow
@@ -76,9 +72,13 @@ export default function LanguageSettingsScreen() {
                     </SettingCard>
                 </View>
 
-                <Text style={[styles.hint, { color: colors.textSecondary }]}>
-                    Changing the language will update the entire app interface.
-                </Text>
+                <View style={styles.hintContainer}>
+                    <Text style={[styles.hint, { color: colors.textSecondary }]}>
+                        Changing the language will update the entire app interface.
+                    </Text>
+                </View>
+
+                <View style={{ height: 100 }} />
             </ScrollView>
         </ScreenWrapper>
     );
@@ -88,47 +88,32 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingBottom: 15,
-        borderBottomWidth: 0.5,
-    },
-    backButton: {
-        padding: 5,
-        width: 40,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        flex: 1,
-        textAlign: 'center',
-    },
     scrollContent: {
         paddingVertical: 20,
-        paddingHorizontal: 20,
+        paddingHorizontal: 24,
     },
     section: {
-        marginBottom: 30,
+        marginBottom: 32,
     },
     sectionTitle: {
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '800',
         marginBottom: 16,
         marginLeft: 4,
         textTransform: 'uppercase',
-        letterSpacing: 1.5,
-        opacity: 0.8,
+        letterSpacing: 1.2,
+        opacity: 0.7,
+    },
+    hintContainer: {
+        marginTop: 8,
+        paddingHorizontal: 20,
+        alignItems: 'center',
     },
     hint: {
         fontSize: 12,
-        marginTop: 12,
-        marginLeft: 8,
-        lineHeight: 16,
-        fontWeight: '500',
+        lineHeight: 18,
+        fontWeight: '600',
         opacity: 0.5,
         textAlign: 'center',
-        paddingHorizontal: 40,
     }
 });

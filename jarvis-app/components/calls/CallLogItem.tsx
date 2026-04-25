@@ -46,6 +46,7 @@ const CallLogItem = ({ item, user, colors, onPress, onLongPress, isSelectionMode
                     source={otherParty.profile_picture}
                     size={52}
                     style={styles.avatar}
+                    online={otherParty.is_online}
                 />
             </View>
 

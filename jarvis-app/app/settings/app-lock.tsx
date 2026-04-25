@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { useRouter, Stack } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -17,7 +17,7 @@ export default function AppLockSettingsScreen() {
     const showAlert = useStore((state) => state.showAlert);
     const [isAppLockEnabled, setIsAppLockEnabled] = useState(false);
     const [isSupported, setIsSupported] = useState(false);
-    const [, setIsLoading] = useState(true); // Keep setter but ignore value if strict
+    const [, setIsLoading] = useState(true);
 
     useEffect(() => {
         checkSupport();
@@ -48,7 +48,6 @@ export default function AppLockSettingsScreen() {
         }
 
         try {
-            // Authenticate before changing the setting
             const result = await LocalAuthentication.authenticateAsync({
                 promptMessage: value ? 'Enable App Lock' : 'Disable App Lock',
                 fallbackLabel: 'Use Passcode',
@@ -57,8 +56,6 @@ export default function AppLockSettingsScreen() {
             if (result.success) {
                 setIsAppLockEnabled(value);
                 await AsyncStorage.setItem('appLockEnabled', String(value));
-            } else {
-                // If cancelled or failed, don't toggle
             }
         } catch (error) {
             console.error('Error toggling app lock:', error);
@@ -67,53 +64,61 @@ export default function AppLockSettingsScreen() {
     }, [isSupported, showAlert]);
 
     return (
-        <ScreenWrapper style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-            <View style={[styles.header, { borderBottomColor: colors.itemSeparator }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <FontAwesome name="chevron-left" size={20} color={colors.primary} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>App Lock</Text>
-                <View style={{ width: 40 }} />
-            </View>
+        <ScreenWrapper style={styles.container} edges={['left', 'right']} withExtraTopPadding={false}>
+            <Stack.Screen 
+                options={{
+                    headerTitle: 'App Lock',
+                }}
+            />
 
-            <View style={styles.content}>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
                 <View style={styles.iconContainer}>
-                    <FontAwesome name="lock" size={60} color={colors.primary} />
+                    <View style={[styles.lockCircle, { backgroundColor: colors.primary + '15' }]}>
+                        <MaterialCommunityIcons name="shield-lock-outline" size={60} color={colors.primary} />
+                    </View>
+                    <Text style={[styles.description, { color: colors.textSecondary }]}>
+                        Secure your chats with Face ID, Touch ID, or your device passcode.
+                        When enabled, you&apos;ll need to authenticate to open Jarvis Chat.
+                    </Text>
                 </View>
 
-                <Text style={[styles.description, { color: colors.textSecondary }]}>
-                    Secure your chats with Face ID, Touch ID, or your device passcode.
-                    When enabled, you&apos;ll need to authenticate to open Jarvis Chat.
-                </Text>
-
-                <SettingCard>
-                    <SettingRow
-                        title="App Lock"
-                        icon="shield"
-                        isSwitch
-                        switchValue={isAppLockEnabled}
-                        onSwitchChange={toggleAppLock}
-                        color="#4FACFE"
-                    />
-                    {isAppLockEnabled && (
+                <View style={styles.section}>
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Security Settings</Text>
+                    <SettingCard>
                         <SettingRow
-                            title="Set / Change PIN"
-                            icon="key"
-                            onPress={() => {
-                                router.push('/settings/change-pin');
-                            }}
-                            color="#F5A623"
-                            isLast
+                            title="App Lock"
+                            subtitle="Require authentication to open Jarvis"
+                            icon="shield-outline"
+                            isSwitch
+                            switchValue={isAppLockEnabled}
+                            onSwitchChange={toggleAppLock}
+                            color="#4FACFE"
                         />
+                        {isAppLockEnabled && (
+                            <SettingRow
+                                title="Set / Change PIN"
+                                subtitle="Custom privacy protection"
+                                icon="key-outline"
+                                onPress={() => {
+                                    router.push('/settings/change-pin');
+                                }}
+                                color="#F5A623"
+                                isLast
+                            />
+                        )}
+                    </SettingCard>
+                    {!isSupported && (
+                        <Text style={[styles.warning, { color: colors.error }]}>
+                            Biometric authentication is not set up on this device.
+                        </Text>
                     )}
-                </SettingCard>
+                </View>
 
-                {!isSupported && (
-                    <Text style={[styles.warning, { color: colors.error }]}>
-                        Biometric authentication is not set up on this device.
-                    </Text>
-                )}
-            </View>
+                <View style={{ height: 100 }} />
+            </ScrollView>
         </ScreenWrapper>
     );
 }
@@ -122,40 +127,47 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingBottom: 15,
-        borderBottomWidth: 0.5,
-    },
-    backButton: {
-        padding: 5,
-        width: 40,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        flex: 1,
-        textAlign: 'center',
-    },
-    content: {
-        padding: 20,
+    scrollContent: {
+        paddingVertical: 20,
+        paddingHorizontal: 24,
     },
     iconContainer: {
         alignItems: 'center',
-        marginVertical: 30,
+        marginVertical: 40,
+        paddingHorizontal: 20,
+    },
+    lockCircle: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 24,
     },
     description: {
         fontSize: 14,
         textAlign: 'center',
-        marginBottom: 30,
-        lineHeight: 20,
-        opacity: 0.8,
+        lineHeight: 22,
+        fontWeight: '600',
+        opacity: 0.7,
+    },
+    section: {
+        marginBottom: 32,
+    },
+    sectionTitle: {
+        fontSize: 12,
+        fontWeight: '800',
+        marginBottom: 16,
+        marginLeft: 4,
+        textTransform: 'uppercase',
+        letterSpacing: 1.2,
+        opacity: 0.7,
     },
     warning: {
         fontSize: 12,
         textAlign: 'center',
-        marginTop: 15,
+        marginTop: 16,
+        fontWeight: '600',
+        opacity: 0.8,
     }
 });

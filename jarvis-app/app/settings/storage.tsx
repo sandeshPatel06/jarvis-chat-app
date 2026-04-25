@@ -68,7 +68,7 @@ export default function StorageSettingsScreen() {
     };
 
     const handleViewStorageDetails = async () => {
-        const stats = await getAppStorageSize();
+        await getAppStorageSize();
         // stats is total, but we can call internal logic if we had it.
         // For simplicity, we just show the total in a bit more detail.
         showAlert(

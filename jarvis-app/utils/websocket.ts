@@ -13,6 +13,8 @@ interface StoreActions {
     getChats: () => any[]; // Typed loosely to avoid circular dep
     setChats: (chats: any[]) => void;
     getCurrentUser: () => any;
+    toggleMessagePin: (chatId: string, messageId: string, isPinned: boolean) => void;
+    clearLocalMessages: (chatId: string) => void;
 }
 
 export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actions: StoreActions) => {
@@ -136,6 +138,15 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
 
             // Save to DB
             database.saveMessage(msg, msg.conversation_id);
+        } else if (data.type === 'message_pinned') {
+            const { message_id, conversation_id } = data;
+            actions.toggleMessagePin(conversation_id, message_id, true);
+        } else if (data.type === 'message_unpinned') {
+            const { message_id, conversation_id } = data;
+            actions.toggleMessagePin(conversation_id, message_id, false);
+        } else if (data.type === 'clear_chat') {
+            const { conversation_id } = data;
+            actions.clearLocalMessages(conversation_id);
         }
     } catch (err) {
         console.error('[WS] Parse error:', err);

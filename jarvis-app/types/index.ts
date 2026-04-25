@@ -16,6 +16,11 @@ export interface User {
     two_step_verification_enabled?: boolean;
     storage_auto_download_media?: boolean;
     chat_wallpaper?: string;
+    chat_enter_is_send?: boolean;
+    chat_media_visibility?: boolean;
+    chat_font_size?: 'Small' | 'Medium' | 'Large' | string;
+    notifications_vibration?: boolean;
+    notifications_preview?: boolean;
     app_language?: string;
     last_seen?: string | Date; // Backend should send this
     is_online?: boolean;

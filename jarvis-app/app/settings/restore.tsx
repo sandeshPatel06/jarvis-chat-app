@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { useRouter, Stack } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { ScreenWrapper } from '@/components/ScreenWrapper';
@@ -71,7 +71,7 @@ export default function RestoreSettingsScreen() {
                     {
                         backgroundColor: colors.card,
                         borderColor: isSelected ? colors.primary : colors.cardBorder,
-                        borderWidth: isDark ? 1 : 0,
+                        borderWidth: isDark ? 1.5 : 1,
                     }
                 ]}
                 onPress={() => toggleChatSelection(item.id)}
@@ -86,7 +86,7 @@ export default function RestoreSettingsScreen() {
                         />
                         {isSelected && (
                             <View style={[styles.selectionBadge, { backgroundColor: colors.primary, borderColor: colors.card }]}>
-                                <FontAwesome name="check" size={10} color="white" />
+                                <MaterialCommunityIcons name="check" size={10} color="white" />
                             </View>
                         )}
                     </View>
@@ -99,24 +99,22 @@ export default function RestoreSettingsScreen() {
                 </View>
                 <View style={[
                     styles.radio,
-                    { borderColor: isSelected ? colors.primary : colors.tabIconDefault + '40' },
+                    { borderColor: isSelected ? colors.primary : colors.textSecondary + '30' },
                     isSelected && { backgroundColor: colors.primary }
                 ]}>
-                    {isSelected && <FontAwesome name="check" size={12} color="white" />}
+                    {isSelected && <MaterialCommunityIcons name="check" size={12} color="white" />}
                 </View>
             </TouchableOpacity>
         );
     }, [colors, isDark, selectedChatIds, toggleChatSelection]);
 
     return (
-        <ScreenWrapper style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-            <View style={[styles.header, { borderBottomColor: colors.itemSeparator }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <FontAwesome name="chevron-left" size={20} color={colors.primary} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>Restore</Text>
-                <View style={{ width: 40 }} />
-            </View>
+        <ScreenWrapper style={styles.container} edges={['left', 'right']} withExtraTopPadding={false}>
+            <Stack.Screen 
+                options={{
+                    headerTitle: 'Restore Chats',
+                }}
+            />
 
             <View style={styles.descriptionContainer}>
                 <Text style={[styles.description, { color: colors.textSecondary }]}>
@@ -138,7 +136,7 @@ export default function RestoreSettingsScreen() {
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
                             <View style={[styles.emptyIconBox, { backgroundColor: colors.primary + '10' }]}>
-                                <FontAwesome name="history" size={40} color={colors.primary} />
+                                <MaterialCommunityIcons name="history" size={40} color={colors.primary} />
                             </View>
                             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                                 No recently deleted chats found.
@@ -172,23 +170,6 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingBottom: 15,
-        borderBottomWidth: 0.5,
-    },
-    backButton: {
-        padding: 5,
-        width: 40,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        flex: 1,
-        textAlign: 'center',
-    },
     descriptionContainer: {
         paddingHorizontal: 32,
         paddingVertical: 24,
@@ -196,12 +177,12 @@ const styles = StyleSheet.create({
     description: {
         fontSize: 14,
         lineHeight: 20,
-        fontWeight: '500',
+        fontWeight: '600',
         textAlign: 'center',
         opacity: 0.7,
     },
     listContent: {
-        paddingHorizontal: 20,
+        paddingHorizontal: 24,
         paddingBottom: 120,
     },
     chatItem: {
@@ -222,12 +203,12 @@ const styles = StyleSheet.create({
     avatar: {
         width: 54,
         height: 54,
-        borderRadius: 27,
+        borderRadius: 20,
     },
     selectionBadge: {
         position: 'absolute',
-        bottom: 0,
-        right: 0,
+        bottom: -2,
+        right: -2,
         width: 18,
         height: 18,
         borderRadius: 9,
@@ -242,13 +223,13 @@ const styles = StyleSheet.create({
     },
     chatSubtext: {
         fontSize: 13,
-        fontWeight: '500',
-        opacity: 0.7,
+        fontWeight: '600',
+        opacity: 0.5,
     },
     radio: {
         width: 24,
         height: 24,
-        borderRadius: 12,
+        borderRadius: 8,
         borderWidth: 2,
         alignItems: 'center',
         justifyContent: 'center',
@@ -273,8 +254,8 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         fontSize: 15,
-        fontWeight: '600',
-        opacity: 0.6,
+        fontWeight: '700',
+        opacity: 0.5,
     },
     footer: {
         position: 'absolute',
@@ -285,8 +266,8 @@ const styles = StyleSheet.create({
         paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     },
     restoreButton: {
-        paddingVertical: 16,
-        borderRadius: 18,
+        paddingVertical: 18,
+        borderRadius: 20,
         alignItems: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },

@@ -16,7 +16,7 @@ export default function SettingsLayout() {
                     fontWeight: '800',
                 },
                 headerShadowVisible: false,
-                headerBackTitleVisible: false,
+                headerBackTitle: '',
             }}
         />
     );

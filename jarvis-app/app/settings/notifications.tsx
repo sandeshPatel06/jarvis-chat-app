@@ -51,14 +51,32 @@ export default function NotificationsSettingsScreen() {
                             switchValue={user?.notifications_sound ?? true}
                             onSwitchChange={(v: boolean) => handleToggle('notifications_sound', v)}
                             color="#6C63FF"
+                        />
+                        <SettingRow
+                            title="Vibrate"
+                            subtitle="Vibration on incoming messages"
+                            icon="vibrate"
+                            isSwitch
+                            switchValue={user?.notifications_vibration ?? true}
+                            onSwitchChange={(v: boolean) => handleToggle('notifications_vibration', v)}
+                            color="#38F9D7"
                             isLast
                         />
                     </SettingCard>
                 </View>
 
                 <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Groups</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Advanced</Text>
                     <SettingCard>
+                        <SettingRow
+                            title="In-App Preview"
+                            subtitle="Show message text in notification banner"
+                            icon="message-text-outline"
+                            isSwitch
+                            switchValue={user?.notifications_preview ?? true}
+                            onSwitchChange={(v: boolean) => handleToggle('notifications_preview', v)}
+                            color="#F093FB"
+                        />
                         <SettingRow
                             title="Group Notifications"
                             subtitle="Get alerts for group messages"
@@ -66,15 +84,17 @@ export default function NotificationsSettingsScreen() {
                             isSwitch
                             switchValue={user?.notifications_groups_enabled ?? true}
                             onSwitchChange={(v: boolean) => handleToggle('notifications_groups_enabled', v)}
-                            color="#38F9D7"
+                            color="#FF9A9E"
                             isLast
                         />
                     </SettingCard>
                 </View>
 
-                <Text style={[styles.hint, { color: colors.textSecondary }]}>
-                    System-wide notification settings can be further managed in your device settings.
-                </Text>
+                <View style={styles.hintContainer}>
+                    <Text style={[styles.hint, { color: colors.textSecondary }]}>
+                        System-wide notification permissions can be managed in your Device Settings.
+                    </Text>
+                </View>
 
                 <View style={{ height: 100 }} />
             </ScrollView>
@@ -96,20 +116,22 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 12,
         fontWeight: '800',
-        marginBottom: 14,
+        marginBottom: 16,
         marginLeft: 4,
         textTransform: 'uppercase',
         letterSpacing: 1.2,
         opacity: 0.7,
     },
+    hintContainer: {
+        marginTop: 8,
+        paddingHorizontal: 20,
+        alignItems: 'center',
+    },
     hint: {
         fontSize: 12,
-        marginTop: 14,
-        marginLeft: 8,
         lineHeight: 18,
         fontWeight: '600',
         opacity: 0.5,
         textAlign: 'center',
-        paddingHorizontal: 40,
     }
 });

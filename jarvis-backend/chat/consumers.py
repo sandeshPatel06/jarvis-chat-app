@@ -623,3 +623,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'type': 'call_ended',
             'chat_id': event['chat_id']
         }))
+
+    async def clear_chat(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'clear_chat',
+            'conversation_id': event['conversation_id']
+        }))

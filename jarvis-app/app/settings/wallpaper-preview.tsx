@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Image, TouchableOpacity, Text } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useStore } from '@/store';
@@ -78,6 +78,12 @@ export default function WallpaperPreviewScreen() {
             edges={['left', 'right']}
             withExtraTopPadding={false}
         >
+            <Stack.Screen 
+                options={{
+                    headerShown: false,
+                }}
+            />
+
             {/* Background Layer */}
             {isImage && (
                 <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
@@ -89,13 +95,17 @@ export default function WallpaperPreviewScreen() {
                 </View>
             )}
 
+            {/* Visual Mock Overlay */}
+            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: isImage ? 'rgba(0,0,0,0.2)' : 'transparent' }]} pointerEvents="none" />
+
             {/* Header (Visual Mock) */}
-            <View pointerEvents="none">
+            <View pointerEvents="none" style={{ marginTop: insets.top }}>
                 <ChatHeader
                     chat={DUMMY_CHAT as any}
                     typingUser={null}
                     onOptionsPress={() => { }}
-                    style={{ backgroundColor: isImage ? 'transparent' : colors.background }}
+                    onPinnedPress={() => { }}
+                    style={{ backgroundColor: 'transparent' }}
                 />
             </View>
 
@@ -113,8 +123,8 @@ export default function WallpaperPreviewScreen() {
             </View>
 
             {/* Mock Input Bar */}
-            <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: insets.bottom + 10 }]}>
-                <View style={[styles.inputField, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={[styles.inputContainer, { backgroundColor: 'transparent', borderTopWidth: 0, paddingBottom: insets.bottom + 20 }]}>
+                <View style={[styles.inputField, { backgroundColor: colors.background + '90', borderColor: colors.border }]}>
                     <Text style={{ color: colors.textSecondary }}>Type a message...</Text>
                 </View>
                 <View style={[styles.sendButton, { backgroundColor: colors.primary }]}>
@@ -122,13 +132,13 @@ export default function WallpaperPreviewScreen() {
                 </View>
             </View>
 
-            {/* Action Overlay (Bottom Sheet like) */}
+            {/* Action Overlay (Bottom Tool Bar) */}
             <View style={[styles.actionOverlay]}>
-                <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.card }]} onPress={handleCancel}>
-                    <Text style={{ color: colors.text, fontWeight: '600' }}>Cancel</Text>
+                <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.background + 'B0' }]} onPress={handleCancel}>
+                    <Text style={{ color: colors.text, fontWeight: '700' }}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.primary }]} onPress={handleSetWallpaper}>
-                    <Text style={{ color: 'white', fontWeight: 'bold' }}>Set Wallpaper</Text>
+                    <Text style={{ color: 'white', fontWeight: '800' }}>Set Wallpaper</Text>
                 </TouchableOpacity>
             </View>
 

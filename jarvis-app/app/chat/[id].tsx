@@ -4,7 +4,7 @@ import { useStore } from '@/store';
 import { Message } from '@/types';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
     FlatList,
     Keyboard,
@@ -36,6 +36,7 @@ import { cacheDirectory, documentDirectory, downloadAsync } from 'expo-file-syst
 import { getMediaUrl } from '@/utils/media';
 import { api } from '@/services/api';
 import { exportChatAsEmail } from '@/utils/chatExport';
+import * as MediaLibrary from 'expo-media-library';
 
 
 export default function ChatDetailScreen() {
@@ -104,6 +105,14 @@ export default function ChatDetailScreen() {
     const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
 
     const hasRetried = useRef<string | null>(null);
+    
+    const displayMessages = useMemo(() => {
+        if (!searchQuery) return chat?.messages || [];
+        const query = searchQuery.toLowerCase();
+        return (chat?.messages || []).filter((m: any) => 
+            m.text?.toLowerCase().includes(query)
+        );
+    }, [chat?.messages, searchQuery]);
 
     /* -------------------- lifecycle -------------------- */
     useEffect(() => {
@@ -268,7 +277,6 @@ export default function ChatDetailScreen() {
             setModalVisible(false);
             setSelectedMessage(null);
             setShowEmojiPicker(false);
-            setCustomEmoji('');
         }
     }, [chat, selectedMessage, reactToMessage]);
 
@@ -767,9 +775,7 @@ export default function ChatDetailScreen() {
                     >
                         <FlatList
                             ref={flatListRef}
-                            data={searchQuery ? chat.messages.filter((m: any) =>
-                                m.text.toLowerCase().includes(searchQuery.toLowerCase())
-                            ) : chat.messages}
+                            data={displayMessages}
                             keyExtractor={(item) => item.id.toString()}
                             renderItem={renderMessage}
                             inverted={true}

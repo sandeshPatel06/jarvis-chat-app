@@ -1,3 +1,4 @@
+from django.urls import path
 from .views import CallViewSet, CallDetailView, ClearCallHistoryView, BulkDeleteCallsView
 
 urlpatterns = [

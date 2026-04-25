@@ -18,7 +18,7 @@ class MessageSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Message
-        fields = ['id', 'conversation', 'sender', 'text', 'file', 'file_type', 'file_name', 'timestamp', 'is_read', 'is_delivered', 'reactions', 'reply_to', 'deleted_at']
+        fields = ['id', 'conversation', 'sender', 'text', 'message_type', 'file', 'file_type', 'file_name', 'latitude', 'longitude', 'contact_name', 'contact_phone', 'timestamp', 'is_read', 'is_delivered', 'reactions', 'reply_to', 'deleted_at', 'is_pinned']
 
     def to_representation(self, instance):
         # Pass context to PublicUserSerializer for privacy masking

@@ -7,7 +7,6 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import CallLogItem from '@/components/calls/CallLogItem';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { api } from '@/services/api';
 
 export default function CallsScreen() {
   const { colors } = useAppTheme();
@@ -16,9 +15,11 @@ export default function CallsScreen() {
   // Store
   const calls = useStore((state) => state.calls);
   const fetchCalls = useStore((state) => state.fetchCalls);
-  const startCall = useStore((state) => state.startCall);
   const user = useStore((state) => state.user);
   const hasMoreCalls = useStore((state) => state.hasMoreCalls);
+  const bulkDeleteCalls = useStore((state) => state.bulkDeleteCalls);
+  const clearCallHistory = useStore((state) => state.clearCallHistory);
+  const startCall = useStore((state) => state.startCall);
 
   // Local State
   const [filter, setFilter] = useState<'all' | 'incoming' | 'outgoing'>('all');
@@ -28,7 +29,6 @@ export default function CallsScreen() {
   const [selectedCalls, setSelectedCalls] = useState<Set<number>>(new Set());
 
   const showAlert = useStore((state) => state.showAlert);
-  const token = useStore((state) => state.token);
 
   useEffect(() => {
     fetchCalls();
@@ -58,11 +58,9 @@ export default function CallsScreen() {
                 text: 'Delete', 
                 style: 'destructive',
                 onPress: async () => {
-                    if (!token) return;
                     try {
-                        await api.chat.bulkDeleteCalls(token, Array.from(selectedCalls));
+                        await bulkDeleteCalls(Array.from(selectedCalls));
                         exitSelectionMode();
-                        fetchCalls();
                     } catch {
                         showAlert('Error', 'Failed to delete calls');
                     }
@@ -82,10 +80,8 @@ export default function CallsScreen() {
                 text: 'Delete All', 
                 style: 'destructive',
                 onPress: async () => {
-                    if (!token) return;
                     try {
-                        await api.chat.clearCallHistory(token);
-                        fetchCalls();
+                        await clearCallHistory();
                     } catch {
                         showAlert('Error', 'Failed to clear history');
                     }

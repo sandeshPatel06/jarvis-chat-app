@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Image, Dimensions } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useStore } from '@/store';
@@ -75,18 +75,19 @@ export default function WallpaperSettingsScreen() {
     };
 
     return (
-        <ScreenWrapper style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-            <View style={[styles.header, { borderBottomColor: colors.itemSeparator }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <FontAwesome name="chevron-left" size={20} color={colors.primary} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>Chat Wallpaper</Text>
-                <TouchableOpacity onPress={handleReset}>
-                    <Text style={{ color: colors.primary, fontSize: 16 }}>Reset</Text>
-                </TouchableOpacity>
-            </View>
+        <ScreenWrapper style={styles.container} edges={['left', 'right']} withExtraTopPadding={false}>
+            <Stack.Screen 
+                options={{
+                    headerTitle: 'Chat Wallpaper',
+                    headerRight: () => (
+                        <TouchableOpacity onPress={handleReset}>
+                            <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '800' }}>Reset</Text>
+                        </TouchableOpacity>
+                    )
+                }}
+            />
 
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
 
                 {/* Custom Photo Section */}
                 <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Custom</Text>
@@ -164,24 +165,13 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingBottom: 15,
-        borderBottomWidth: 0.5,
-    },
-    backButton: {
-        padding: 5,
-        width: 40,
-    },
     headerTitle: {
         fontSize: 18,
         fontWeight: '800',
     },
-    content: {
-        padding: 20,
+    scrollContent: {
+        paddingVertical: 20,
+        paddingHorizontal: 24,
         paddingBottom: 50,
     },
     customButton: {
@@ -199,11 +189,13 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     sectionTitle: {
-        fontSize: 14,
-        fontWeight: '700',
-        marginBottom: 15,
+        fontSize: 12,
+        fontWeight: '800',
+        marginBottom: 16,
+        marginLeft: 4,
         textTransform: 'uppercase',
-        letterSpacing: 1,
+        letterSpacing: 1.2,
+        opacity: 0.7,
     },
     grid: {
         flexDirection: 'row',

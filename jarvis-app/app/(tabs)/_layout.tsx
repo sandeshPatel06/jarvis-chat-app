@@ -22,16 +22,26 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
         headerShown: true,
-        tabBarButton: (props) => (
-          <TouchableOpacity
-            {...props}
-            activeOpacity={0.7}
-            onPress={(e) => {
-              Haptics.selectionAsync();
-              props.onPress?.(e);
-            }}
-          />
-        ),
+        tabBarButton: ({ delayLongPress, disabled, ...props }: any) => {
+          // React Navigation might pass null for some props which TouchableOpacity doesn't like
+          const sanitizedProps = Object.entries(props).reduce((acc: any, [key, value]) => {
+            if (value !== null) acc[key] = value;
+            return acc;
+          }, {});
+
+          return (
+            <TouchableOpacity
+              {...sanitizedProps}
+              delayLongPress={delayLongPress ?? undefined}
+              disabled={disabled === null ? undefined : disabled}
+              activeOpacity={0.7}
+              onPress={(e) => {
+                Haptics.selectionAsync();
+                props.onPress?.(e);
+              }}
+            />
+          );
+        },
         tabBarBackground: () => (
           <BlurView
             intensity={Platform.OS === 'ios' ? 80 : 100}

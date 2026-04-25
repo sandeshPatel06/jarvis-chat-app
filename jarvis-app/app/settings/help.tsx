@@ -1,7 +1,6 @@
 import React, { useCallback } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View, Text, Linking } from 'react-native';
-import { useRouter } from 'expo-router';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { useRouter, Stack } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Device from 'expo-device';
 
@@ -59,31 +58,31 @@ export default function HelpSettingsScreen() {
     }, [showAlert]);
 
     return (
-        <ScreenWrapper style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-            <View style={[styles.header, { borderBottomColor: colors.itemSeparator }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <FontAwesome name="chevron-left" size={20} color={colors.primary} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>Help</Text>
-                <View style={{ width: 40 }} />
-            </View>
+        <ScreenWrapper style={styles.container} edges={['left', 'right']} withExtraTopPadding={false}>
+            <Stack.Screen 
+                options={{
+                    headerTitle: 'Help & Support',
+                }}
+            />
 
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
                 <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.primary }]}>Support</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Support</Text>
                     <SettingCard>
                         <SettingRow
                             title="Help Center"
-                            icon="question-circle"
+                            subtitle="Get help with your questions"
+                            icon="help-circle-outline"
                             onPress={handleHelpCenter}
                             color="#4FACFE"
                         />
                         <SettingRow
                             title="Contact us"
-                            icon="envelope"
+                            subtitle="Send us an email"
+                            icon="email-outline"
                             onPress={handleContactUs}
                             color="#6C63FF"
                             isLast
@@ -92,17 +91,19 @@ export default function HelpSettingsScreen() {
                 </View>
 
                 <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.primary }]}>Legal & Info</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Legal & Info</Text>
                     <SettingCard>
                         <SettingRow
                             title="Terms and Privacy Policy"
-                            icon="file-text"
+                            subtitle="Read our legal documents"
+                            icon="file-document-outline"
                             onPress={handlePrivacyPolicy}
                             color="#38F9D7"
                         />
                         <SettingRow
                             title="App info"
-                            icon="info-circle"
+                            subtitle="Version and device details"
+                            icon="information-outline"
                             onPress={handleAppInfo}
                             color="#A18CD1"
                             isLast
@@ -130,26 +131,9 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingBottom: 15,
-        borderBottomWidth: 0.5,
-    },
-    backButton: {
-        padding: 5,
-        width: 40,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        flex: 1,
-        textAlign: 'center',
-    },
     scrollContent: {
         paddingVertical: 20,
-        paddingHorizontal: 20,
+        paddingHorizontal: 24,
     },
     section: {
         marginBottom: 30,
@@ -160,8 +144,8 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         marginLeft: 4,
         textTransform: 'uppercase',
-        letterSpacing: 1.5,
-        opacity: 0.8,
+        letterSpacing: 1.2,
+        opacity: 0.7,
     },
     footer: {
         alignItems: 'center',

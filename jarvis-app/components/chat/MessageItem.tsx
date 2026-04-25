@@ -256,8 +256,8 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
                                 </View>
                             </View>
                             {reactions.length > 0 && (
-                                <View style={[styles.reactionBadge, { borderColor: colors.background }]}>
-                                    <Text style={{ fontSize: 10 }}>{reactions[0]}</Text>
+                                <View style={[styles.reactionBadge, { borderColor: colors.background, right: -6 }]}>
+                                    <Text style={{ fontSize: 10 }}>{reactions.join('')}</Text>
                                 </View>
                             )}
                         </View>
@@ -382,7 +382,7 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
                             </LinearGradient>
                             {reactions.length > 0 && (
                                 <View style={[styles.reactionBadge, { left: -6 }]}>
-                                    <Text style={{ fontSize: 10 }}>{reactions[0]}</Text>
+                                    <Text style={{ fontSize: 10 }}>{reactions.join('')}</Text>
                                 </View>
                             )}
                         </View>
