@@ -35,15 +35,21 @@ jobs:
       - name: Install Expo & EAS
         run: npm install -g expo-cli eas-cli
 
-      - name: Authenticate with Expo
+      - name: Setup EAS Project Connection
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: expo whoami
+        run: |
+          # Check current user
+          npx eas-cli whoami
+          # Remove hardcoded IDs that cause "Entity not authorized" errors in CI
+          # This allows the build to link to the account associated with the current EXPO_TOKEN
+          jq 'del(.expo.extra.eas.projectId) | del(.expo.owner)' app.json > app.json.tmp && mv app.json.tmp app.json
 
       - name: Build with EAS (JSON output)
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
+          # The build will now use the slug in app.json to connect to the correct project under the current account
           eas build \
             --platform android \
             --profile preview \
