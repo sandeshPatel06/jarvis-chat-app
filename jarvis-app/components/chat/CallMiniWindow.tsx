@@ -1,30 +1,42 @@
 import React, { useRef } from 'react';
-import { StyleSheet, View, Text, Animated, PanResponder, Dimensions } from 'react-native';
+import { StyleSheet, View, Animated, PanResponder, Dimensions, TouchableOpacity } from 'react-native';
 import { RTCView } from 'react-native-webrtc';
 import { useStore } from '@/store';
 import { useRouter, useSegments } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useAppTheme } from '@/hooks/useAppTheme';
+import { MaterialIcons, FontAwesome } from '@expo/vector-icons';
+import { Avatar } from '@/components/ui/Avatar';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 
-const MINI_WINDOW_WIDTH = 120;
-const MINI_WINDOW_HEIGHT = 180;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const VIDEO_WIDTH = 120;
+const VIDEO_HEIGHT = 180;
+const AUDIO_SIZE = 90;
 
 export const CallMiniWindow = () => {
     const router = useRouter();
     const segments = useSegments();
-    const { colors } = useAppTheme();
-    const { callState, setIsMinimized, chats } = useStore();
-    const { isCalling, isMinimized, remoteStream, localStream, activeChatId } = callState;
+    
+    // Explicitly select parts of state to avoid unnecessary re-renders
+    const isCalling = useStore((state: any) => state.callState.isCalling);
+    const isMinimized = useStore((state: any) => state.callState.isMinimized);
+    const remoteStream = useStore((state: any) => state.callState.remoteStream);
+    const localStream = useStore((state: any) => state.callState.localStream);
+    const activeChatId = useStore((state: any) => state.callState.activeChatId);
+    const isVideo = useStore((state: any) => state.callState.isVideo) ?? true;
+    const chats = useStore((state: any) => state.chats);
+
+    const width = isVideo ? VIDEO_WIDTH : AUDIO_SIZE;
+    const height = isVideo ? VIDEO_HEIGHT : AUDIO_SIZE;
 
     // Draggable position state
-    const pan = useRef(new Animated.ValueXY({ x: SCREEN_WIDTH - MINI_WINDOW_WIDTH - 20, y: SCREEN_HEIGHT - MINI_WINDOW_HEIGHT - 100 })).current;
+    const pan = useRef(new Animated.ValueXY({ 
+        x: SCREEN_WIDTH - width - 20, 
+        y: SCREEN_HEIGHT - height - 120 
+    })).current;
+    
     const lastTap = useRef(0);
-
-    const handleExpand = () => {
-        setIsMinimized(false);
-        router.push(`/call/${activeChatId}`);
-    };
 
     const panResponder = useRef(
         PanResponder.create({
@@ -44,28 +56,29 @@ export const CallMiniWindow = () => {
             onPanResponderRelease: (e, gesture) => {
                 pan.flattenOffset();
 
-                // Check for double tap to expand
                 const now = Date.now();
                 const DOUBLE_TAP_DELAY = 300;
+                // Double tap check
                 if (now - lastTap.current < DOUBLE_TAP_DELAY && Math.abs(gesture.dx) < 10 && Math.abs(gesture.dy) < 10) {
-                    handleExpand();
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    useStore.getState().setIsMinimized(false);
+                    router.push(`/call/${activeChatId}`);
                     return;
                 }
                 lastTap.current = now;
 
-                // Snap to edges if needed
                 const finalX = (pan.x as any)._value;
                 const finalY = (pan.y as any)._value;
 
-                // Keep within screen bounds
-                const boundedX = Math.max(0, Math.min(finalX, SCREEN_WIDTH - MINI_WINDOW_WIDTH));
-                const boundedY = Math.max(0, Math.min(finalY, SCREEN_HEIGHT - MINI_WINDOW_HEIGHT));
+                // Snap logic: keep within safe screen bounds
+                const boundedX = Math.max(10, Math.min(finalX, SCREEN_WIDTH - width - 10));
+                const boundedY = Math.max(50, Math.min(finalY, SCREEN_HEIGHT - height - 80));
 
                 Animated.spring(pan, {
                     toValue: { x: boundedX, y: boundedY },
                     useNativeDriver: false,
-                    friction: 7,
-                    tension: 40,
+                    friction: 8,
+                    tension: 50,
                 }).start();
             },
         })
@@ -74,48 +87,85 @@ export const CallMiniWindow = () => {
     const isOnCallScreen = segments[0] === 'call';
     if (!isCalling || !isMinimized || isOnCallScreen) return null;
 
-    const chat = chats.find(c => c.id === activeChatId);
-    const displayName = chat?.name || 'Call';
+    const chat = chats.find((c: any) => c.id === activeChatId);
+
+    const handleExpand = () => {
+        Haptics.selectionAsync();
+        useStore.getState().setIsMinimized(false);
+        router.push(`/call/${activeChatId}`);
+    };
 
     return (
         <Animated.View
             style={[
                 styles.container,
-                { borderColor: colors.primary },
                 {
+                    width,
+                    height,
+                    borderRadius: isVideo ? 16 : AUDIO_SIZE / 2,
                     transform: pan.getTranslateTransform(),
                 },
             ]}
             {...panResponder.panHandlers}
         >
-            <View style={styles.streamContainer}>
-                {remoteStream ? (
-                    <RTCView
-                        key={remoteStream.toURL()}
-                        streamURL={remoteStream.toURL()}
-                        style={styles.stream}
-                        objectFit="cover"
-                    />
+            <TouchableOpacity 
+                activeOpacity={0.85} 
+                style={styles.innerContainer}
+                onPress={handleExpand}
+            >
+                {isVideo ? (
+                    // -------- VIDEO CALL PIP --------
+                    <View style={styles.videoContainer}>
+                        {remoteStream ? (
+                            <RTCView
+                                key={remoteStream.toURL()}
+                                streamURL={remoteStream.toURL()}
+                                style={styles.stream}
+                                objectFit="cover"
+                                zOrder={10}
+                            />
+                        ) : (
+                            <LinearGradient
+                                colors={['#0f2027', '#203a43', '#2c5364']}
+                                style={styles.placeholderGradient}
+                            >
+                                <Avatar source={chat?.avatar} size={60} />
+                            </LinearGradient>
+                        )}
+                        {localStream && (
+                            <View style={styles.localStreamPip}>
+                                <RTCView
+                                    streamURL={localStream.toURL()}
+                                    style={styles.stream}
+                                    objectFit="cover"
+                                    mirror={true}
+                                    zOrder={11}
+                                />
+                            </View>
+                        )}
+                        <View style={styles.expandOverlayVideo}>
+                            <MaterialIcons name="open-in-full" size={18} color="rgba(255,255,255,0.9)" />
+                        </View>
+                    </View>
                 ) : (
-                    <View style={[styles.placeholder, { backgroundColor: colors.card }]}>
-                        <MaterialIcons name="person" size={40} color={colors.tabIconDefault} />
-                        <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-                            {displayName}
-                        </Text>
-                    </View>
+                    // -------- AUDIO CALL PIP (Floating Head) --------
+                    <LinearGradient
+                        colors={['#1a2a6c', '#b21f1f', '#fdbb2d']}
+                        style={[styles.audioContainer, { borderRadius: AUDIO_SIZE / 2 }]}
+                    >
+                        <View style={[styles.audioAvatarWrapper, { borderRadius: AUDIO_SIZE / 2 }]}>
+                            <Avatar source={chat?.avatar} size={AUDIO_SIZE - 6} />
+                            <View style={styles.badge}>
+                                <FontAwesome name="phone" size={12} color="#fff" />
+                            </View>
+                        </View>
+                        
+                        <View style={styles.expandOverlayAudio}>
+                            <MaterialIcons name="open-in-full" size={14} color="rgba(255,255,255,0.9)" />
+                        </View>
+                    </LinearGradient>
                 )}
-
-                {localStream && (
-                    <View style={[styles.localStreamContainer, { borderColor: colors.border }]}>
-                        <RTCView
-                            streamURL={localStream.toURL()}
-                            style={styles.stream}
-                            objectFit="cover"
-                            mirror={true}
-                        />
-                    </View>
-                )}
-            </View>
+            </TouchableOpacity>
         </Animated.View>
     );
 };
@@ -123,46 +173,105 @@ export const CallMiniWindow = () => {
 const styles = StyleSheet.create({
     container: {
         position: 'absolute',
-        bottom: 100,
-        right: 20,
-        width: MINI_WINDOW_WIDTH,
-        height: MINI_WINDOW_HEIGHT,
-        borderRadius: 12,
-        overflow: 'hidden',
-        backgroundColor: '#000',
-        elevation: 10,
+        top: 0,
+        left: 0,
+        overflow: 'visible',
+        elevation: 15,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 5,
-        borderWidth: 1,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        backgroundColor: 'transparent',
+        zIndex: 99999, // Ensure it sits on top of everything
     },
-    streamContainer: {
+    innerContainer: {
         flex: 1,
+        width: '100%',
+        height: '100%',
+    },
+    videoContainer: {
+        flex: 1,
+        borderRadius: 16,
+        overflow: 'hidden',
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.9)',
+        backgroundColor: '#000',
     },
     stream: {
         width: '100%',
         height: '100%',
     },
-    localStreamContainer: {
-        position: 'absolute',
-        bottom: 8,
-        right: 8,
-        width: 40,
-        height: 60,
-        borderRadius: 4,
-        overflow: 'hidden',
-        borderWidth: 1,
-    },
-    placeholder: {
+    placeholderGradient: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 5,
     },
-    name: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        marginTop: 5,
+    localStreamPip: {
+        position: 'absolute',
+        bottom: 8,
+        right: 8,
+        width: 35,
+        height: 50,
+        borderRadius: 8,
+        overflow: 'hidden',
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.9)',
+        backgroundColor: '#000',
+    },
+    expandOverlayVideo: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        borderRadius: 12,
+        padding: 4,
+    },
+    expandOverlayAudio: {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: [{ translateX: -12 }, { translateY: -12 }], // Center it approximately
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        borderRadius: 12,
+        padding: 4,
+        opacity: 0, // Hidden by default, could be shown on hover if web, or just transparent
+    },
+    audioContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 3,
+        borderColor: 'rgba(255,255,255,1)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.5,
+        shadowRadius: 6,
+        elevation: 10,
+    },
+    audioAvatarWrapper: {
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#000',
+        overflow: 'hidden',
+    },
+    badge: {
+        position: 'absolute',
+        bottom: 0,
+        right: 4,
+        backgroundColor: '#34C759',
+        borderRadius: 12,
+        width: 24,
+        height: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#000',
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.5,
+        shadowRadius: 2,
     },
 });

@@ -9,7 +9,7 @@ import { AppState } from '@/store';
 
 export interface CallState {
     isCalling: boolean;
-    incomingCall: { chatId: string, offer: any, isVideo: boolean } | null;
+    incomingCall: { chatId: string, offer: any, isVideo: boolean, callerName?: string, callerAvatar?: string } | null;
     remoteStream: MediaStream | null;
     localStream: MediaStream | null;
     activeChatId: string | null;
@@ -51,7 +51,7 @@ const playRingtone = async (isIncoming: boolean) => {
         }
         const source = isIncoming
             ? require('@/assets/sounds/incoming_call.mp3')
-            : require('@/assets/sounds/outgoing_call.mp3');
+            : require('@/assets/sounds/outgoing_call.wav');
         const player = Audio.createAudioPlayer(source);
         player.loop = true;
         player.play();
@@ -170,11 +170,27 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
             console.warn('[AcceptCall] No incoming call found in state');
             return;
         }
+        
+        // Concurrency Lock: Prevent double-execution if user triple-taps Answer
+        if (callState.isRequestingPermissions || callState.isCalling) {
+            console.warn('[AcceptCall] Already processing accept, ignoring duplicate call');
+            return;
+        }
+
         const { chatId, offer, isVideo } = callState.incomingCall;
         console.log('[AcceptCall] Accepting from:', chatId, 'isVideo:', isVideo, 'offerPrefix:', offer?.sdp?.substring(0, 50));
         stopRingtone();
+        
+        // Instantly transition state to lock out additional taps and dismiss modals
         set((state) => ({
-            callState: { ...state.callState, isCalling: true, activeChatId: chatId, isVideo, isRequestingPermissions: true }
+            callState: { 
+                ...state.callState, 
+                isCalling: true, 
+                activeChatId: chatId, 
+                isVideo, 
+                isRequestingPermissions: true,
+                incomingCall: null // Clear incoming call immediately to force UI remount
+            }
         }));
         try {
             const audioStatus = await Audio.requestRecordingPermissionsAsync();
@@ -259,7 +275,16 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                     return;
                 }
                 set((state) => ({
-                    callState: { ...state.callState, incomingCall: { chatId: data.conversation_id, offer: data.offer, isVideo: !!data.is_video } }
+                    callState: { 
+                        ...state.callState, 
+                        incomingCall: { 
+                            chatId: data.conversation_id, 
+                            offer: data.offer, 
+                            isVideo: !!data.is_video,
+                            callerName: data.caller_name || '',
+                            callerAvatar: data.caller_avatar || ''
+                        } 
+                    }
                 }));
                 playRingtone(true);
                 break;

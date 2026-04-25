@@ -263,6 +263,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
             recipient_id = await self.get_recipient_from_conversation(chat_id)
             if recipient_id:
+                # Inject caller info for reliability on receiver end
+                text_data_json['caller_name'] = self.user.username
+                text_data_json['caller_avatar'] = self.user.profile_picture.url if getattr(self.user, 'profile_picture', None) else ""
+
                 logger.info(f"[WS] ➡️ Broadcasting {message_type} to user_{recipient_id}")
                 await self.channel_layer.group_send(
                     f"user_{recipient_id}",

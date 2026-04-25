@@ -94,6 +94,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          title: 'Chats',
           tabBarIcon: ({ color, focused }) => (
             <View style={styles.iconContainer}>
               <MaterialCommunityIcons 
@@ -122,6 +123,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="people"
         options={{
+          title: 'People',
           tabBarIcon: ({ color, focused }) => (
             <View style={styles.iconContainer}>
               <MaterialCommunityIcons 
@@ -137,6 +139,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="calls"
         options={{
+          title: 'Calls',
           tabBarIcon: ({ color, focused }) => (
             <View style={styles.iconContainer}>
               <MaterialCommunityIcons 
@@ -152,6 +155,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
+          title: 'Settings',
           tabBarIcon: ({ color, focused }) => (
             <View style={styles.iconContainer}>
               <MaterialCommunityIcons 

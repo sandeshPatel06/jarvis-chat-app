@@ -1,4 +1,4 @@
-import notifee, { AndroidImportance, AndroidVisibility, EventType } from '@notifee/react-native';
+import notifee, { AndroidImportance, AndroidVisibility, EventType, AndroidCategory } from '@notifee/react-native';
 
 /**
  * Handles incoming call data from FCM and displays a notification.
@@ -8,16 +8,17 @@ export async function handleIncomingCallFCM(data: any) {
 
     const { callUUID, callerName } = data;
 
-    // Create a channel (required for Android)
+    // Create a channel with a new ID to bypass any previously cached OS configurations
     const channelId = await notifee.createChannel({
-        id: 'incoming_calls',
-        name: 'Incoming Calls',
+        id: 'jarvis_voice_calls',
+        name: 'Incoming Voice/Video Calls',
         importance: AndroidImportance.HIGH,
         visibility: AndroidVisibility.PUBLIC,
         vibration: true,
+        bypassDnd: true, // Allow calls to bypass Do Not Disturb mode
     });
 
-    // Display a notification
+    // Display a robust, un-swipeable incoming call notification
     await notifee.displayNotification({
         id: callUUID || 'incoming_call',
         title: 'Incoming Call',
@@ -27,6 +28,9 @@ export async function handleIncomingCallFCM(data: any) {
             importance: AndroidImportance.HIGH,
             visibility: AndroidVisibility.PUBLIC,
             sound: 'default',
+            ongoing: true, // Prevents the user or OS from swiping away the notification while it's ringing
+            autoCancel: false,
+            lightUpScreen: true, // Forces the screen to wake up (crucial for lock screen)
             pressAction: {
                 id: 'default',
                 launchActivity: 'default',
@@ -45,7 +49,7 @@ export async function handleIncomingCallFCM(data: any) {
                 id: 'full_screen',
                 launchActivity: 'default',
             },
-            category: 'call' as any,
+            category: AndroidCategory.CALL,
         },
         data: {
             callUUID,

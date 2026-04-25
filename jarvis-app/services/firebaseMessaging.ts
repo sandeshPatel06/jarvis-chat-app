@@ -11,6 +11,7 @@ import {
     getToken
 } from '@react-native-firebase/messaging';
 import notifee, { AndroidImportance, AndroidVisibility, AndroidStyle, EventType } from '@notifee/react-native';
+import * as SecureStore from 'expo-secure-store';
 
 import { handleIncomingCallFCM } from '@/helper/backgroundCallHelper';
 // import { registerForPushNotificationsAsync } from '../utils/notifications'; // Deprecated in favor of FCM
@@ -211,7 +212,10 @@ notifee.onBackgroundEvent(async ({ type, detail }) => {
                 console.log(`[Notifee] Replying to ${conversationId}: ${replyText}`);
                 try {
                     const state = useStore.getState();
-                    const token = state.token;
+                    let token = state.token;
+                    if (!token) {
+                        token = await SecureStore.getItemAsync('token');
+                    }
 
                     if (token) {
                         await api.chat.uploadFile(token, conversationId, null, null, replyText);
@@ -227,7 +231,19 @@ notifee.onBackgroundEvent(async ({ type, detail }) => {
 
             if (conversationId && messageId) {
                 console.log(`[Notifee] Marking as read: ${messageId} in ${conversationId}`);
-                // Implementation for mark as read
+                try {
+                    const state = useStore.getState();
+                    let token = state.token;
+                    if (!token) {
+                        token = await SecureStore.getItemAsync('token');
+                    }
+                    if (token) {
+                        await api.chat.markMessagesAsRead(token, conversationId);
+                        console.log('[Notifee] Mark as read sent successfully');
+                    }
+                } catch (error) {
+                    console.error('[Notifee] Failed to mark as read in background:', error);
+                }
             }
         }
 

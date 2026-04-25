@@ -12,7 +12,7 @@ import { Message } from '@/types';
 import * as Haptics from 'expo-haptics';
 import { ImageEditor } from './ImageEditor';
 import { VoiceRecorder } from './VoiceRecorder';
-import * as Location from 'expo-location';
+
 import * as Contacts from 'expo-contacts';
 
 interface ChatInputProps {
@@ -52,29 +52,6 @@ export const ChatInput = ({
     const isExpoGo = Constants.appOwnership === 'expo';
     const sendMessage = useStore(state => state.sendMessage);
 
-    const handleLocationSharing = async () => {
-        setShowAttachMenu(false);
-        try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                showAlert('Permission Denied', 'Location permission is required to share your location.');
-                return;
-            }
-
-            setUploading(true);
-            const location = await Location.getCurrentPositionAsync({});
-            const { latitude, longitude } = location.coords;
-            const locationUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
-            
-            await sendMessage(chatId, `📍 Shared Location:\n${locationUrl}`, replyingToMessage?.id);
-            setReplyingToMessage(null);
-        } catch (error) {
-            console.error('Location sharing error', error);
-            showAlert('Error', 'Failed to get your current location.');
-        } finally {
-            setUploading(false);
-        }
-    };
 
     const handleContactSharing = async () => {
         setShowAttachMenu(false);
@@ -461,11 +438,6 @@ export const ChatInput = ({
                         <TouchableOpacity onPress={() => handleAttachment('*/*')} style={styles.menuItem}>
                             <FontAwesome name="file-text-o" size={20} color={colors.text} style={{ width: 25 }} />
                             <Text style={[styles.menuText, { color: colors.text }]}>Document</Text>
-                        </TouchableOpacity>
-                        <View style={[styles.separator, { backgroundColor: colors.border }]} />
-                        <TouchableOpacity onPress={handleLocationSharing} style={styles.menuItem}>
-                            <FontAwesome name="map-marker" size={20} color={colors.text} style={{ width: 25 }} />
-                            <Text style={[styles.menuText, { color: colors.text }]}>Location</Text>
                         </TouchableOpacity>
                         <View style={[styles.separator, { backgroundColor: colors.border }]} />
                         <TouchableOpacity onPress={handleContactSharing} style={styles.menuItem}>

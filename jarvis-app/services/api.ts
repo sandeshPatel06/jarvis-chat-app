@@ -293,6 +293,26 @@ export const api = {
         },
     },
     chat: {
+        markMessagesAsRead: async (token: string, conversationId: string) => {
+            const url = `${API_URL}/chat/conversations/${conversationId}/read/`;
+            try {
+                log(`POST ${url}`);
+                const response = await fetchWithTracking(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Token ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+                if (response.status === 204 || response.status === 200) return true;
+                const json = await response.json();
+                if (!response.ok) throw new Error(JSON.stringify(json) || 'Failed to mark as read');
+                return json;
+            } catch (error) {
+                log('Mark read error', error);
+                throw error;
+            }
+        },
         restoreChats: async (token: string, conversationIds: number[], restoreDate?: string) => {
             const url = `${API_URL}/chat/restore/`;
             try {

@@ -12,16 +12,18 @@ import Animated, {
     withRepeat,
     withTiming,
     withDelay,
+    Easing
 } from 'react-native-reanimated';
 import { getMediaUrl } from '@/utils/media';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const PulseCircle = ({ delay = 0 }: { delay?: number }) => {
     const scale = useSharedValue(1);
-    const opacity = useSharedValue(0.4);
+    const opacity = useSharedValue(0.5);
 
     useEffect(() => {
-        scale.value = withDelay(delay, withRepeat(withTiming(2, { duration: 2000 }), -1, false));
-        opacity.value = withDelay(delay, withRepeat(withTiming(0, { duration: 2000 }), -1, false));
+        scale.value = withDelay(delay, withRepeat(withTiming(1.4, { duration: 1500, easing: Easing.out(Easing.ease) }), -1, false));
+        opacity.value = withDelay(delay, withRepeat(withTiming(0, { duration: 1500, easing: Easing.out(Easing.ease) }), -1, false));
     }, [delay, scale, opacity]);
 
     const animatedStyle = useAnimatedStyle(() => ({
@@ -38,8 +40,9 @@ export default function IncomingCallModal() {
     const { colors, isDark } = useAppTheme();
     const router = useRouter();
 
-    const chat = incomingCall ? chats.find(c => c.id === incomingCall.chatId) : null;
-    const avatarUri = chat?.avatar ? getMediaUrl(chat.avatar) : null;
+    const chat = incomingCall ? chats.find(c => String(c.id) === String(incomingCall.chatId)) : null;
+    const rawAvatar = incomingCall?.callerAvatar || chat?.avatar;
+    const avatarUri = rawAvatar ? getMediaUrl(rawAvatar) : null;
 
     const handleAccept = async () => {
         if (!incomingCall) return;
@@ -63,9 +66,14 @@ export default function IncomingCallModal() {
             onRequestClose={handleDecline}
         >
             <View style={styles.overlay}>
+                {/* Immersive background matching the CallScreen */}
+                <LinearGradient
+                    colors={['rgba(15, 32, 39, 0.95)', 'rgba(32, 58, 67, 0.95)', 'rgba(44, 83, 100, 0.95)']}
+                    style={StyleSheet.absoluteFill}
+                />
                 <BlurView
-                    intensity={100}
-                    tint={isDark ? "dark" : "light"}
+                    intensity={60}
+                    tint="dark"
                     style={StyleSheet.absoluteFill}
                 />
 
@@ -73,41 +81,45 @@ export default function IncomingCallModal() {
                     <View style={styles.callerInfo}>
                         <View style={styles.avatarWrapper}>
                             <PulseCircle />
-                            <PulseCircle delay={1000} />
-                            <View style={[styles.avatarContainer, { backgroundColor: colors.primary }]}>
+                            <PulseCircle delay={750} />
+                            <View style={styles.premiumAvatar}>
                                 {avatarUri ? (
                                     <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
                                 ) : (
-                                    <FontAwesome name="user" size={50} color="white" />
+                                    <FontAwesome name="user" size={60} color="white" />
                                 )}
                             </View>
                         </View>
-                        <Text style={[styles.callerName, { color: colors.text }]}>{chat?.name || 'Unknown Caller'}</Text>
-                        <Text style={[styles.callStatus, { color: colors.textSecondary }]}>
+                        <Text style={styles.callerName}>{incomingCall.callerName || chat?.name || 'Unknown Caller'}</Text>
+                        <Text style={styles.callStatus}>
                             Incoming {incomingCall.isVideo ? 'Video' : 'Voice'} Call...
                         </Text>
                     </View>
 
                     <View style={styles.actions}>
-                        <TouchableOpacity
-                            style={[styles.button, styles.declineButton, { backgroundColor: colors.error }]}
-                            onPress={handleDecline}
-                            activeOpacity={0.8}
-                        >
-                            <MaterialIcons name="call-end" size={32} color="white" />
-                            <Text style={[styles.buttonText, { color: colors.text }]}>Decline</Text>
-                        </TouchableOpacity>
+                        <View style={styles.actionButtonContainer}>
+                            <TouchableOpacity
+                                style={[styles.button, styles.declineButton]}
+                                onPress={handleDecline}
+                                activeOpacity={0.8}
+                            >
+                                <MaterialIcons name="call-end" size={40} color="white" />
+                            </TouchableOpacity>
+                            <Text style={styles.buttonText}>Decline</Text>
+                        </View>
 
-                        <TouchableOpacity
-                            style={[styles.button, styles.acceptButton, { backgroundColor: colors.success }]}
-                            onPress={handleAccept}
-                            activeOpacity={0.8}
-                        >
-                            <Animated.View>
-                                <MaterialIcons name="call" size={32} color="white" />
-                            </Animated.View>
-                            <Text style={[styles.buttonText, { color: colors.text }]}>Accept</Text>
-                        </TouchableOpacity>
+                        <View style={styles.actionButtonContainer}>
+                            <TouchableOpacity
+                                style={[styles.button, styles.acceptButton]}
+                                onPress={handleAccept}
+                                activeOpacity={0.8}
+                            >
+                                <Animated.View>
+                                    <MaterialIcons name="call" size={40} color="white" />
+                                </Animated.View>
+                            </TouchableOpacity>
+                            <Text style={styles.buttonText}>Accept</Text>
+                        </View>
                     </View>
                 </View>
             </View>
@@ -122,36 +134,38 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     container: {
+        flex: 1,
         width: '100%',
-        height: '100%',
-        justifyContent: 'space-between',
-        paddingVertical: 100, // Increased padding
-        paddingHorizontal: 50,
-    },
-    callerInfo: {
-        alignItems: 'center',
-        marginTop: 40,
-    },
-    avatarWrapper: {
-        width: 120,
-        height: 120,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 30,
+    },
+    callerInfo: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 80,
+    },
+    avatarWrapper: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 40,
     },
     pulseCircle: {
         position: 'absolute',
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        backgroundColor: '#6C63FF',
+        width: 140,
+        height: 140,
+        borderRadius: 70,
+        backgroundColor: 'rgba(255, 255, 255, 0.4)',
     },
-    avatarContainer: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
+    premiumAvatar: {
+        width: 140,
+        height: 140,
+        borderRadius: 70,
+        borderWidth: 3,
+        borderColor: 'rgba(255, 255, 255, 0.8)',
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: '#1a1a1a',
         elevation: 15,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 8 },
@@ -164,52 +178,56 @@ const styles = StyleSheet.create({
         height: '100%',
     },
     callerName: {
-        fontSize: 32,
+        color: '#ffffff',
+        fontSize: 34,
         fontWeight: '800',
-        marginBottom: 8,
+        marginBottom: 12,
         textAlign: 'center',
+        letterSpacing: 0.5,
+        textShadowColor: 'rgba(0, 0, 0, 0.6)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 6,
     },
     callStatus: {
-        fontSize: 18,
+        color: 'rgba(255, 255, 255, 0.8)',
+        fontSize: 20,
         fontWeight: '500',
-        opacity: 0.8,
+        letterSpacing: 1,
     },
     actions: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        justifyContent: 'space-evenly',
         width: '100%',
-        marginBottom: 40,
-        paddingHorizontal: 20, // Added horizontal padding
+        paddingBottom: 80,
+    },
+    actionButtonContainer: {
+        alignItems: 'center',
     },
     button: {
         alignItems: 'center',
         justifyContent: 'center',
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        marginBottom: 15,
     },
     acceptButton: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        elevation: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        backgroundColor: '#34C759', // iOS green
+        shadowColor: '#34C759',
     },
     declineButton: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        elevation: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        backgroundColor: '#FF3B30', // iOS red
+        shadowColor: '#FF3B30',
     },
     buttonText: {
-        marginTop: 12,
         fontSize: 16,
         fontWeight: '600',
-        position: 'absolute',
-        bottom: -35,
+        color: '#ffffff',
+        letterSpacing: 0.5,
     },
 });

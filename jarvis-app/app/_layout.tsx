@@ -101,14 +101,18 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    // Handle hardware back button for Android
+    // Prevent accidental app-exit on hardware 'Back' if a call is active
     const backAction = () => {
-      // If we are in a call screen (can check segments or state)
-      // This is a bit tricky with Expo Router in a global layout
-      // Better to handle inside CallScreen, but user asked for "back our minimize app"
-      // Let's implement it here as a fallback or directly in CallScreen.
-      // actually CallScreen is better for back button.
-      return false;
+      const { callState } = useStore.getState();
+      if (callState.isCalling) {
+        if (Platform.OS === 'android') {
+          import('react-native').then(({ ToastAndroid }) => {
+            ToastAndroid.show('An active call is ongoing.', ToastAndroid.SHORT);
+          });
+        }
+        return true; // Prevents default behavior (app exiting)
+      }
+      return false; // Allows default (exits app if at root navigation or pops nav)
     };
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
@@ -217,6 +221,7 @@ function RootLayoutNav() {
                   headerShown: false,
                 }}
               />
+              <Stack.Screen name="call/[id]" options={{ headerShown: false }} />
               <Stack.Screen name="contact/[id]" options={{ headerShown: false }} />
               <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
               <Stack.Screen name="auth/login" options={{ headerShown: false }} />

@@ -97,10 +97,10 @@ def send_fcm_notification(user, title, body, data=None, ttl=None, priority='high
         )
 
         notification = None
-        # Only attach visible notification if it's NOT a call (calls use data-only for full screen UI)
-        # OR if we want a fallback. 
-        # Usually for calls we rely on data to trigger incomingCall screen.
-        if payload_data.get('type') != 'incoming_call':
+        # Only attach visible notification if it's NOT a call and NOT a chat message
+        # We rely on data-only payloads for messages to allow the frontend Notifee 
+        # to build a custom rich Messaging UI locally.
+        if payload_data.get('type') not in ['incoming_call', 'chat_message', 'message']:
             notification = messaging.Notification(
                 title=title,
                 body=body,

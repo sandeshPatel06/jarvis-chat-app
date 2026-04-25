@@ -301,7 +301,8 @@ class MessageUploadView(APIView):
                                      "type": "chat_message",
                                      "conversation_id": str(conversation.id),
                                      "sender_id": str(request.user.id),
-                                     "message_id": str(message.id)
+                                     "message_id": str(message.id),
+                                     "sender_avatar": request.user.profile_picture.url if request.user.profile_picture else ""
                                  }
                              )
                          except Exception as e:
@@ -314,6 +315,31 @@ class MessageUploadView(APIView):
             logger = logging.getLogger(__name__)
             logger.error(f"Error in upload view: {e}", exc_info=True)
             return Response({"error": "Failed to upload message. Please try again."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class MarkConversationReadView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, conversation_id):
+        try:
+            conversation = Conversation.objects.get(id=conversation_id)
+            if not conversation.participants.filter(id=request.user.id).exists():
+                return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+            
+            Message.objects.filter(conversation=conversation).exclude(sender=request.user).update(is_read=True)
+            
+            channel_layer = get_channel_layer()
+            for participant in conversation.participants.all():
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{participant.id}",
+                    {
+                        'type': 'messages_read',
+                        'conversation_id': str(conversation_id),
+                        'reader_id': request.user.id
+                    }
+                )
+            return Response({"status": "read"}, status=status.HTTP_200_OK)
+        except Conversation.DoesNotExist:
+            return Response({"error": "Conversation not found"}, status=status.HTTP_404_NOT_FOUND)
 
 class ClearMessagesView(APIView):
     permission_classes = [permissions.IsAuthenticated]
