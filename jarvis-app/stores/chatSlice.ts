@@ -136,41 +136,102 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
         set({ socket: ws } as any);
     },
 
-    addMessage: (message) => {
-        const chatId = (message.conversation_id || message.conversation)?.toString();
+    addMessage: (payload) => {
+        const chatId = (payload.conversation_id || payload.conversation)?.toString();
         if (!chatId) return;
 
         set((state: any) => {
             const chats = [...state.chats];
-            const chatIndex = chats.findIndex(c => c.id === chatId);
+            let chatIndex = chats.findIndex(c => c.id.toString() === chatId);
             
+            // 1. Standardize message data
+            const msgId = payload.id ? payload.id.toString() : `temp_${Date.now()}`;
+            const message = { 
+                ...payload,
+                id: msgId,
+                timestamp: payload.timestamp instanceof Date ? payload.timestamp : new Date(payload.timestamp),
+                sender: (payload.sender === 'me' || payload.sender_id === state.user?.id || (typeof payload.sender === 'object' && payload.sender.username === state.user?.username)) ? 'me' : 'them',
+                isRead: !!(payload.is_read || payload.isRead),
+                isDelivered: !!(payload.is_delivered || payload.isDelivered),
+                reactions: payload.reactions || [],
+                reply_to: payload.reply_to || payload.reply_to_json || null
+            };
+
+            // 2. Create placeholder if chat doesn't exist
             if (chatIndex === -1) {
-                // Should fetch chats if not found
-                return state;
+                console.log(`[ChatSlice] 🆕 Creating new chat entry for ID: ${chatId}`);
+                const newChat: Chat = {
+                    id: chatId,
+                    name: payload.sender_name || 'New Chat',
+                    avatar: null,
+                    lastMessage: message.text || (message.file ? 'Attachment' : ''),
+                    lastMessageTime: message.timestamp,
+                    unreadCount: state.activeChatId === chatId ? 0 : 1,
+                    messages: [message],
+                };
+                chats.push(newChat);
+                // Sort chats after adding new one
+                chats.sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
+                return { chats: [...chats] };
             }
 
             const chat = { ...chats[chatIndex] };
-            const msgId = message.id.toString();
             
-            // Check for temp ID and deduplicate
-            const tempIdMatch = chat.messages.findIndex((m: any) => m.id.startsWith('temp_') && m.text === message.text);
+            // 3. Check for temp ID and deduplicate
+            const tempIdMatch = chat.messages.findIndex((m: any) => 
+                (payload.tempId && m.id === payload.tempId) ||
+                (m.id?.toString().startsWith('temp_') && 
+                 (m.text === message.text || (message.file && m.file)))
+            );
+            
             let newMessages = [...chat.messages];
 
             if (tempIdMatch !== -1) {
-                newMessages[tempIdMatch] = { ...message, id: msgId };
-            } else if (!newMessages.some(m => m.id === msgId)) {
-                newMessages = [{ ...message, id: msgId }, ...newMessages];
+                // Replace optimistic message with the real one from server
+                console.log(`[ChatSlice] ✨ Replacing temp message ${newMessages[tempIdMatch].id} with real ID: ${msgId}`);
+                newMessages[tempIdMatch] = { 
+                    ...message, 
+                    isUploading: false,
+                    error: false
+                };
+            } else if (!newMessages.some(m => m.id.toString() === msgId)) {
+                // Add new message to the list
+                newMessages.push(message);
             } else {
-                return state; // Duplicate, no change
+                // Update existing message
+                const existingIdx = newMessages.findIndex(m => m.id.toString() === msgId);
+                newMessages[existingIdx] = { ...newMessages[existingIdx], ...message };
             }
 
-            chat.messages = newMessages;
-            chat.lastMessage = message.text || (message.file ? 'Attachment' : '');
-            chat.lastMessageTime = new Date(message.timestamp);
-            chat.unreadCount = state.activeChatId === chatId ? chat.unreadCount : (chat.unreadCount || 0) + 1;
+            // Standardize Sorting: Newest messages at index 0 for inverted list
+            newMessages.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+            // 4. Update chat preview
+            chat.messages = [...newMessages];
+            
+            let lastText = message.text || '';
+            if (!lastText && message.file_type) {
+                if (message.file_type.startsWith('image/')) lastText = '📸 Photo';
+                else if (message.file_type.startsWith('video/')) lastText = '🎥 Video';
+                else if (message.file_type.startsWith('audio/')) lastText = '🎵 Audio';
+                else lastText = '📁 Document';
+            } else if (!lastText && message.file) {
+                lastText = '📎 Attachment';
+            }
+            
+            chat.lastMessage = lastText;
+            chat.lastMessageTime = message.timestamp;
+            
+            if (state.activeChatId !== chatId && !msgId.startsWith('temp_')) {
+                chat.unreadCount = (chat.unreadCount || 0) + 1;
+            }
 
             chats[chatIndex] = chat;
-            return { chats };
+            
+            // 5. Final Sort of chats list
+            chats.sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
+
+            return { chats: [...chats] };
         });
     },
 
@@ -202,15 +263,62 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
     },
 
     sendFileMessage: async (chatId, file, text, replyToId, duration) => {
-        // Implementation remains similar but moved to slice
         const { token, addMessage } = get() as any;
         if (!token) return;
+
+        const tempId = `temp_file_${Date.now()}`;
         
+        // 1. Optimistic Update: Show the file immediately using its local URI
+        const optimisticMessage = {
+            id: tempId,
+            text: text || '',
+            sender: 'me' as const,
+            timestamp: new Date(),
+            conversation_id: chatId,
+            file: file.uri, // Use local path
+            file_type: file.mimeType || 'image/jpeg',
+            file_name: file.name || 'file',
+            isUploading: true,
+            error: false,
+            duration: duration
+        };
+
+        addMessage(optimisticMessage);
+        
+        // Also save optimistic to DB as "unsent"
+        await database.saveMessage(optimisticMessage as any, chatId, true);
+
         try {
+            // 2. Perform actual upload in background
             const result = await api.chat.uploadFile(token, chatId, null, file, text, replyToId, duration);
-            addMessage({ ...result, conversation_id: chatId });
+            
+            // 3. Update store (result will be used to replace tempId)
+            const finalMessage = { 
+                ...result, 
+                id: result.id.toString(),
+                timestamp: new Date(result.timestamp),
+                conversation_id: chatId,
+                tempId: tempId, 
+                file: file.uri,
+                isUploading: false,
+                error: false
+            };
+            
+            addMessage(finalMessage);
+            
+            // Save to local DB as final
+            await database.saveMessage(finalMessage as any, chatId);
         } catch (e) {
             console.error('File upload failed', e);
+            // Update message in store to show error
+            set((state: any) => ({
+                chats: state.chats.map((c: any) => 
+                    c.id.toString() === chatId.toString() ? {
+                        ...c,
+                        messages: c.messages.map((m: any) => m.id === tempId ? { ...m, isUploading: false, error: true } : m)
+                    } : c
+                )
+            }));
             throw e;
         }
     },
@@ -281,28 +389,50 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
         try {
             const remote = await api.chat.getMessages(token, chatId, 20, 0);
             const mapped = await Promise.all(remote.map(async (m: any) => {
-                const msg = {
-                    id: m.id.toString(),
+                const msgId = m.id.toString();
+                
+                // Construct standard message object
+                const msg: any = {
+                    id: msgId,
                     text: m.text,
-                    sender: m.sender.username === user?.username ? 'me' : 'them',
+                    sender: (m.sender?.username === user?.username || m.sender === user?.username) ? 'me' : 'them',
                     timestamp: new Date(m.timestamp),
-                    isRead: m.is_read,
-                    file: m.file
+                    isRead: !!m.is_read,
+                    isDelivered: !!m.is_delivered,
+                    file: m.file,
+                    file_type: m.file_type,
+                    file_name: m.file_name,
+                    reactions: m.reactions || [],
+                    reply_to: m.reply_to || null
                 };
 
+                // SMART CHECK: If message has a file, check if it already exists locally
                 if (msg.file) {
-                    const url = getMediaUrl(msg.file);
-                    if (url) {
-                        downloadManager.enqueue(url, msg.id, (localUri) => {
-                            set((state: any) => ({
-                                chats: state.chats.map((c: any) => 
-                                    c.id === chatId ? {
-                                        ...c,
-                                        messages: c.messages.map((rem: any) => rem.id === msg.id ? { ...rem, file: localUri } : rem)
-                                    } : c
-                                )
-                            }));
-                        }, () => {});
+                    const urlWithoutQuery = msg.file.split('?')[0];
+                    const extensionMatch = urlWithoutQuery.match(/\.([0-9a-z]+)(?:[\?#]|$)/i);
+                    const ext = extensionMatch ? extensionMatch[1] : 'jpg';
+                    
+                    const localUri = await getLocalMediaUri(msgId, ext);
+                    
+                    if (localUri) {
+                        // File exists! Use local URI immediately 
+                        console.log(`[ChatSlice] 📦 Using cached file for ${msgId}: ${localUri}`);
+                        msg.file = localUri;
+                    } else if (!msg.file.startsWith('file://')) {
+                        // File doesn't exist locally, enqueue download
+                        const url = getMediaUrl(msg.file);
+                        if (url) {
+                            downloadManager.enqueue(url, msgId, (downloadedUri) => {
+                                set((state: any) => ({
+                                    chats: state.chats.map((c: any) => 
+                                        c.id.toString() === chatId.toString() ? {
+                                            ...c,
+                                            messages: c.messages.map((rem: any) => rem.id.toString() === msgId ? { ...rem, file: downloadedUri } : rem)
+                                        } : c
+                                    )
+                                }));
+                            }, () => {});
+                        }
                     }
                 }
                 return msg;

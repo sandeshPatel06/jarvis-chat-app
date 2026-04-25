@@ -106,17 +106,8 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
             if (msg.sender === 'them') {
                 actions.markDelivered(msg.conversation_id, msg.id);
 
-                // Check if user is in this chat
+                // Check if user is in this chat for notifications
                 if (actions.getActiveChatId() !== msg.conversation_id) {
-                    // Increment unread count
-                    const chats = actions.getChats();
-                    const updatedChats = chats.map((c) =>
-                        c.id === msg.conversation_id
-                            ? { ...c, unreadCount: (c.unreadCount || 0) + 1 }
-                            : c
-                    );
-                    actions.setChats(updatedChats);
-
                     try {
                         let body = msg.text;
                         if (msg.reply_to) {

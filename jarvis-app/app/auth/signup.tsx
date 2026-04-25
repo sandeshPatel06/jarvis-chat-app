@@ -32,6 +32,16 @@ export default function SignupScreen() {
     const [loading, setLoading] = useState(false);
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     
+    const generatePassword = () => {
+        const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+        let retVal = "";
+        for (let i = 0; i < 12; i++) {
+            retVal += charset.charAt(Math.floor(Math.random() * charset.length));
+        }
+        setPassword(retVal);
+        setIsPasswordVisible(true);
+    };
+    
     const router = useRouter();
     const { setUser, showAlert } = useStore();
     const { colors, isDark } = useAppTheme();
@@ -224,6 +234,12 @@ export default function SignupScreen() {
                                     placeholderTextColor={colors.textSecondary + '80'}
                                     secureTextEntry={!isPasswordVisible}
                                 />
+                                <TouchableOpacity 
+                                    onPress={generatePassword}
+                                    style={{ marginRight: 10 }}
+                                >
+                                    <Ionicons name="key-outline" size={20} color={colors.primary} />
+                                </TouchableOpacity>
                                 <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
                                     <Ionicons name={isPasswordVisible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textSecondary} />
                                 </TouchableOpacity>

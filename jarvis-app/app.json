@@ -18,11 +18,18 @@
       "bundleIdentifier": "com.jarvischat.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "This app uses the camera for video calling.",
-        "NSMicrophoneUsageDescription": "This app uses the microphone for voice and video calls.",
+        "NSCameraUsageDescription": "Jarvis Chat needs access to your camera for video calling and taking photos.",
+        "NSMicrophoneUsageDescription": "Jarvis Chat needs access to your microphone for voice and video calls.",
+        "NSPhotoLibraryUsageDescription": "Jarvis Chat needs access to your photos to send images and save media.",
+        "NSPhotoLibraryAddUsageDescription": "Jarvis Chat needs permission to save photos to your gallery.",
+        "NSContactsUsageDescription": "Jarvis Chat syncs your contacts to help you connect with your friends.",
+        "NSLocationWhenInUseUsageDescription": "Jarvis Chat needs your location to send it to your friends during chats.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Jarvis Chat needs your location to share it with contacts even when in background.",
         "UIBackgroundModes": [
           "audio",
-          "voip"
+          "voip",
+          "fetch",
+          "remote-notification"
         ]
       },
       "googleServicesFile": "./GoogleService-Info.plist"
@@ -47,6 +54,7 @@
         "android.permission.CALL_PHONE",
         "android.permission.CAMERA",
         "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_CAMERA",
         "android.permission.FOREGROUND_SERVICE_MICROPHONE",
         "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
         "android.permission.INTERNET",
@@ -56,6 +64,8 @@
         "android.permission.READ_CALL_LOG",
         "android.permission.READ_CONTACTS",
         "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_PHONE_NUMBERS",
         "android.permission.READ_PHONE_STATE",
         "android.permission.RECEIVE_BOOT_COMPLETED",
@@ -83,10 +93,19 @@
       "expo-secure-store",
       "expo-localization",
       "expo-asset",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/logo.png",
+          "color": "#121212"
+        }
+      ],
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
-      "expo-mail-composer"
+      "expo-mail-composer",
+      "expo-contacts",
+      "expo-media-library",
+      "expo-image-picker"
     ],
     "experiments": {
       "typedRoutes": true

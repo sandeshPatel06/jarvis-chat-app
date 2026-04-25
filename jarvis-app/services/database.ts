@@ -20,24 +20,29 @@ export const saveConversation = async (chat: Chat) => {
 export const saveMessage = async (message: Message, conversationId: string, isUnsent: boolean = false) => {
     const db = await getDb();
     try {
+        // Ensure timestamp is a Date object before calling toISOString
+        const timestampDate = message.timestamp instanceof Date 
+            ? message.timestamp 
+            : (message.timestamp ? new Date(message.timestamp) : new Date());
+
         const fileValue = typeof message.file === 'string' ? message.file : (message.file ? String(message.file) : '');
 
         await db.runAsync(
             `INSERT OR REPLACE INTO messages (id, conversation_id, text, sender, timestamp, is_read, is_delivered, reactions, reply_to_json, is_unsent, file, file_type, file_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                message.id,
-                conversationId,
-                message.text,
-                message.sender,
-                message.timestamp.toISOString(),
+                (message.id || '').toString(),
+                (conversationId || '').toString(),
+                (message.text || '').toString(),
+                typeof message.sender === 'string' ? message.sender : 'them',
+                timestampDate.toISOString(),
                 message.isRead ? 1 : 0,
                 message.isDelivered ? 1 : 0,
                 JSON.stringify(message.reactions || []),
                 JSON.stringify(message.reply_to || null),
                 isUnsent ? 1 : 0,
                 fileValue,
-                message.file_type || '',
-                message.file_name || '',
+                (message.file_type || '').toString(),
+                (message.file_name || '').toString(),
             ]
         );
     } catch (error) {

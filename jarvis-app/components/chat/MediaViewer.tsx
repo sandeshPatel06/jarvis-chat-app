@@ -162,8 +162,7 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({ visible, mediaUri, med
                         <VideoView
                             style={styles.video}
                             player={player}
-                            allowsFullscreen
-                            allowsPictureInPicture
+                            nativeControls
                         />
                     ) : mediaType === 'pdf' ? (
                         <WebView

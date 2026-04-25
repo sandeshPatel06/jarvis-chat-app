@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -27,6 +27,8 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
     const swipeableRef = React.useRef<Swipeable>(null);
     const [imageError, setImageError] = React.useState(false);
     const [viewerVisible, setViewerVisible] = React.useState(false);
+    const isUploading = (item as any).isUploading;
+    const hasError = (item as any).error;
 
     const handleMediaPress = () => {
         if (item.file && item.file_type) {
@@ -49,16 +51,19 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
     };
 
     const getImageSource = () => {
-        if (!item.file || imageError) {
-            if ((item as any).remoteFile) {
-                const remoteUrl = getMediaUrl((item as any).remoteFile);
-                if (remoteUrl) return { uri: remoteUrl };
-            }
-            return null;
-        }
+        if (!item.file || imageError) return null;
+        
         const uri = typeof item.file === 'string' ? item.file : (item.file as any).uri;
-        if (uri) return { uri };
-        return null;
+        if (!uri) return null;
+
+        // If it's a local file or already a full URL, return it
+        if (uri.startsWith('file://') || uri.startsWith('http')) {
+            return { uri };
+        }
+
+        // Otherwise, it's a relative path from backend
+        const fullUrl = getMediaUrl(uri);
+        return fullUrl ? { uri: fullUrl } : null;
     };
 
 
@@ -199,9 +204,7 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
                                                 onLongPress={() => onLongPress(item)}
                                                 delayLongPress={200}
                                                 activeOpacity={0.95}
-                                            >
-                                                <View style={styles.videoThumbnail}>
-                                                    {/* Better video placeholder */}
+                                            ><View style={styles.videoThumbnail}>
                                                     <View style={[styles.playButtonCircle, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
                                                         <MaterialCommunityIcons name="play" size={24} color="white" />
                                                     </View>
@@ -209,10 +212,16 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
                                                 <LinearGradient
                                                     colors={['transparent', 'rgba(0,0,0,0.6)']}
                                                     style={styles.videoInfoOverlay}
-                                                >
-                                                    <Text style={styles.videoDurationText}>0:30</Text> {/* Placeholder duration */}
-                                                </LinearGradient>
-                                            </TouchableOpacity>
+                                                ><Text style={styles.videoDurationText}>0:30</Text></LinearGradient>
+                                                {(isUploading || hasError) && (
+                                                    <View style={styles.mediaUploadOverlay}>
+                                                        {isUploading ? (
+                                                            <ActivityIndicator size="small" color="#fff" />
+                                                        ) : (
+                                                            <MaterialCommunityIcons name="alert-circle" size={24} color="#FF5252" />
+                                                        )}
+                                                    </View>
+                                                )}</TouchableOpacity>
                                         ) : item.file_type?.startsWith('audio/') ? (
                                             <VoicePlayer 
                                                 audioUri={getMediaUrl(item.file)!} 
@@ -297,6 +306,15 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
                                                         onError={handleImageError}
                                                     />
                                                 )}
+                                                {(isUploading || hasError) && (
+                                                    <View style={styles.mediaUploadOverlay}>
+                                                        {isUploading ? (
+                                                            <ActivityIndicator size="small" color="#fff" />
+                                                        ) : (
+                                                            <MaterialCommunityIcons name="alert-circle" size={32} color="#FF5252" />
+                                                        )}
+                                                    </View>
+                                                )}
                                             </TouchableOpacity>
                                         ) : item.file_type?.startsWith('video/') ? (
                                             <TouchableOpacity
@@ -305,8 +323,7 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
                                                 onLongPress={() => onLongPress(item)}
                                                 delayLongPress={200}
                                                 activeOpacity={0.95}
-                                            >
-                                                <View style={styles.videoThumbnail}>
+                                            ><View style={styles.videoThumbnail}>
                                                     <View style={[styles.playButtonCircle, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
                                                         <MaterialCommunityIcons name="play" size={24} color="white" />
                                                     </View>
@@ -314,10 +331,16 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
                                                 <LinearGradient
                                                     colors={['transparent', 'rgba(0,0,0,0.6)']}
                                                     style={styles.videoInfoOverlay}
-                                                >
-                                                    <Text style={styles.videoDurationText}>0:30</Text>
-                                                </LinearGradient>
-                                            </TouchableOpacity>
+                                                ><Text style={styles.videoDurationText}>0:30</Text></LinearGradient>
+                                                {(isUploading || hasError) && (
+                                                    <View style={styles.mediaUploadOverlay}>
+                                                        {isUploading ? (
+                                                            <ActivityIndicator size="small" color="#fff" />
+                                                        ) : (
+                                                            <MaterialCommunityIcons name="alert-circle" size={24} color="#FF5252" />
+                                                        )}
+                                                    </View>
+                                                )}</TouchableOpacity>
                                         ) : item.file_type?.startsWith('audio/') ? (
                                             <VoicePlayer 
                                                 audioUri={getMediaUrl(item.file)!} 
@@ -392,7 +415,7 @@ export const MessageItemComponent = ({ item, onLongPress, onSwipeReply, onSwipeF
 
             <MediaViewer
                 visible={viewerVisible}
-                mediaUri={typeof item.file === 'string' ? item.file : (item.file as any)?.uri || null}
+                mediaUri={getImageSource()?.uri || getMediaUrl(typeof item.file === 'string' ? item.file : (item.file as any)?.uri) || null}
                 mediaType={getMediaType()}
                 onClose={() => setViewerVisible(false)}
             />
@@ -623,6 +646,12 @@ const styles = StyleSheet.create({
     },
     readReceiptContainer: {
         marginLeft: 4,
+    },
+    mediaUploadOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 });
 

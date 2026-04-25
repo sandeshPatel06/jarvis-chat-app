@@ -171,8 +171,14 @@ export default function ChatDetailScreen() {
                     markRead(chat.id, msg.id);
                 }
             });
+            
+            // Scroll to end (bottom of inverted list) on new local message
+            if (chat.messages.length > 0 && !editingMessageId) {
+                // LayoutAnimation can cause jumpiness if called too often, 
+                // but for new messages it's usually desired
+            }
         }
-    }, [chat?.messages, markRead, chat?.id]);
+    }, [chat?.messages?.length, markRead, chat?.id]); // Watch length specifically
 
 
 
@@ -776,6 +782,7 @@ export default function ChatDetailScreen() {
                         <FlatList
                             ref={flatListRef}
                             data={displayMessages}
+                            extraData={[chat?.messages?.length, lastTypingSent.current, editingMessageId]} // Force re-render on these changes
                             keyExtractor={(item) => item.id.toString()}
                             renderItem={renderMessage}
                             inverted={true}
@@ -789,7 +796,7 @@ export default function ChatDetailScreen() {
                             initialNumToRender={15}
                             maxToRenderPerBatch={10}
                             windowSize={10}
-                            removeClippedSubviews={Platform.OS === 'android'}
+                            removeClippedSubviews={false} // Disable to avoid visibility bugs on some Android versions
                         />
 
                         {/* Selection Mode Toolbar */}

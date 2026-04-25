@@ -530,19 +530,18 @@ export const api = {
                 const normalizedUri = api.chat.normalizeFileUri(file.uri);
 
                 // Expo Document Picker result structure
+                const fileName = file.name || (file.uri ? file.uri.split('/').pop() : 'file');
+                const fileType = file.mimeType || (fileName.toLowerCase().endsWith('.jpg') || fileName.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' : 'application/octet-stream');
+                
                 formData.append('file', {
                     uri: normalizedUri,
-                    name: file.name || 'file',
-                    type: file.mimeType || 'application/octet-stream'
+                    name: fileName,
+                    type: fileType
                 } as any);
 
                 // Send file_type and file_name separately for backend
-                if (file.mimeType) {
-                    formData.append('file_type', file.mimeType);
-                }
-                if (file.name) {
-                    formData.append('file_name', file.name);
-                }
+                formData.append('file_type', fileType);
+                formData.append('file_name', fileName);
 
                 log('File being uploaded', {
                     name: file.name,
@@ -564,7 +563,19 @@ export const api = {
                     body: formData,
                 });
 
-                const json = await response.json();
+                const responseText = await response.text();
+                let json: any = {};
+                try {
+                    json = responseText ? JSON.parse(responseText) : {};
+                } catch (e) {
+                    console.warn('[API] Response was not valid JSON', responseText);
+                    if (response.status >= 200 && response.status < 300) {
+                        json = { status: 'success', id: `temp_${Date.now()}` };
+                    } else {
+                        throw new Error(`Server error: ${response.status}`);
+                    }
+                }
+
                 log('Upload response', { status: response.status, json });
 
                 if (!response.ok) {

@@ -31,6 +31,7 @@ export interface Message {
     text: string;
     sender: 'me' | 'them';
     timestamp: Date;
+    conversation_id?: string;
     file?: string | null;
     file_type?: string | null;
     file_name?: string | null;
@@ -46,6 +47,9 @@ export interface Message {
     deleted_at?: string;
     is_pinned?: boolean;
     duration?: number;
+    isUploading?: boolean;
+    error?: boolean;
+    tempId?: string;
 }
 
 export interface Chat {

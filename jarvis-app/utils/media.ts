@@ -50,7 +50,9 @@ export const downloadMedia = async (remoteUrl: string, messageId: string): Promi
         if (!remoteUrl) return null;
 
         // Create a unique filename based on message ID and original extension
-        const extension = remoteUrl.split('.').pop()?.split('?')[0] || 'jpg';
+        const urlWithoutQuery = remoteUrl.split('?')[0];
+        const extensionMatch = urlWithoutQuery.match(/\.([0-9a-z]+)(?:[\?#]|$)/i);
+        const extension = extensionMatch ? extensionMatch[1] : 'jpg';
         const filename = `${messageId}.${extension}`;
 
         // Ensure media directory exists using new API
