@@ -1,8 +1,9 @@
 import React from 'react';
-import { Modal, View, TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
+import { Modal, View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as Sharing from 'expo-sharing';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useStore } from '@/store';
 import { Message } from '@/types';
 
 interface MessageOptionsModalProps {
@@ -33,19 +34,20 @@ export const MessageOptionsModal: React.FC<MessageOptionsModalProps> = ({
     onSaveToGallery
 }) => {
     const { colors } = useAppTheme();
+    const showAlert = useStore(state => state.showAlert);
 
     if (!message) return null;
 
     const handleShare = async () => {
         if (!message.file || !message.file.startsWith('file://')) {
-            Alert.alert('Error', 'No local file available to share');
+            showAlert('Error', 'No local file available to share');
             return;
         }
 
         try {
             const isAvailable = await Sharing.isAvailableAsync();
             if (!isAvailable) {
-                Alert.alert('Error', 'Sharing is not available on this device');
+                showAlert('Error', 'Sharing is not available on this device');
                 return;
             }
 
@@ -53,7 +55,7 @@ export const MessageOptionsModal: React.FC<MessageOptionsModalProps> = ({
             onClose();
         } catch (error) {
             console.error('Share error:', error);
-            Alert.alert('Error', 'Failed to share file');
+            showAlert('Error', 'Failed to share file');
         }
     };
 

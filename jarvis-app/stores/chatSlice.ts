@@ -38,6 +38,7 @@ export interface ChatSlice {
     forwardMessage: (message: Message, chatIds: string[]) => Promise<void>;
     clearChat: (chatId: string) => Promise<void>;
     callsOffset: number;
+    hasMoreCalls: boolean;
     calls: any[];
     updateMessageRead: (messageId: string, chatId?: string) => void;
     updateMessageDelivered: (messageId: string, chatId?: string) => void;

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, ActivityIndicator, Image } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { useStore } from '@/store';
 
 
 
@@ -14,6 +15,7 @@ interface ImageEditorProps {
 
 export const ImageEditor: React.FC<ImageEditorProps> = ({ imageUri, onSave, onCancel }) => {
     const { colors } = useAppTheme();
+    const showAlert = useStore(state => state.showAlert);
     const [currentUri, setCurrentUri] = useState(imageUri);
     const [processing, setProcessing] = useState(false);
     const [rotation, setRotation] = useState(0);
@@ -31,7 +33,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageUri, onSave, onCa
             setRotation(newRotation);
         } catch (error) {
             console.error('Rotate error:', error);
-            Alert.alert('Error', 'Failed to rotate image');
+            showAlert('Error', 'Failed to rotate image');
         } finally {
             setProcessing(false);
         }
@@ -48,7 +50,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageUri, onSave, onCa
             setCurrentUri(result.uri);
         } catch (error) {
             console.error('Flip error:', error);
-            Alert.alert('Error', 'Failed to flip image');
+            showAlert('Error', 'Failed to flip image');
         } finally {
             setProcessing(false);
         }
@@ -65,10 +67,10 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageUri, onSave, onCa
                 { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
             );
             setCurrentUri(result.uri);
-            Alert.alert('Success', 'Image compressed to reduce file size');
+            showAlert('Success', 'Image compressed to reduce file size');
         } catch (error) {
             console.error('Compress error:', error);
-            Alert.alert('Error', 'Failed to compress image');
+            showAlert('Error', 'Failed to compress image');
         } finally {
             setProcessing(false);
         }

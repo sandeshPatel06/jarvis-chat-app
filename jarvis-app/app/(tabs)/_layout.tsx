@@ -5,11 +5,9 @@ import React from 'react';
 import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useClientOnlyValue } from '@/components/useClientOnlyValue';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
 // You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
 

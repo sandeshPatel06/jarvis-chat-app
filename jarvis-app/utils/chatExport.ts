@@ -1,6 +1,6 @@
 import * as MailComposer from 'expo-mail-composer';
 import { Message } from '@/types';
-import { Alert } from 'react-native';
+import { useStore } from '@/store';
 
 /**
  * Export chat messages as email
@@ -12,7 +12,7 @@ export const exportChatAsEmail = async (messages: Message[], chatName: string) =
         // Check if email is available
         const isAvailable = await MailComposer.isAvailableAsync();
         if (!isAvailable) {
-            Alert.alert(
+            useStore.getState().showAlert(
                 'Email Not Available',
                 'Email is not configured on this device',
                 [{ text: 'OK' }]
@@ -44,7 +44,7 @@ export const exportChatAsEmail = async (messages: Message[], chatName: string) =
         });
     } catch (error) {
         console.error('Email export error:', error);
-        Alert.alert('Error', 'Failed to export chat');
+        useStore.getState().showAlert('Error', 'Failed to export chat');
     }
 };
 
@@ -57,7 +57,7 @@ export const exportMessageAsEmail = async (message: Message, chatName: string) =
     try {
         const isAvailable = await MailComposer.isAvailableAsync();
         if (!isAvailable) {
-            Alert.alert('Email Not Available', 'Email is not configured on this device');
+            useStore.getState().showAlert('Email Not Available', 'Email is not configured on this device');
             return;
         }
 
@@ -72,6 +72,6 @@ export const exportMessageAsEmail = async (message: Message, chatName: string) =
         });
     } catch (error) {
         console.error('Email export error:', error);
-        Alert.alert('Error', 'Failed to export message');
+        useStore.getState().showAlert('Error', 'Failed to export message');
     }
 };

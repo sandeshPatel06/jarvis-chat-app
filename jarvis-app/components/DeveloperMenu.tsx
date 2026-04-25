@@ -7,7 +7,6 @@ import {
     FlatList,
     TouchableOpacity,
     Platform,
-    Alert,
     ScrollView,
     ActivityIndicator,
 } from 'react-native';
@@ -18,9 +17,9 @@ import * as Device from 'expo-device';
 import NetInfo from '@react-native-community/netinfo';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
-import { getTableStats } from '@/services/db';
+import { getTableStats, resetDatabase } from '@/services/db';
 import { useStore } from '@/store';
+import * as Updates from 'expo-updates';
 
 interface DeveloperMenuProps {
     visible: boolean;
@@ -58,6 +57,7 @@ export const DeveloperMenu: React.FC<DeveloperMenuProps> = ({ visible, onClose }
     const user = useStore(state => state.user);
     const theme = useStore(state => state.theme);
     const token = useStore(state => state.token);
+    const showAlert = useStore(state => state.showAlert);
 
     const storeState = useMemo(() => ({
         hasHydrated,
@@ -103,16 +103,18 @@ export const DeveloperMenu: React.FC<DeveloperMenuProps> = ({ visible, onClose }
             const start = Date.now();
             const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/auth/profile/`, { method: 'HEAD' });
             const end = Date.now();
-            Alert.alert('Ping Success', `Status: ${response.status}\nLatency: ${end - start}ms`);
+            showAlert('Ping Success', `Status: ${response.status}\nLatency: ${end - start}ms`);
         } catch (e) {
-            Alert.alert('Ping Failed', String(e));
+            showAlert('Ping Failed', String(e));
         } finally {
             setIsPinging(false);
         }
     };
 
+    const logout = useStore(state => state.logout);
+
     const handleResetApp = () => {
-        Alert.alert(
+        showAlert(
             'Reset App Data',
             'This will clear ALL messages, chats, tokens, and settings. The app will restart. Continue?',
             [
@@ -121,12 +123,30 @@ export const DeveloperMenu: React.FC<DeveloperMenuProps> = ({ visible, onClose }
                     text: 'Reset Everything',
                     style: 'destructive',
                     onPress: async () => {
-                        await AsyncStorage.clear();
-                        await SecureStore.deleteItemAsync('token');
-                        // SQLite reset is harder as we can't delete file while open, 
-                        // but clearing critical tables is doable.
-                        // For a real "Developer" reset, we usually suggest deleting app storage from OS.
-                        Alert.alert('Done', 'Storage cleared. Please restart the app manually.');
+                        try {
+                            setIsPinging(true); // Reuse loading state
+                            
+                            // 1. Perform logout (clears state and critical secure items)
+                            await logout();
+                            
+                            // 2. Clear All Async Storage
+                            await AsyncStorage.clear();
+                            
+                            // 3. Reset SQLite Database
+                            await resetDatabase();
+                            
+                            // 4. Force Reload
+                            showAlert(
+                                'Reset Complete',
+                                'App has been fully reset. Restarting now...',
+                                [{ text: 'OK', onPress: () => Updates.reloadAsync() }]
+                            );
+                        } catch (e) {
+                            showAlert('Reset Failed', 'Some data could not be cleared: ' + String(e));
+                        } finally {
+                            setIsPinging(false);
+                            onClose();
+                        }
                     }
                 }
             ]
@@ -143,7 +163,7 @@ export const DeveloperMenu: React.FC<DeveloperMenuProps> = ({ visible, onClose }
             .map(l => `[${new Date(l.timestamp).toISOString()}] [${l.level.toUpperCase()}] ${l.message}`)
             .join('\n');
         await Clipboard.setStringAsync(textToCopy);
-        Alert.alert('Copied', 'All filtered logs copied to clipboard.');
+        showAlert('Copied', 'All filtered logs copied to clipboard.');
     };
 
     const formatTimestamp = (timestamp: number) => {

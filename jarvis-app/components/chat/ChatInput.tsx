@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TextInput, TouchableOpacity, StyleSheet, Text, ActivityIndicator, Image, Alert, Modal, Pressable } from 'react-native';
+import { View, TextInput, TouchableOpacity, StyleSheet, Text, ActivityIndicator, Image, Modal, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as DocumentPicker from 'expo-document-picker';
@@ -40,6 +40,7 @@ export const ChatInput = ({
 }: ChatInputProps) => {
     const { colors } = useAppTheme();
     const sendFileMessage = useStore(state => state.sendFileMessage);
+    const showAlert = useStore(state => state.showAlert);
     const [uploading, setUploading] = React.useState(false);
     const [showAttachMenu, setShowAttachMenu] = React.useState(false);
     const [selectedFile, setSelectedFile] = React.useState<any>(null);
@@ -63,7 +64,7 @@ export const ChatInput = ({
             // Request permissions
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert(
+                showAlert(
                     'Permission Required',
                     'Please grant photo library access to select images.',
                     [{ text: 'OK' }]
@@ -95,13 +96,13 @@ export const ChatInput = ({
                 const fileInfo = await getInfoAsync(file.uri);
 
                 if (!fileInfo.exists) {
-                    Alert.alert('File Not Found', 'Unable to access the selected image.');
+                    showAlert('File Not Found', 'Unable to access the selected image.');
                     return;
                 }
 
                 const maxSize = 50 * 1024 * 1024;
                 if (fileInfo.size && fileInfo.size > maxSize) {
-                    Alert.alert(
+                    showAlert(
                         'File Too Large',
                         `Maximum size is 50MB. Your file is ${(fileInfo.size / 1024 / 1024).toFixed(2)}MB.`
                     );
@@ -113,12 +114,12 @@ export const ChatInput = ({
 
             } catch (error) {
                 console.error('File validation error:', error);
-                Alert.alert('File Access Error', 'Unable to validate the selected image.');
+                showAlert('File Access Error', 'Unable to validate the selected image.');
             }
 
         } catch (error) {
             console.error('Image picker error', error);
-            Alert.alert('Selection Failed', 'Failed to select image. Please try again.');
+            showAlert('Selection Failed', 'Failed to select image. Please try again.');
         }
     };
 
@@ -128,7 +129,7 @@ export const ChatInput = ({
         try {
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert(
+                showAlert(
                     'Permission Required',
                     'Please grant photo library access to select videos.',
                     [{ text: 'OK' }]
@@ -159,13 +160,13 @@ export const ChatInput = ({
                 const fileInfo = await getInfoAsync(file.uri);
 
                 if (!fileInfo.exists) {
-                    Alert.alert('File Not Found', 'Unable to access the selected video.');
+                    showAlert('File Not Found', 'Unable to access the selected video.');
                     return;
                 }
 
                 const maxSize = 50 * 1024 * 1024;
                 if (fileInfo.size && fileInfo.size > maxSize) {
-                    Alert.alert(
+                    showAlert(
                         'File Too Large',
                         `Maximum size is 50MB. Your file is ${(fileInfo.size / 1024 / 1024).toFixed(2)}MB.`
                     );
@@ -177,12 +178,12 @@ export const ChatInput = ({
 
             } catch (error) {
                 console.error('File validation error:', error);
-                Alert.alert('File Access Error', 'Unable to validate the selected video.');
+                showAlert('File Access Error', 'Unable to validate the selected video.');
             }
 
         } catch (error) {
             console.error('Video picker error', error);
-            Alert.alert('Selection Failed', 'Failed to select video. Please try again.');
+            showAlert('Selection Failed', 'Failed to select video. Please try again.');
         }
     };
 
@@ -192,7 +193,7 @@ export const ChatInput = ({
         try {
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert(
+                showAlert(
                     'Permission Required',
                     'Please grant camera access to take photos.',
                     [{ text: 'OK' }]
@@ -222,7 +223,7 @@ export const ChatInput = ({
                 const fileInfo = await getInfoAsync(file.uri);
 
                 if (!fileInfo.exists) {
-                    Alert.alert('File Not Found', 'Unable to access the captured image.');
+                    showAlert('File Not Found', 'Unable to access the captured image.');
                     return;
                 }
 
@@ -238,7 +239,7 @@ export const ChatInput = ({
 
         } catch (error) {
             console.error('Camera picker error', error);
-            Alert.alert('Selection Failed', 'Failed to take photo. Please try again.');
+            showAlert('Selection Failed', 'Failed to take photo. Please try again.');
         }
     };
 
@@ -261,7 +262,7 @@ export const ChatInput = ({
                 const fileInfo = await getInfoAsync(file.uri);
 
                 if (!fileInfo.exists) {
-                    Alert.alert(
+                    showAlert(
                         'File Not Found',
                         'Unable to access the selected file. Please try again.',
                         [{ text: 'OK' }]
@@ -272,7 +273,7 @@ export const ChatInput = ({
                 // Check file size (50MB limit)
                 const maxSize = 50 * 1024 * 1024; // 50MB
                 if (fileInfo.size && fileInfo.size > maxSize) {
-                    Alert.alert(
+                    showAlert(
                         'File Too Large',
                         `The selected file is too large. Maximum size is 50MB. Your file is ${(fileInfo.size / 1024 / 1024).toFixed(2)}MB.`,
                         [{ text: 'OK' }]
@@ -289,7 +290,7 @@ export const ChatInput = ({
 
             } catch (fileCheckError) {
                 console.error('File validation error:', fileCheckError);
-                Alert.alert(
+                showAlert(
                     'File Access Error',
                     'Unable to validate the selected file. Please ensure you have granted necessary permissions.',
                     [{ text: 'OK' }]
@@ -302,7 +303,7 @@ export const ChatInput = ({
 
         } catch (error) {
             console.error('File pick error', error);
-            Alert.alert(
+            showAlert(
                 'Selection Failed',
                 'Failed to select file. Please try again.',
                 [{ text: 'OK' }]
@@ -321,7 +322,7 @@ export const ChatInput = ({
             setReplyingToMessage(null);
         } catch (error: any) {
             console.error('Send file error', error);
-            Alert.alert(
+            showAlert(
                 'Upload Failed',
                 error.message || 'Failed to send file. Please try again.',
                 [{ text: 'OK' }]

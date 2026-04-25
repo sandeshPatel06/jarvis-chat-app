@@ -39,17 +39,6 @@ import { exportChatAsEmail } from '@/utils/chatExport';
 
 
 export default function ChatDetailScreen() {
-    console.log('[DEBUG] ChatHeader:', !!ChatHeader);
-    console.log('[DEBUG] ChatInput:', !!ChatInput);
-    console.log('[DEBUG] MessageItem:', !!MessageItem);
-    console.log('[DEBUG] ForwardMessageModal:', !!ForwardMessageModal);
-    console.log('[DEBUG] PinnedMessagesModal:', !!PinnedMessagesModal);
-    console.log('[DEBUG] ReactionPicker:', !!ReactionPicker);
-    console.log('[DEBUG] MessageOptionsModal:', !!MessageOptionsModal);
-    console.log('[DEBUG] ScreenWrapper:', !!ScreenWrapper);
-    console.log('[DEBUG] KeyboardAvoidingView:', !!KeyboardAvoidingView);
-    console.log('[DEBUG] BlurView:', !!BlurView);
-    console.log('[DEBUG] Animated:', !!Animated);
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
     const insets = useSafeAreaInsets();
@@ -89,7 +78,6 @@ export default function ChatDetailScreen() {
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-    const [customEmoji, setCustomEmoji] = useState('');
 
     // Chat Options
     const [chatOptionsVisible, setChatOptionsVisible] = useState(false);
@@ -113,6 +101,7 @@ export default function ChatDetailScreen() {
 
     const fetchChats = useStore(useCallback((state: any) => state.fetchChats, []));
     const [isRetrying, setIsRetrying] = useState(false);
+    const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
 
     const hasRetried = useRef<string | null>(null);
 
@@ -130,19 +119,22 @@ export default function ChatDetailScreen() {
 
     // Separate effect for syncing chats if ID is missing
     useEffect(() => {
-        if (id && !chat && hasRetried.current !== id) {
+        if (id && !chat && !hasAttemptedFetch && hasRetried.current !== id) {
             const syncChats = async () => {
                 setIsRetrying(true);
                 hasRetried.current = id;
                 try {
                     await fetchChats();
+                    setHasAttemptedFetch(true);
+                } catch (error) {
+                    console.error('Initial chat fetch failed:', error);
                 } finally {
                     setIsRetrying(false);
                 }
             };
             syncChats();
         }
-    }, [id, chat, fetchChats]);
+    }, [id, chat, fetchChats, hasAttemptedFetch]);
 
     useEffect(() => {
         const show = Keyboard.addListener('keyboardDidShow', () => {
@@ -494,11 +486,33 @@ export default function ChatDetailScreen() {
             )}
 
             {!chat ? (
-                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                    {isRetrying ? (
-                        <ActivityIndicator size="large" color={colors.primary} />
+                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }]}>
+                    {isRetrying || (!hasAttemptedFetch && !chat) ? (
+                        <View style={{ alignItems: 'center' }}>
+                            <ActivityIndicator size="large" color={colors.primary} />
+                            <Text style={{ color: colors.textSecondary, marginTop: 16, fontWeight: '600' }}>
+                                Opening conversation...
+                            </Text>
+                        </View>
                     ) : (
-                        <Text style={{ color: colors.text }}>Chat not found</Text>
+                        <View style={{ alignItems: 'center', paddingHorizontal: 40 }}>
+                            <MaterialCommunityIcons 
+                                name="chat-remove-outline" 
+                                size={64} 
+                                color={colors.textSecondary} 
+                                style={{ opacity: 0.3, marginBottom: 20 }} 
+                            />
+                            <Text style={[styles.errorTitle, { color: colors.text }]}>Conversation Not Found</Text>
+                            <Text style={[styles.errorText, { color: colors.textSecondary }]}>
+                                This chat might have been deleted or moved.
+                            </Text>
+                            <TouchableOpacity 
+                                style={[styles.retryButton, { backgroundColor: colors.primary }]}
+                                onPress={() => router.back()}
+                            >
+                                <Text style={styles.retryButtonText}>Go Back</Text>
+                            </TouchableOpacity>
+                        </View>
                     )}
                 </View>
             ) : (
@@ -946,5 +960,27 @@ const styles = StyleSheet.create({
     toolbarActions: {
         flexDirection: 'row',
         alignItems: 'center',
+    },
+    retryButton: {
+        marginTop: 24,
+        paddingHorizontal: 32,
+        paddingVertical: 14,
+        borderRadius: 16,
+    },
+    retryButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    errorTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    errorText: {
+        fontSize: 16,
+        textAlign: 'center',
+        opacity: 0.8,
     },
 });

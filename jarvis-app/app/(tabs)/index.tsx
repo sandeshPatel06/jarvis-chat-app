@@ -3,18 +3,19 @@ import { Text, View } from '@/components/Themed';
 import { useStore } from '@/store';
 import { Chat } from '@/types';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { FlatList, StyleSheet, TextInput, TouchableOpacity, LayoutAnimation, Platform } from 'react-native';
 
 import { useAppTheme } from '@/hooks/useAppTheme';
 import ChatItem from '@/components/chat/ChatItem';
-import { Avatar } from '@/components/ui/Avatar';
 
 export default function ChatsScreen() {
   const router = useRouter();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
 
   // Specific selectors to avoid unnecessary re-renders
   const chats = useStore(useCallback((state) => state.chats, []));
@@ -153,6 +154,7 @@ export default function ChatsScreen() {
       <Stack.Screen
         options={{
           headerShown: !isSearching && !isSelectionMode,
+          headerTitle: 'Chats',
         }}
       />
 
@@ -171,16 +173,17 @@ export default function ChatsScreen() {
         </View>
       )}
 
-      {/* Floating Search Bar (if searching) */}
+      {/* Unique Header Search bar inside the scrollable area (or integrated) */}
       {isSearching && (
-        <View style={styles.header}>
-          <View style={[styles.headerSearchContainer, { backgroundColor: colors.backgroundSecondary }]}>
+        <View style={[styles.searchOverlay, { backgroundColor: colors.background + 'CC' }]}>
+          <BlurView intensity={20} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+          <View style={[styles.headerSearchContainer, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderBottomWidth: 1 }]}>
             <TouchableOpacity onPress={toggleSearch} style={styles.headerIcon}>
-              <FontAwesome name="arrow-left" size={24} color={colors.text} />
+              <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
             </TouchableOpacity>
             <TextInput
               style={[styles.headerSearchInput, { color: colors.text }]}
-              placeholder="Search..."
+              placeholder="Search conversations..."
               placeholderTextColor={colors.textSecondary}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -188,7 +191,7 @@ export default function ChatsScreen() {
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.headerIcon}>
-                <FontAwesome name="times" size={20} color={colors.text} />
+                <MaterialCommunityIcons name="close-circle" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             )}
           </View>
@@ -201,43 +204,8 @@ export default function ChatsScreen() {
         renderItem={renderItem}
         ListHeaderComponent={() => (
           <View style={styles.headerComponent}>
-            <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Active Now</Text>
-            </View>
-            <FlatList
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              data={chats.filter(c => c.is_online)}
-              keyExtractor={(item) => `story-${item.id}`}
-              contentContainerStyle={styles.storyList}
-              renderItem={({ item }) => (
-                <TouchableOpacity 
-                   style={styles.storyItem}
-                   onPress={() => router.push(`/chat/${item.id}`)}
-                >
-                  <LinearGradient
-                    colors={[colors.primary, colors.secondary]}
-                    style={styles.storyRing}
-                  >
-                    <Avatar
-                      source={item.avatar}
-                      size={60}
-                      style={styles.storyAvatar}
-                    />
-                  </LinearGradient>
-                  <Text style={[styles.storyName, { color: colors.text }]} numberOfLines={1}>
-                    {item.name?.split(' ')[0]}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={() => (
-                 <View style={styles.storyEmpty}>
-                    <Text style={{color: colors.textSecondary, fontSize: 12}}>No one active</Text>
-                 </View>
-              )}
-            />
-            <View style={[styles.sectionHeader, { marginTop: 20 }]}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Messages</Text>
+            <View style={[styles.sectionHeader, { marginTop: 10, marginBottom: 8 }]}>
+              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>All Conversations</Text>
             </View>
           </View>
         )}
@@ -276,52 +244,48 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  searchOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 100,
+  },
   header: {
-    justifyContent: 'center',
-    paddingHorizontal: 15,
-    paddingTop: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   headerTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  headerSearchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 15,
-    padding: 10,
-    marginBottom: 10,
-  },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
   },
   headerIcon: {
-    padding: 5,
+    padding: 6,
+  },
+  headerSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginTop: Platform.OS === 'ios' ? 44 : 20,
+    marginHorizontal: 16,
+    borderRadius: 20,
   },
   headerSearchInput: {
     flex: 1,
     fontSize: 16,
-    marginLeft: 10,
-    marginRight: 10,
+    fontWeight: '600',
+    marginLeft: 12,
   },
   listContent: {
-    paddingTop: 10,
-    paddingBottom: 150, // More space for FAB and floating tab bar
+    paddingBottom: 200,
   },
   itemContainer: {
     flexDirection: 'row',
     padding: 15,
     alignItems: 'center',
-    // shadowColor: "#000",
-    // shadowOffset: {
-    // 	width: 0,
-    // 	height: 1,
-    // },
-    // shadowOpacity: 0.05,
-    // shadowRadius: 2,
-    // elevation: 1,
   },
   avatarContainer: {
     position: 'relative',
@@ -339,7 +303,7 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#4ade80', // Green-400
+    backgroundColor: '#4ade80',
     borderWidth: 2,
   },
   contentContainer: {
@@ -383,78 +347,37 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   separator: {
-    display: 'none', // Remove separator
-  },
-  fab: {
-    position: 'absolute',
-    bottom: '20%', // Above tab bar
-    right: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 8,
-    borderRadius: 28,
-  },
-  fabGradient: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+    display: 'none',
   },
   headerComponent: {
     paddingVertical: 10,
   },
   sectionHeader: {
-    paddingHorizontal: 20,
-    marginBottom: 15,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-    opacity: 0.6,
-  },
-  storyList: {
-    paddingLeft: 20,
-    paddingRight: 10,
-  },
-  storyItem: {
-    alignItems: 'center',
-    marginRight: 15,
-    width: 75,
-  },
-  storyRing: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    padding: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 24,
     marginBottom: 8,
   },
-  storyAvatar: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    borderWidth: 3,
-    borderColor: 'white',
-  },
-  storyName: {
+  sectionTitle: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    opacity: 0.6,
   },
-  storyEmpty: {
-    paddingHorizontal: 20,
-    height: 80,
-    justifyContent: 'center',
+  fab: {
+    position: 'absolute',
+    bottom: 100, 
+    right: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 8,
+  },
+  fabGradient: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
-    opacity: 0.5,
-  }
+    justifyContent: 'center',
+  },
 });

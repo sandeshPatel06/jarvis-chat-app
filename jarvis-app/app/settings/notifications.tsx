@@ -1,7 +1,6 @@
 import React, { useCallback } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Text } from 'react-native';
-import { useRouter } from 'expo-router';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { ScrollView, StyleSheet, View, Text } from 'react-native';
+import { Stack } from 'expo-router';
 
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { useStore } from '@/store';
@@ -13,7 +12,6 @@ export default function NotificationsSettingsScreen() {
     const { colors } = useAppTheme();
     const user = useStore((state) => state.user);
     const updateSettings = useStore((state) => state.updateSettings);
-    const router = useRouter();
 
     const handleToggle = useCallback(async (field: string, value: boolean) => {
         try {
@@ -22,35 +20,33 @@ export default function NotificationsSettingsScreen() {
     }, [updateSettings]);
 
     return (
-        <ScreenWrapper style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-            <View style={[styles.header, { borderBottomColor: colors.itemSeparator }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <FontAwesome name="chevron-left" size={20} color={colors.primary} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
-                <View style={{ width: 40 }} />
-            </View>
+        <ScreenWrapper style={styles.container} edges={['left', 'right']} withExtraTopPadding={false}>
+            <Stack.Screen 
+                options={{
+                    headerTitle: 'Notifications',
+                }}
+            />
 
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
                 <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.primary }]}>Messages</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Messages</Text>
                     <SettingCard>
                         <SettingRow
                             title="Show Notifications"
                             subtitle="Get alerts for new messages"
-                            icon="bell"
+                            icon="bell-outline"
                             isSwitch
                             switchValue={user?.notifications_enabled ?? true}
                             onSwitchChange={(v: boolean) => handleToggle('notifications_enabled', v)}
                             color="#4FACFE"
                         />
                         <SettingRow
-                            title="Sound"
+                            title="Notification Sound"
                             subtitle="Play sounds for incoming messages"
-                            icon="volume-up"
+                            icon="volume-high"
                             isSwitch
                             switchValue={user?.notifications_sound ?? true}
                             onSwitchChange={(v: boolean) => handleToggle('notifications_sound', v)}
@@ -61,12 +57,12 @@ export default function NotificationsSettingsScreen() {
                 </View>
 
                 <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: colors.primary }]}>Groups</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Groups</Text>
                     <SettingCard>
                         <SettingRow
-                            title="Show Notifications"
+                            title="Group Notifications"
                             subtitle="Get alerts for group messages"
-                            icon="users"
+                            icon="account-group-outline"
                             isSwitch
                             switchValue={user?.notifications_groups_enabled ?? true}
                             onSwitchChange={(v: boolean) => handleToggle('notifications_groups_enabled', v)}
@@ -77,8 +73,10 @@ export default function NotificationsSettingsScreen() {
                 </View>
 
                 <Text style={[styles.hint, { color: colors.textSecondary }]}>
-                    System-wide notification settings can be managed in your device settings.
+                    System-wide notification settings can be further managed in your device settings.
                 </Text>
+
+                <View style={{ height: 100 }} />
             </ScrollView>
         </ScreenWrapper>
     );
@@ -88,44 +86,28 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingBottom: 15,
-        borderBottomWidth: 0.5,
-    },
-    backButton: {
-        padding: 5,
-        width: 40,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        flex: 1,
-        textAlign: 'center',
-    },
     scrollContent: {
-        padding: 20,
+        paddingVertical: 20,
+        paddingHorizontal: 24,
     },
     section: {
-        marginBottom: 30,
+        marginBottom: 32,
     },
     sectionTitle: {
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '800',
-        marginBottom: 16,
+        marginBottom: 14,
         marginLeft: 4,
         textTransform: 'uppercase',
-        letterSpacing: 1.5,
-        opacity: 0.8,
+        letterSpacing: 1.2,
+        opacity: 0.7,
     },
     hint: {
         fontSize: 12,
-        marginTop: 12,
+        marginTop: 14,
         marginLeft: 8,
-        lineHeight: 16,
-        fontWeight: '500',
+        lineHeight: 18,
+        fontWeight: '600',
         opacity: 0.5,
         textAlign: 'center',
         paddingHorizontal: 40,

@@ -57,11 +57,10 @@ const ChatItem = ({
                 style={({ pressed }) => [
                     styles.itemContainer,
                     {
-                        backgroundColor: isSelected ? colors.primary + '20' : colors.card,
-                        borderColor: colors.border,
+                        backgroundColor: isSelected ? colors.primary + '30' : colors.card,
+                        borderColor: isSelected ? colors.primary : colors.cardBorder,
                         opacity: pressed ? 0.9 : 1,
                         transform: [{ scale: pressed ? 0.98 : 1 }],
-                        borderRadius: 20,
                     }
                 ]}
             >
@@ -89,21 +88,23 @@ const ChatItem = ({
                 <View style={styles.contentContainer}>
                     <View style={styles.headerRow}>
                         <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
-                        <Text style={[styles.time, { color: colors.tabIconDefault }]}>{formatTime(item.lastMessageTime)}</Text>
+                        <Text style={[styles.time, { color: colors.textSecondary }]}>{formatTime(item.lastMessageTime)}</Text>
                     </View>
                     <View style={styles.messageRow}>
-                        <Text numberOfLines={1} style={[styles.message, { color: colors.text, opacity: 0.7 }]}>
+                        <Text numberOfLines={1} style={[styles.message, { color: colors.textSecondary }]}>
                             {formatAttachmentPreview(item.lastMessage)}
                         </Text>
                         {item.unreadCount > 0 && (
-                            <LinearGradient
-                                colors={[colors.primary, colors.secondary]}
-                                style={styles.unreadBadge}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                            >
-                                <Text style={styles.unreadText}>{item.unreadCount}</Text>
-                            </LinearGradient>
+                            <View style={styles.badgeWrapper}>
+                                <LinearGradient
+                                    colors={[colors.primary, colors.secondary]}
+                                    style={styles.unreadBadge}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                >
+                                    <Text style={styles.unreadText}>{item.unreadCount}</Text>
+                                </LinearGradient>
+                            </View>
                         )}
                     </View>
                 </View>
@@ -115,20 +116,20 @@ const ChatItem = ({
 const styles = StyleSheet.create({
     itemContainer: {
         flexDirection: 'row',
-        padding: 15,
+        padding: 16,
         alignItems: 'center',
         borderWidth: 1,
+        borderRadius: 24,
+        marginVertical: 4,
     },
     avatarContainer: {
-        position: 'relative',
-        marginRight: 15,
+        marginRight: 16,
     },
     avatar: {
-        width: 54,
-        height: 54,
-        borderRadius: 27,
+        width: 58,
+        height: 58,
+        borderRadius: 20,
     },
-
     contentContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -136,15 +137,17 @@ const styles = StyleSheet.create({
     headerRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 4,
+        alignItems: 'center',
+        marginBottom: 6,
     },
     name: {
-        fontSize: 17,
-        fontWeight: '700',
+        fontSize: 18,
+        fontWeight: '800',
+        letterSpacing: -0.2,
     },
     time: {
         fontSize: 12,
-        fontWeight: '500',
+        fontWeight: '600',
     },
     messageRow: {
         flexDirection: 'row',
@@ -152,21 +155,29 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     message: {
-        fontSize: 15,
+        fontSize: 14,
+        fontWeight: '500',
         flex: 1,
         marginRight: 10,
     },
+    badgeWrapper: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 4,
+    },
     unreadBadge: {
-        minWidth: 22,
-        height: 22,
-        borderRadius: 11,
+        minWidth: 24,
+        height: 24,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 6,
     },
     unreadText: {
-        fontSize: 11,
-        fontWeight: 'bold',
+        fontSize: 10,
+        fontWeight: '900',
         color: 'white',
     },
 });

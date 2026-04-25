@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { getInfoAsync } from 'expo-file-system/legacy';
+import { addNetworkUsage } from '@/utils/usageTracker';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -15,13 +16,47 @@ const log = (message: string, data?: any) => {
     }
 };
 
+const fetchWithTracking = async (url: string, options: any = {}) => {
+    // Estimate bytes sent
+    let sentBytes = 0;
+    if (options.body) {
+        if (typeof options.body === 'string') {
+            sentBytes = options.body.length;
+        } else if (options.body instanceof FormData) {
+            // Very rough estimate for FormData
+            sentBytes = 1024 * 5; // Assumed overhead if we can't easily measure
+        }
+    }
+    // Add header estimate
+    sentBytes += 500;
+
+    const response = await fetch(url, options);
+    
+    // Estimate bytes received
+    let receivedBytes = 0;
+    try {
+        const cloned = response.clone();
+        const text = await cloned.text();
+        receivedBytes = text.length;
+    } catch {
+        receivedBytes = 1024; // fallback
+    }
+    // Add header estimate
+    receivedBytes += 500;
+
+    // Async record usage
+    addNetworkUsage(sentBytes, receivedBytes).catch(() => {});
+
+    return response;
+};
+
 export const api = {
     auth: {
         requestOTP: async (identifier: string) => {
             const url = `${API_URL}/auth/request-otp/`;
             try {
                 log(`POST ${url}`, { identifier });
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ identifier }),
@@ -39,7 +74,7 @@ export const api = {
             const url = `${API_URL}/auth/verify-otp/`;
             try {
                 log(`POST ${url}`, data);
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data),
@@ -57,7 +92,7 @@ export const api = {
             const url = `${API_URL}/auth/complete-signup/`;
             try {
                 log(`POST ${url}`, data);
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data),
@@ -75,7 +110,7 @@ export const api = {
             const url = `${API_URL}/auth/login/`;
             try {
                 log(`POST ${url}`, data);
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -97,7 +132,7 @@ export const api = {
             try {
                 const isFormData = data instanceof FormData;
                 log(`PATCH ${url}`, isFormData ? 'FormData' : data);
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'PATCH',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -118,7 +153,7 @@ export const api = {
             const url = `${API_URL}/auth/fcm-token/`;
             try {
                 log(`POST ${url}`, { fcm_token: fcmToken });
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -139,7 +174,7 @@ export const api = {
             const url = `${API_URL}/auth/profile/`;
             try {
                 log(`DELETE ${url}`);
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Token ${token}` },
                 });
@@ -156,7 +191,7 @@ export const api = {
             const url = `${API_URL}/auth/users/${userId}/`;
             try {
                 log(`GET ${url}`);
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -176,7 +211,7 @@ export const api = {
             const url = `${API_URL}/auth/block/`;
             try {
                 log(`POST ${url}`, { userId });
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -197,7 +232,7 @@ export const api = {
             const url = `${API_URL}/auth/block/`;
             try {
                 log(`DELETE ${url}`, { userId });
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -218,7 +253,7 @@ export const api = {
             const url = `${API_URL}/auth/block/`;
             try {
                 log(`GET ${url}`);
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -240,7 +275,7 @@ export const api = {
             const url = `${API_URL}/contacts/`;
             try {
                 log(`GET ${url}`);
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -262,7 +297,7 @@ export const api = {
             const url = `${API_URL}/chat/restore/`;
             try {
                 log(`POST ${url}`, { conversationIds, restoreDate });
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -286,7 +321,7 @@ export const api = {
             const url = `${API_URL}/chat/conversations/?deleted=${deleted}`;
             try {
                 log(`GET ${url}`);
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -307,7 +342,7 @@ export const api = {
             const url = `${API_URL}/chat/messages/${conversationId}/?limit=${limit}&offset=${offset}`;
             try {
                 log(`GET ${url}`);
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -332,7 +367,7 @@ export const api = {
             const url = `${API_URL}/auth/check-contacts/`;
             try {
                 log(`POST ${url}`, { count: phoneNumbers.length });
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -354,7 +389,7 @@ export const api = {
             const url = `${API_URL}/chat/conversations/`;
             try {
                 log(`POST ${url}`, { recipient: recipientUsername });
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -375,7 +410,7 @@ export const api = {
             const url = `${API_URL}/chat/conversations/${conversationId}/`;
             try {
                 log(`DELETE ${url}`);
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -407,7 +442,7 @@ export const api = {
             const url = `${API_URL}/chat/conversations/${conversationId}/clear/`;
             try {
                 log(`POST ${url}`);
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -500,7 +535,7 @@ export const api = {
 
             try {
                 log(`POST ${url} (Multipart)`, { conversationId, hasFile: !!file });
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -535,7 +570,7 @@ export const api = {
             const url = `${API_URL}/calls/?limit=${limit}&offset=${offset}`;
             try {
                 log(`GET ${url}`);
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -560,7 +595,7 @@ export const api = {
             const url = `${API_URL}/calls/`;
             try {
                 log(`POST ${url}`, data);
-                const response = await fetch(url, {
+                const response = await fetchWithTracking(url, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Token ${token}`,
@@ -577,6 +612,55 @@ export const api = {
                 // Don't throw, just log error to avoid disrupting UX
                 console.error(error);
                 return null;
+            }
+        },
+        deleteCall: async (token: string, callId: number) => {
+            const url = `${API_URL}/calls/${callId}/`;
+            try {
+                log(`DELETE ${url}`);
+                const response = await fetchWithTracking(url, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Token ${token}` },
+                });
+                if (response.status === 204) return true;
+                throw new Error('Failed to delete call');
+            } catch (error) {
+                log('Delete call error', error);
+                throw error;
+            }
+        },
+        clearCallHistory: async (token: string) => {
+            const url = `${API_URL}/calls/clear/`;
+            try {
+                log(`DELETE ${url}`);
+                const response = await fetch(url, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Token ${token}` },
+                });
+                if (response.status === 204) return true;
+                throw new Error('Failed to clear call history');
+            } catch (error) {
+                log('Clear call history error', error);
+                throw error;
+            }
+        },
+        bulkDeleteCalls: async (token: string, callIds: number[]) => {
+            const url = `${API_URL}/calls/bulk-delete/`;
+            try {
+                log(`POST ${url}`, { callIds });
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Token ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ call_ids: callIds }),
+                });
+                if (response.status === 204) return true;
+                throw new Error('Failed to bulk delete calls');
+            } catch (error) {
+                log('Bulk delete calls error', error);
+                throw error;
             }
         }
     }

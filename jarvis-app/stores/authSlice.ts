@@ -69,12 +69,26 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
     updateSettings: async (settings) => {
         const { token, user, showToast } = get() as any;
         if (!token || !user) return;
+
+        // Optimistic Update
+        const previousUser = { ...user };
+        const optimisticUser = { ...user, ...settings };
+        
+        set({ user: optimisticUser } as any);
+        SecureStore.setItemAsync('user', JSON.stringify(optimisticUser)).catch(console.error);
+
         try {
             const updatedUser = await api.auth.updateProfile(token, settings);
-            get().updateUser(updatedUser);
+            // Sync with actual server data (in case server calculated something)
+            set({ user: updatedUser } as any);
+            SecureStore.setItemAsync('user', JSON.stringify(updatedUser)).catch(console.error);
         } catch (e) {
-            console.error('Update settings failed', e);
-            if (showToast) showToast('error', 'Update Failed', 'Could not save your settings.');
+            console.error('Update settings failed, reverting...', e);
+            // Revert on failure
+            set({ user: previousUser } as any);
+            SecureStore.setItemAsync('user', JSON.stringify(previousUser)).catch(console.error);
+            
+            if (showToast) showToast('error', 'Update Failed', 'Settings could not be saved.');
             throw e;
         }
     },

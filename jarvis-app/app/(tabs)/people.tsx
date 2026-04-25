@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import * as SMS from 'expo-sms';
 import * as Contacts from 'expo-contacts';
 import { Avatar } from '@/components/ui/Avatar';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface Contact {
     id: string;
@@ -155,9 +156,36 @@ export default function PeopleScreen() {
         }
     };
 
-    const handleChatWithContact = (contact: Contact) => {
-        // Navigate to chat with this contact
-        router.push(`/chat/${contact.id}`);
+    const fetchChats = useStore(useCallback((state: any) => state.fetchChats, []));
+    const chats = useStore(useCallback((state: any) => state.chats, []));
+
+    const handleChatWithContact = async (contact: Contact) => {
+        try {
+            // 1. Check if conversation already exists in our store
+            const existingChat = chats.find((c: any) => c.user_id === contact.id);
+            
+            if (existingChat) {
+                router.push(`/chat/${existingChat.id}`);
+                return;
+            }
+
+            // 2. If not, create a new conversation
+            if (!token) return;
+            
+            setLoading(true); // Show loading while creating
+            const newChat = await api.chat.createConversation(token, contact.username);
+            
+            // 3. Refresh chats to make sure the store has it
+            await fetchChats();
+            
+            // 4. Navigate to the new chat
+            router.push(`/chat/${newChat.id}`);
+        } catch (error) {
+            console.error('Failed to handle chat with contact:', error);
+            showAlert('Error', 'Could not open conversation. Please try again.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const filteredContacts = contacts.filter((contact) => {
@@ -168,19 +196,35 @@ export default function PeopleScreen() {
     });
 
     const renderContact = ({ item }: { item: Contact }) => {
-        // Check if contact has Jarvis account
         const hasJarvisAccount = item.has_account === true;
 
         return (
-            <View style={[styles.contactItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Avatar
-                    source={item.profile_picture}
-                    size={50}
-                    online={item.is_online && hasJarvisAccount}
-                    style={styles.avatar}
-                />
+            <TouchableOpacity
+                activeOpacity={0.7}
+                onLongPress={() => {}}
+                style={[
+                    styles.contactItem,
+                    { 
+                        backgroundColor: colors.card, 
+                        borderColor: colors.cardBorder 
+                    }
+                ]}
+                onPress={() => hasJarvisAccount ? handleChatWithContact(item) : {}}
+            >
+                <View style={styles.avatarWrapper}>
+                    <Avatar
+                        source={item.profile_picture}
+                        size={56}
+                        online={item.is_online && hasJarvisAccount}
+                        style={[
+                            styles.avatar,
+                            hasJarvisAccount && { borderRadius: 18 } // Squircle-like for Jarvis users
+                        ]}
+                    />
+                </View>
+                
                 <View style={styles.contactInfo}>
-                    <Text style={[styles.contactName, { color: colors.text }]}>{item.username}</Text>
+                    <Text style={[styles.contactName, { color: colors.text }]} numberOfLines={1}>{item.username}</Text>
                     <Text style={[styles.contactBio, { color: colors.textSecondary }]} numberOfLines={1}>
                         {hasJarvisAccount
                             ? (item.is_online
@@ -189,38 +233,39 @@ export default function PeopleScreen() {
                             : (item.phone || 'No phone number')}
                     </Text>
                 </View>
-                {item.is_online && hasJarvisAccount && (
-                    <View style={[styles.onlineIndicator, { backgroundColor: colors.success }]} />
-                )}
 
-                {hasJarvisAccount ? (
-                    // Show Chat button for Jarvis users
-                    <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: colors.primary }]}
-                        onPress={() => handleChatWithContact(item)}
-                    >
-                        <MaterialCommunityIcons name="message" size={20} color="#fff" />
-                    </TouchableOpacity>
-                ) : (
-                    // Show Invite button for non-Jarvis users
-                    <TouchableOpacity
-                        style={[styles.inviteButton, { backgroundColor: colors.primary + '15' }]}
-                        onPress={() => handleInvite(item)}
-                    >
-                        <MaterialCommunityIcons name="message-text-outline" size={20} color={colors.primary} />
-                        <Text style={[styles.inviteText, { color: colors.primary }]}>Invite</Text>
-                    </TouchableOpacity>
-                )}
-            </View>
+                <View style={styles.actionContainer}>
+                    {hasJarvisAccount ? (
+                        <TouchableOpacity
+                            onPress={() => handleChatWithContact(item)}
+                        >
+                            <LinearGradient
+                                colors={[colors.primary, colors.secondary]}
+                                style={styles.chatAction}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                            >
+                                <MaterialCommunityIcons name="chat-processing" size={20} color="#fff" />
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity
+                            style={[styles.inviteButton, { backgroundColor: colors.primary + '15' }]}
+                            onPress={() => handleInvite(item)}
+                        >
+                            <Text style={[styles.inviteText, { color: colors.primary }]}>Invite</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+            </TouchableOpacity>
         );
     };
 
     return (
         <ScreenWrapper style={styles.container} edges={['left', 'right']} withExtraTopPadding={false}>
             <View style={styles.header}>
-                {/* Title removed to prevent duplication with Tab Header */}
-                <View style={[styles.searchContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <FontAwesome name="search" size={16} color={colors.textSecondary} style={styles.searchIcon} />
+                <View style={[styles.searchContainer, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                    <MaterialCommunityIcons name="magnify" size={22} color={colors.textSecondary} style={styles.searchIcon} />
                     <TextInput
                         style={[styles.searchInput, { color: colors.text }]}
                         placeholder="Search contacts..."
@@ -260,22 +305,16 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     header: {
-        paddingHorizontal: 20,
-        paddingTop: 20,
-        paddingBottom: 10,
-    },
-    title: {
-        fontSize: 34,
-        fontWeight: '900',
-        marginBottom: 20,
-        letterSpacing: -1,
+        paddingHorizontal: 24,
+        paddingTop: 12,
+        paddingBottom: 8,
     },
     searchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 12,
-        paddingHorizontal: 15,
-        paddingVertical: 10,
+        paddingHorizontal: 16,
+        height: 52,
+        borderRadius: 20,
         borderWidth: 1,
     },
     searchIcon: {
@@ -284,15 +323,12 @@ const styles = StyleSheet.create({
     searchInput: {
         flex: 1,
         fontSize: 16,
+        fontWeight: '600',
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    loadingText: {
-        marginTop: 10,
-        fontSize: 14,
     },
     emptyContainer: {
         flex: 1,
@@ -301,63 +337,72 @@ const styles = StyleSheet.create({
         paddingHorizontal: 40,
     },
     emptyText: {
-        fontSize: 16,
+        fontSize: 14,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+        letterSpacing: 1.5,
         marginTop: 20,
         textAlign: 'center',
+        opacity: 0.6,
     },
     listContent: {
         paddingHorizontal: 20,
-        paddingTop: 10,
-        paddingBottom: 20,
+        paddingTop: 12,
+        paddingBottom: 120, // Extra space for tab bar
     },
     contactItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 15,
-        borderRadius: 16,
-        marginBottom: 10,
+        padding: 16,
+        borderRadius: 24,
+        marginBottom: 8,
         borderWidth: 1,
     },
+    avatarWrapper: {
+        marginRight: 16,
+    },
     avatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
     },
     contactInfo: {
         flex: 1,
-        marginLeft: 15,
+        justifyContent: 'center',
     },
     contactName: {
-        fontSize: 17,
-        fontWeight: '600',
+        fontSize: 18,
+        fontWeight: '800',
+        letterSpacing: -0.2,
     },
     contactBio: {
-        fontSize: 14,
-        marginTop: 2,
+        fontSize: 13,
+        fontWeight: '600',
+        marginTop: 4,
+        opacity: 0.7,
     },
-    onlineIndicator: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        marginRight: 10,
+    actionContainer: {
+        marginLeft: 10,
     },
-    actionButton: {
-        width: 50,
-        height: 40,
-        borderRadius: 20,
+    chatAction: {
+        width: 48,
+        height: 48,
+        borderRadius: 16,
         justifyContent: 'center',
         alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
     },
     inviteButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 15,
+        paddingHorizontal: 16,
         paddingVertical: 10,
-        borderRadius: 20,
-        gap: 5,
+        borderRadius: 14,
     },
     inviteText: {
         fontSize: 14,
-        fontWeight: '600',
+        fontWeight: '800',
     },
 });

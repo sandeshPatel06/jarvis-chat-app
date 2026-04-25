@@ -118,3 +118,30 @@ export const getTableStats = async () => {
     }
     return stats;
 };
+
+export const resetDatabase = async () => {
+    try {
+        const db = await getDb();
+        console.log('[SQLite] Resetting database...');
+        
+        // Disable foreign keys temporarily to drop tables comfortably
+        await db.execAsync('PRAGMA foreign_keys = OFF;');
+        
+        await db.execAsync(`
+            DROP TABLE IF EXISTS messages;
+            DROP TABLE IF EXISTS conversations;
+            DROP TABLE IF EXISTS users;
+            DROP TABLE IF EXISTS kv_store;
+        `);
+        
+        await db.execAsync('PRAGMA foreign_keys = ON;');
+        
+        // Re-initialize
+        await initDatabase();
+        console.log('[SQLite] Database reset complete');
+        return true;
+    } catch (error) {
+        console.error('[SQLite] Reset failed:', error);
+        throw error;
+    }
+};

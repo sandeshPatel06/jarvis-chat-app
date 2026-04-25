@@ -1,7 +1,6 @@
 import React, { useCallback } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Text } from 'react-native';
-import { useRouter } from 'expo-router';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { StyleSheet, ScrollView, View, Text } from 'react-native';
+import { useRouter, Stack } from 'expo-router';
 
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { useStore } from '@/store';
@@ -50,14 +49,12 @@ export default function AccountSettingsScreen() {
     }, [showAlert, deleteAccount, router]);
 
     return (
-        <ScreenWrapper style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-            <View style={[styles.header, { borderBottomColor: colors.itemSeparator }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <FontAwesome name="chevron-left" size={20} color={colors.primary} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>Account</Text>
-                <View style={{ width: 40 }} />
-            </View>
+        <ScreenWrapper style={styles.container} edges={['left', 'right']} withExtraTopPadding={false}>
+            <Stack.Screen 
+                options={{
+                    headerTitle: 'Account Settings',
+                }}
+            />
 
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
@@ -66,30 +63,30 @@ export default function AccountSettingsScreen() {
                 <View style={styles.section}>
                     <SettingCard>
                         <SettingRow
-                            title="Security notifications"
-                            icon="shield"
+                            title="Security Notifications"
+                            icon="shield-check-outline"
                             isSwitch
                             switchValue={user?.security_notifications_enabled ?? false}
                             onSwitchChange={handleToggleSecurity}
                             color="#4FACFE"
                         />
                         <SettingRow
-                            title="Two-step verification"
-                            icon="lock"
+                            title="Two-Step Verification"
+                            icon="lock-outline"
                             isSwitch
                             switchValue={user?.two_step_verification_enabled ?? false}
                             onSwitchChange={handleToggleTwoStep}
                             color="#6C63FF"
                         />
                         <SettingRow
-                            title="Change number"
-                            icon="phone"
+                            title="Change Number"
+                            icon="phone-outline"
                             onPress={() => { }}
                             color="#FA709A"
                         />
                         <SettingRow
-                            title="Request account info"
-                            icon="file-text-o"
+                            title="Request Account Info"
+                            icon="file-document-outline"
                             onPress={() => { }}
                             color="#FEE140"
                             isLast
@@ -100,8 +97,8 @@ export default function AccountSettingsScreen() {
                 <View style={styles.section}>
                     <SettingCard>
                         <SettingRow
-                            title="Delete my account"
-                            icon="trash-o"
+                            title="Delete My Account"
+                            icon="delete-outline"
                             onPress={handleDeleteAccount}
                             color={colors.error}
                             isLast
@@ -112,6 +109,8 @@ export default function AccountSettingsScreen() {
                 <Text style={[styles.hint, { color: colors.textSecondary }]}>
                     Your account security is our top priority. Enable two-step verification for maximum protection.
                 </Text>
+
+                <View style={{ height: 100 }} />
             </ScrollView>
         </ScreenWrapper>
     );
@@ -121,56 +120,20 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingBottom: 15,
-        borderBottomWidth: 0.5,
-    },
-    backButton: {
-        padding: 5,
-        width: 40,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        flex: 1,
-        textAlign: 'center',
-    },
     scrollContent: {
         paddingVertical: 20,
-        paddingHorizontal: 20,
+        paddingHorizontal: 24,
     },
     section: {
-        marginBottom: 20,
-    },
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 14,
-        paddingHorizontal: 16,
-    },
-    iconBox: {
-        width: 38,
-        height: 38,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 14,
-    },
-    rowTitle: {
-        flex: 1,
-        fontSize: 16,
-        fontWeight: '600',
+        marginBottom: 24,
     },
     hint: {
         fontSize: 13,
         textAlign: 'center',
-        marginTop: 24,
+        marginTop: 12,
         paddingHorizontal: 30,
-        lineHeight: 18,
+        lineHeight: 20,
         opacity: 0.6,
-        fontWeight: '500',
+        fontWeight: '600',
     }
 });

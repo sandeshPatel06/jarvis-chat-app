@@ -2,14 +2,15 @@ import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { Text, View } from '@/components/Themed';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useStore } from '@/store';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import CallLogItem from '@/components/calls/CallLogItem';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { api } from '@/services/api';
 
 export default function CallsScreen() {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const router = useRouter();
 
   // Store
@@ -23,6 +24,11 @@ export default function CallsScreen() {
   const [filter, setFilter] = useState<'all' | 'incoming' | 'outgoing'>('all');
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedCalls, setSelectedCalls] = useState<Set<number>>(new Set());
+
+  const showAlert = useStore((state) => state.showAlert);
+  const token = useStore((state) => state.token);
 
   useEffect(() => {
     fetchCalls();
@@ -41,6 +47,77 @@ export default function CallsScreen() {
     setIsLoadingMore(false);
   };
 
+  const handleBulkDelete = () => {
+    const count = selectedCalls.size;
+    showAlert(
+        'Delete Calls', 
+        `Delete ${count} selected call record(s)?`, 
+        [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+                text: 'Delete', 
+                style: 'destructive',
+                onPress: async () => {
+                    if (!token) return;
+                    try {
+                        await api.chat.bulkDeleteCalls(token, Array.from(selectedCalls));
+                        exitSelectionMode();
+                        fetchCalls();
+                    } catch {
+                        showAlert('Error', 'Failed to delete calls');
+                    }
+                }
+            }
+        ]
+    );
+  };
+
+  const handleClearHistory = () => {
+    showAlert(
+        'Clear History', 
+        'Delete all call records?', 
+        [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+                text: 'Delete All', 
+                style: 'destructive',
+                onPress: async () => {
+                    if (!token) return;
+                    try {
+                        await api.chat.clearCallHistory(token);
+                        fetchCalls();
+                    } catch {
+                        showAlert('Error', 'Failed to clear history');
+                    }
+                }
+            }
+        ]
+    );
+  };
+
+  const exitSelectionMode = useCallback(() => {
+    setIsSelectionMode(false);
+    setSelectedCalls(new Set());
+  }, []);
+
+  const toggleSelection = useCallback((id: number) => {
+    setSelectedCalls(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) {
+            next.delete(id);
+            if (next.size === 0) setIsSelectionMode(false);
+        } else {
+            next.add(id);
+            setIsSelectionMode(true);
+        }
+        return next;
+    });
+  }, []);
+
+  const onLongPress = useCallback((item: any) => {
+    toggleSelection(item.id);
+  }, [toggleSelection]);
+
   const filteredCalls = useMemo(() => {
     if (filter === 'all') return calls;
     if (filter === 'incoming') return calls.filter(c => c.caller.username !== user?.username);
@@ -53,8 +130,6 @@ export default function CallsScreen() {
     if (chat) {
       startCall(chat.id, isVideo);
       router.push(`/call/${chat.id}`);
-    } else {
-      alert('Could not redial. Chat not found.');
     }
   }, [startCall, router]);
 
@@ -64,43 +139,76 @@ export default function CallsScreen() {
         item={item}
         user={user}
         colors={colors}
+        isSelectionMode={isSelectionMode}
+        isSelected={selectedCalls.has(item.id)}
         onPress={handleCall}
+        onLongPress={onLongPress}
       />
     );
-  }, [user, colors, handleCall]);
+  }, [user, colors, handleCall, onLongPress, isSelectionMode, selectedCalls]);
 
   const FilterTab = ({ label, value }: { label: string, value: typeof filter }) => (
     <TouchableOpacity
+      activeOpacity={0.8}
       style={[
         styles.filterTab,
+        { backgroundColor: colors.card, borderColor: colors.cardBorder },
         filter === value && { backgroundColor: colors.primary, borderColor: colors.primary }
       ]}
       onPress={() => setFilter(value)}
     >
       <Text style={[
         styles.filterText,
-        filter === value ? { color: 'white' } : { color: colors.text }
+        filter === value ? { color: 'white' } : { color: colors.textSecondary }
       ]}>{label}</Text>
     </TouchableOpacity>
   );
 
   return (
     <ScreenWrapper style={styles.container} edges={['left', 'right']} withExtraTopPadding={false}>
-
+      <Stack.Screen 
+        options={{
+            headerTitle: isSelectionMode ? `${selectedCalls.size} Selected` : 'Calls',
+            headerLeft: isSelectionMode ? () => (
+                <TouchableOpacity onPress={exitSelectionMode} style={{marginLeft: 16}}>
+                    <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+            ) : undefined,
+            headerRight: () => (
+                <TouchableOpacity 
+                    onPress={isSelectionMode ? handleBulkDelete : handleClearHistory} 
+                    style={{marginRight: 16}}
+                >
+                    <MaterialCommunityIcons 
+                        name={isSelectionMode ? "trash-can" : "trash-can-outline"} 
+                        size={24} 
+                        color={isSelectionMode ? colors.primary : colors.textSecondary} 
+                    />
+                </TouchableOpacity>
+            )
+        }}
+      />
       {/* Filter Header */}
-      <View style={[styles.filterContainer, { borderBottomColor: colors.border }]}>
+      <View style={styles.filterContainer}>
         <FilterTab label="All" value="all" />
-        <FilterTab label="Received" value="incoming" />
-        <FilterTab label="Dialed" value="outgoing" />
+        <FilterTab label="Incoming" value="incoming" />
+        <FilterTab label="Outgoing" value="outgoing" />
       </View>
 
       {filteredCalls.length === 0 ? (
         <View style={styles.emptyContent}>
-          <View style={[styles.iconContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
-            <FontAwesome name="phone" size={40} color={colors.tabIconDefault} />
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>No {filter !== 'all' ? filter : 'Recent'} Calls</Text>
-          <Text style={styles.emptySubtitle}>Calls will appear here.</Text>
+            <MaterialCommunityIcons 
+                name="phone-off-outline" 
+                size={64} 
+                color={colors.textSecondary} 
+                style={{ opacity: 0.3, marginBottom: 20 }} 
+            />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>No Call History</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                {filter === 'all' 
+                    ? "Your recent calls will appear here." 
+                    : `No ${filter} calls found in your history.`}
+            </Text>
         </View>
       ) : (
         <FlatList
@@ -109,11 +217,6 @@ export default function CallsScreen() {
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          getItemLayout={(_, index) => ({
-            length: 74,
-            offset: 74 * index,
-            index,
-          })}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.5}
           refreshing={refreshing}
@@ -121,9 +224,6 @@ export default function CallsScreen() {
           ListFooterComponent={
             isLoadingMore ? <ActivityIndicator size="small" color={colors.primary} style={{ padding: 20 }} /> : null
           }
-          initialNumToRender={10}
-          maxToRenderPerBatch={10}
-          windowSize={5}
         />
       )}
     </ScreenWrapper>
@@ -134,89 +234,42 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 0.5,
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 16,
+    gap: 12,
   },
-  headerTitle: {
-    fontSize: 32,
+  filterTab: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  filterText: {
+    fontSize: 14,
     fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  callItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 15,
-  },
-  info: {
-    flex: 1,
-  },
-  name: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  detailsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  time: {
-    fontSize: 13,
   },
   listContent: {
-    paddingBottom: 120, // Enough room for floating tab bar
+    paddingTop: 4,
+    paddingBottom: 120,
   },
   emptyContent: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
-  },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
+    paddingHorizontal: 40,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   emptySubtitle: {
-    fontSize: 14,
-    color: 'gray',
+    fontSize: 16,
     textAlign: 'center',
-    lineHeight: 20,
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderBottomWidth: 0.5,
-    gap: 10,
-  },
-  filterTab: {
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    backgroundColor: 'rgba(150, 150, 150, 0.1)',
-  },
-  filterText: {
-    fontSize: 14,
-    fontWeight: '600',
+    opacity: 0.8,
+    lineHeight: 22,
   },
 });
