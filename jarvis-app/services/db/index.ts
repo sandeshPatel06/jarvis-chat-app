@@ -91,7 +91,7 @@ export const initDatabase = async () => {
 };
 
 // Key-Value Store Helpers (Replacement for SecureStore where appropriate)
-export const kv = {
+const kv = {
     set: async (key: string, value: string) => {
         const db = await getDb();
         await db.runAsync('INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?)', [key, value]);

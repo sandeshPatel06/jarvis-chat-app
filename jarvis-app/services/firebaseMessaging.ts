@@ -198,13 +198,29 @@ getInitialNotification(messaging).then((remoteMessage) => {
 });
 
 // ============================================================================
-// NOTIFEE BACKGROUND EVENTS (Reply/Mark Read)
+// NOTIFEE BACKGROUND EVENTS (Reply/Mark Read / Call Actions)
 // ============================================================================
 notifee.onBackgroundEvent(async ({ type, detail }) => {
     const { notification, pressAction, input } = detail;
 
     if (type === EventType.ACTION_PRESS) {
-        if (pressAction?.id === 'reply' && input) {
+        // 1. Handle Call Answer (Background)
+        if (pressAction?.id === 'answer_call') {
+            console.log('[Notifee] User answered call from notification');
+            // Notification is cleared automatically in some OS, but we force it
+            if (notification?.id) await notifee.cancelNotification(notification.id);
+            // Business logic for answering is handled in foreground once app launches
+        } 
+        
+        // 2. Handle Call Decline (Background)
+        else if (pressAction?.id === 'decline_call') {
+            console.log('[Notifee] User declined call from notification');
+            if (notification?.id) await notifee.cancelNotification(notification.id);
+            // TODO: Notify server that the call was declined
+        }
+
+        // 3. Handle Message Reply (Background)
+        else if (pressAction?.id === 'reply' && input) {
             const conversationId = notification?.data?.conversation_id as string;
             const replyText = input as string;
 
@@ -225,7 +241,10 @@ notifee.onBackgroundEvent(async ({ type, detail }) => {
                     console.error('[Notifee] Failed to send background reply:', error);
                 }
             }
-        } else if (pressAction?.id === 'mark_as_read') {
+        } 
+        
+        // 4. Handle Mark as Read (Background)
+        else if (pressAction?.id === 'mark_as_read') {
             const conversationId = notification?.data?.conversation_id as string;
             const messageId = notification?.data?.message_id as string;
 
@@ -247,8 +266,23 @@ notifee.onBackgroundEvent(async ({ type, detail }) => {
             }
         }
 
+        // Always clear the notification after action if not already done
         if (notification?.id) {
             await notifee.cancelNotification(notification.id);
+        }
+    }
+});
+
+// ============================================================================
+// NOTIFEE FOREGROUND EVENTS (Answer/Cancel)
+// ============================================================================
+notifee.onForegroundEvent(async ({ type, detail }) => {
+    const { notification, pressAction } = detail;
+    if (type === EventType.ACTION_PRESS) {
+        if (pressAction?.id === 'answer_call' || pressAction?.id === 'decline_call') {
+            if (notification?.id) {
+                await notifee.cancelNotification(notification.id);
+            }
         }
     }
 });
@@ -277,7 +311,7 @@ export async function requestFirebasePermission(): Promise<boolean> {
     }
 }
 
-export async function getFCMToken(): Promise<string | null> {
+async function getFCMToken(): Promise<string | null> {
     try {
         const token = await getToken(messaging);
         console.log('[Firebase] 🔑 FCM Token:', token);

@@ -496,7 +496,7 @@ export default function ChatDetailScreen() {
 
             {!chat ? (
                 <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }]}>
-                    {isRetrying || (!hasAttemptedFetch && !chat) ? (
+                    {!chat ? (
                         <View style={{ alignItems: 'center' }}>
                             <ActivityIndicator size="large" color={colors.primary} />
                             <Text style={{ color: colors.textSecondary, marginTop: 16, fontWeight: '600' }}>

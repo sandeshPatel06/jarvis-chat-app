@@ -9,7 +9,7 @@ import { Platform } from 'react-native';
  * Requests notification permissions from the user.
  * Returns true if granted, false otherwise.
  */
-export async function requestNotificationPermissions(): Promise<boolean> {
+async function requestNotificationPermissions(): Promise<boolean> {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
@@ -38,7 +38,7 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 /**
  * Registers for push notifications and returns the token.
  */
-export async function registerForPushNotificationsAsync() {
+async function registerForPushNotificationsAsync() {
     if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('default', {
             name: 'default',
@@ -103,7 +103,7 @@ export async function scheduleLocalNotification(
  * Configures how notifications are handled when the app is in the foreground.
  * @deprecated Use custom logic in _layout.tsx instead
  */
-export function setForegroundNotificationHandler() {
+function setForegroundNotificationHandler() {
     Notifications.setNotificationHandler({
         handleNotification: async () => ({
             shouldShowAlert: true,

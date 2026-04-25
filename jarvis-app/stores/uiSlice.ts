@@ -3,20 +3,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState } from '@/store';
 import { api } from '@/services/api';
 
-export interface Toast {
+interface Toast {
     type: 'success' | 'error' | 'info';
     text1: string;
     text2?: string;
     id: number;
 }
 
-export interface AlertButton {
+interface AlertButton {
     text: string;
     onPress?: () => void;
     style?: 'default' | 'cancel' | 'destructive';
 }
 
-export interface AlertState {
+interface AlertState {
     title: string;
     message: string;
     buttons?: AlertButton[];
