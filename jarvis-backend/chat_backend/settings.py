@@ -91,14 +91,28 @@ TEMPLATES = [
 WSGI_APPLICATION = 'chat_backend.wsgi.application'
 ASGI_APPLICATION = 'chat_backend.asgi.application'
 
+LANGUAGE_CODE = 'en-us'
+TIME_ZONE = os.environ.get('DJANGO_TIME_ZONE', 'UTC')
+USE_I18N = True
+USE_TZ = True
+
+
+def _redis_backend_url(env_name, default_db):
+    return os.environ.get(env_name, os.environ.get('REDIS_URL', f'redis://localhost:6379/{default_db}'))
+
+
 # Redis Configuration
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/1')
+REDIS_CHANNEL_LAYER_URL = _redis_backend_url('REDIS_CHANNEL_LAYER_URL', 0)
+REDIS_CACHE_URL = _redis_backend_url('REDIS_CACHE_URL', 2)
+REDIS_CELERY_BROKER_URL = _redis_backend_url('REDIS_CELERY_BROKER_URL', 3)
+REDIS_CELERY_RESULT_BACKEND = _redis_backend_url('REDIS_CELERY_RESULT_BACKEND', 3)
 
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [os.environ.get('REDIS_URL', 'redis://localhost:6379/0')],
+            "hosts": [REDIS_CHANNEL_LAYER_URL],
         },
     },
 }
@@ -107,7 +121,7 @@ CHANNEL_LAYERS = {
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": os.environ.get('REDIS_URL', 'redis://localhost:6379/2'),
+        "LOCATION": REDIS_CACHE_URL,
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
         }
@@ -115,29 +129,47 @@ CACHES = {
 }
 
 # Celery Configuration
-CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/3')
-CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/3')
+CELERY_BROKER_URL = REDIS_CELERY_BROKER_URL
+CELERY_RESULT_BACKEND = REDIS_CELERY_RESULT_BACKEND
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60 # 30 minutes
+CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60
+CELERY_TASK_DEFAULT_QUEUE = 'default'
+CELERY_TASK_ROUTES = {
+    'chat.tasks.send_message_notification': {'queue': 'notifications'},
+    'chat.tasks.send_call_notification': {'queue': 'notifications'},
+    'chat.tasks.process_message_media': {'queue': 'media'},
+}
 
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-import dj_database_url
+try:
+    import dj_database_url
+except ModuleNotFoundError:
+    dj_database_url = None
 
 # Use PostgreSQL from DATABASE_URL environment variable, fallback to SQLite for local development
-DATABASES = {
-    'default': dj_database_url.config(
-        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
-}
+if dj_database_url:
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -157,18 +189,6 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
-
-
-# Internationalization
-# https://docs.djangoproject.com/en/5.0/topics/i18n/
-
-LANGUAGE_CODE = 'en-us'
-
-TIME_ZONE = 'UTC'
-
-USE_I18N = True
-
-USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)
@@ -243,4 +263,3 @@ EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_TIMEOUT = 60
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER or 'noreply@jarvis.chat'
-

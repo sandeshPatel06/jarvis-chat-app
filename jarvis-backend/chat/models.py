@@ -32,6 +32,17 @@ class Message(models.Model):
     file = models.FileField(upload_to='chat_files/', null=True, blank=True)
     file_type = models.CharField(max_length=50, null=True, blank=True)
     file_name = models.CharField(max_length=255, null=True, blank=True)
+    media_processing_state = models.CharField(
+        max_length=20,
+        default='ready',
+        choices=[
+            ('ready', 'Ready'),
+            ('pending', 'Pending'),
+            ('processing', 'Processing'),
+            ('failed', 'Failed'),
+        ],
+    )
+    media_metadata = models.JSONField(default=dict, blank=True)
     
     # Location fields
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
@@ -51,6 +62,8 @@ class Message(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=['conversation', 'timestamp']),
+            models.Index(fields=['conversation', 'is_read', 'timestamp']),
+            models.Index(fields=['conversation', 'deleted_at', 'timestamp']),
             models.Index(fields=['sender', 'timestamp']),
             models.Index(fields=['message_type']),
         ]
