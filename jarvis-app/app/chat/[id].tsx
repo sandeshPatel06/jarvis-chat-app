@@ -116,6 +116,12 @@ export default function ChatDetailScreen() {
         );
     }, [chat?.messages, searchQuery]);
 
+    const unreadMessageIds = useMemo(() => {
+        return (chat?.messages || [])
+            .filter((msg: any) => msg.sender === 'them' && !msg.isRead)
+            .map((msg: any) => msg.id);
+    }, [chat?.messages]);
+
     /* -------------------- lifecycle -------------------- */
     const isSyncing = useRef(false);
 
@@ -169,13 +175,10 @@ export default function ChatDetailScreen() {
     }, [chat?.messages?.length, animationsEnabled]);
 
     useEffect(() => {
-        if (chat?.messages) {
-            const unreadMessages = chat.messages.filter((msg: any) => msg.sender === 'them' && !msg.isRead);
-            unreadMessages.forEach((msg: any) => {
-                markRead(chat.id, msg.id);
-            });
-        }
-    }, [chat?.id, chat?.messages?.length, markRead]); // Only depend on length and ID
+        unreadMessageIds.forEach((messageId) => {
+            markRead(chat.id, messageId);
+        });
+    }, [chat?.id, unreadMessageIds, markRead]);
 
 
 
@@ -472,20 +475,25 @@ export default function ChatDetailScreen() {
     const { isDark } = useAppTheme();
     const wallpaper = user?.chat_wallpaper || 'default';
 
-    // Determine background source
-    let backgroundSource = null;
-    let backgroundColor = colors.background;
+    const { backgroundSource, backgroundColor } = useMemo(() => {
+        let nextBackgroundSource = null as any;
+        let nextBackgroundColor = colors.background;
 
-    if (wallpaper === 'default') {
-        // Use local assets for default wallpaper based on theme
-        backgroundSource = isDark
-            ? require('@/assets/images/chat-bg-dark.png')
-            : require('@/assets/images/chat-bg.png');
-    } else if (wallpaper.startsWith('#')) {
-        backgroundColor = wallpaper;
-    } else {
-        backgroundSource = { uri: wallpaper };
-    }
+        if (wallpaper === 'default') {
+            nextBackgroundSource = isDark
+                ? require('@/assets/images/chat-bg-dark.png')
+                : require('@/assets/images/chat-bg.png');
+        } else if (wallpaper.startsWith('#')) {
+            nextBackgroundColor = wallpaper;
+        } else {
+            nextBackgroundSource = { uri: wallpaper };
+        }
+
+        return {
+            backgroundSource: nextBackgroundSource,
+            backgroundColor: nextBackgroundColor,
+        };
+    }, [wallpaper, isDark, colors.background]);
 
     return (
         <ScreenWrapper

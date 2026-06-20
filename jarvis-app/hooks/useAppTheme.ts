@@ -3,7 +3,7 @@ import { useStore } from '@/store';
 import { useColorScheme } from 'react-native';
 
 export function useAppTheme() {
-    const { theme: userTheme } = useStore();
+    const userTheme = useStore((state) => state.theme);
     const systemScheme = useColorScheme();
 
     const effectiveTheme = userTheme === 'system'
