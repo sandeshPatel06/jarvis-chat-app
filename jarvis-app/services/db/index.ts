@@ -64,6 +64,7 @@ export const initDatabase = async () => {
                 reactions TEXT,
                 reply_to_json TEXT,
                 is_unsent INTEGER DEFAULT 0,
+                is_pinned INTEGER DEFAULT 0,
                 FOREIGN KEY (conversation_id) REFERENCES conversations (id)
             );
         `);
@@ -74,6 +75,7 @@ export const initDatabase = async () => {
             'ALTER TABLE messages ADD COLUMN file_name TEXT;',
             'ALTER TABLE conversations ADD COLUMN user_id INTEGER;',
             'ALTER TABLE conversations ADD COLUMN is_group INTEGER DEFAULT 0;',
+            'ALTER TABLE messages ADD COLUMN is_pinned INTEGER DEFAULT 0;',
         ];
 
         for (const query of migrations) {

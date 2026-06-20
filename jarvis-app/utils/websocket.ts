@@ -25,8 +25,15 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
             const { conversation_id, sender_username } = data;
             actions.setTyping(conversation_id, sender_username);
 
-            setTimeout(() => {
+            // Clear any existing timeout for this conversation to prevent race conditions
+            if ((global as any).typingTimeouts?.[conversation_id]) {
+                clearTimeout((global as any).typingTimeouts[conversation_id]);
+            }
+            if (!(global as any).typingTimeouts) (global as any).typingTimeouts = {};
+            
+            (global as any).typingTimeouts[conversation_id] = setTimeout(() => {
                 actions.setTyping(conversation_id, null);
+                delete (global as any).typingTimeouts[conversation_id];
             }, 3000);
         } else if (data.type === 'message_read') {
             const { message_id, conversation_id } = data;
@@ -43,11 +50,12 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
                         msg.id === message_id ? { ...msg, text: new_text } : msg
                     );
                     const lastMsg = newMessages[newMessages.length - 1];
-                    return { ...chat, messages: newMessages, lastMessage: lastMsg ? lastMsg.text : '' };
+                    return { ...chat, messages: newMessages, lastMessage: lastMsg ? lastMsg.text : chat.lastMessage };
                 }
                 return chat;
             });
             actions.setChats(updatedChats);
+            database.updateMessageText(message_id, new_text);
         } else if (data.type === 'message_deleted') {
             const { message_id, conversation_id } = data;
             const chats = actions.getChats();
@@ -60,6 +68,7 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
                 return chat;
             });
             actions.setChats(updatedChats);
+            database.deleteMessage(message_id);
         } else if (data.type === 'message_reaction') {
             const { message_id, conversation_id, reactions } = data;
             const chats = actions.getChats();
@@ -73,6 +82,7 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
                 return chat;
             });
             actions.setChats(updatedChats);
+            database.updateMessageReactions(message_id, reactions);
 
             // Reaction Notification
             if (actions.getActiveChatId() !== conversation_id) {
@@ -132,12 +142,15 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
         } else if (data.type === 'message_pinned') {
             const { message_id, conversation_id } = data;
             actions.toggleMessagePin(conversation_id, message_id, true);
+            database.updateMessagePin(message_id, true);
         } else if (data.type === 'message_unpinned') {
             const { message_id, conversation_id } = data;
             actions.toggleMessagePin(conversation_id, message_id, false);
+            database.updateMessagePin(message_id, false);
         } else if (data.type === 'clear_chat') {
             const { conversation_id } = data;
             actions.clearLocalMessages(conversation_id);
+            database.clearChatMessages(conversation_id);
         }
     } catch (err) {
         console.error('[WS] Parse error:', err);

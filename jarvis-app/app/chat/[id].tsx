@@ -117,16 +117,27 @@ export default function ChatDetailScreen() {
     }, [chat?.messages, searchQuery]);
 
     /* -------------------- lifecycle -------------------- */
+    const isSyncing = useRef(false);
+
     useEffect(() => {
         if (id) {
             useStore.getState().setActiveChat(id);
             connectWebSocket();
             
             const syncChatData = async () => {
-                if (!chat) {
-                    await fetchChats();
+                if (isSyncing.current) return;
+                isSyncing.current = true;
+                
+                try {
+                    // Check if chat exists in current state without depending on 'chat' object
+                    const currentChat = useStore.getState().chats.find((c: any) => c.id === id);
+                    if (!currentChat) {
+                        await fetchChats();
+                    }
+                    await fetchMessages(id);
+                } finally {
+                    isSyncing.current = false;
                 }
-                await fetchMessages(id);
             };
             
             syncChatData();
@@ -134,7 +145,7 @@ export default function ChatDetailScreen() {
         return () => {
             useStore.getState().setActiveChat(null);
         };
-    }, [id, chat, connectWebSocket, fetchChats, fetchMessages, markRead]); // Keep it minimal to avoid re-fetch loops
+    }, [id, connectWebSocket, fetchChats, fetchMessages]); // Removed 'chat' and 'markRead' to break infinite loop
 
     useEffect(() => {
         const show = Keyboard.addListener('keyboardDidShow', () => {
@@ -159,13 +170,12 @@ export default function ChatDetailScreen() {
 
     useEffect(() => {
         if (chat?.messages) {
-            chat.messages.forEach((msg: any) => {
-                if (msg.sender === 'them' && !msg.isRead) {
-                    markRead(chat.id, msg.id);
-                }
+            const unreadMessages = chat.messages.filter((msg: any) => msg.sender === 'them' && !msg.isRead);
+            unreadMessages.forEach((msg: any) => {
+                markRead(chat.id, msg.id);
             });
         }
-    }, [chat?.messages?.length, markRead, chat?.id, chat?.messages]);
+    }, [chat?.id, chat?.messages?.length, markRead]); // Only depend on length and ID
 
 
 

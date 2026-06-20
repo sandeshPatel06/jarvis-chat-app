@@ -438,8 +438,31 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
                 return msg;
             }));
             set((state: any) => ({
-                chats: state.chats.map((c: any) => c.id === chatId ? { ...c, messages: mapped } : c)
+                chats: state.chats.map((c: any) => {
+                    if (c.id === chatId) {
+                        // Merge remote messages with local, avoiding duplicates
+                        const existingIds = new Set(c.messages.map((m: any) => m.id.toString()));
+                        const newMessages = [...c.messages];
+                        
+                        mapped.forEach((msg: any) => {
+                            if (!existingIds.has(msg.id.toString())) {
+                                newMessages.push(msg);
+                            }
+                        });
+
+                        // Sort newest first for inverted list
+                        newMessages.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+                        
+                        return { ...c, messages: newMessages };
+                    }
+                    return c;
+                })
             }));
+            
+            // Save remote messages to DB
+            for (const msg of mapped) {
+                await database.saveMessage(msg, chatId);
+            }
         } catch (e) {
             console.error('Fetch messages failed', e);
         }
@@ -513,7 +536,56 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
     },
 
     loadMoreMessages: async (chatId) => {
-        // Implementation for pagination
+        const { token, user } = get() as any;
+        if (!token) return;
+
+        const chat = (get() as any).chats.find((c: any) => c.id === chatId);
+        if (!chat) return;
+
+        const offset = chat.messages.length;
+        try {
+            const remote = await api.chat.getMessages(token, chatId, 20, offset);
+            if (remote.length === 0) return;
+
+            const mapped = await Promise.all(remote.map(async (m: any) => {
+                // Same mapping logic as fetchMessages (ideally this should be a helper)
+                const msgId = m.id.toString();
+                const msg: any = {
+                    id: msgId,
+                    text: m.text,
+                    sender: (m.sender?.username === user?.username || m.sender === user?.username) ? 'me' : 'them',
+                    timestamp: new Date(m.timestamp),
+                    isRead: !!m.is_read,
+                    isDelivered: !!m.is_delivered,
+                    file: m.file,
+                    file_type: m.file_type,
+                    file_name: m.file_name,
+                    reactions: m.reactions || [],
+                    is_pinned: !!m.is_pinned,
+                    reply_to: m.reply_to || null
+                };
+                return msg;
+            }));
+
+            set((state: any) => ({
+                chats: state.chats.map((c: any) => {
+                    if (c.id === chatId) {
+                        const existingIds = new Set(c.messages.map((m: any) => m.id.toString()));
+                        const combined = [...c.messages];
+                        mapped.forEach(m => {
+                            if (!existingIds.has(m.id.toString())) combined.push(m);
+                        });
+                        combined.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+                        return { ...c, messages: combined };
+                    }
+                    return c;
+                })
+            }));
+
+            for (const msg of mapped) await database.saveMessage(msg, chatId);
+        } catch (e) {
+            console.error('Load more messages failed', e);
+        }
     },
 
     forwardMessage: async (message, chatIds) => {

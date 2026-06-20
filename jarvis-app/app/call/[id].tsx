@@ -24,12 +24,14 @@ export default function CallScreen() {
     const endCall = useStore((state: any) => state.endCall);
     const setIsMinimized = useStore((state: any) => state.setIsMinimized);
     const chat = useStore(useCallback((state: any) => state.chats.find((c: any) => c.id === id) || null, [id]));
+    const startTime = useStore((state: any) => state.callState.startTime);
     const callHasStarted = useRef(isCalling);
 
     const [isMuted, setIsMuted] = useState(false);
     const [isVideoEnabled, setIsVideoEnabled] = useState(true);
     const [isSpeakerOn, setIsSpeakerOn] = useState(true);
     const [isEnding, setIsEnding] = useState(false);
+    const [duration, setDuration] = useState('00:00');
 
     // Animation for pulsing avatar
     const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -95,6 +97,20 @@ export default function CallScreen() {
         }
     }, [isCalling, isEnding, router]);
 
+    useEffect(() => {
+        let interval: any;
+        if (startTime && !isEnding) {
+            interval = setInterval(() => {
+                const now = Date.now();
+                const diff = Math.floor((now - startTime) / 1000);
+                const mm = Math.floor(diff / 60).toString().padStart(2, '0');
+                const ss = (diff % 60).toString().padStart(2, '0');
+                setDuration(`${mm}:${ss}`);
+            }, 1000);
+        }
+        return () => clearInterval(interval);
+    }, [startTime, isEnding]);
+
     const handleEndCall = useCallback(() => {
         setIsEnding(true);
         endCall();
@@ -132,7 +148,7 @@ export default function CallScreen() {
     }, []);
 
     const renderCallStatus = () => {
-        if (connectionState === 'connected' || remoteStream) return '00:00';
+        if (connectionState === 'connected' || remoteStream) return duration;
         if (connectionState === 'connecting') return 'Connecting...';
         return 'Ringing...';
     };

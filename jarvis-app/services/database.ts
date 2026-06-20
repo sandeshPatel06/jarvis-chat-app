@@ -28,7 +28,7 @@ export const saveMessage = async (message: Message, conversationId: string, isUn
         const fileValue = typeof message.file === 'string' ? message.file : (message.file ? String(message.file) : '');
 
         await db.runAsync(
-            `INSERT OR REPLACE INTO messages (id, conversation_id, text, sender, timestamp, is_read, is_delivered, reactions, reply_to_json, is_unsent, file, file_type, file_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT OR REPLACE INTO messages (id, conversation_id, text, sender, timestamp, is_read, is_delivered, reactions, reply_to_json, is_unsent, file, file_type, file_name, is_pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 (message.id || '').toString(),
                 (conversationId || '').toString(),
@@ -43,6 +43,7 @@ export const saveMessage = async (message: Message, conversationId: string, isUn
                 fileValue,
                 (message.file_type || '').toString(),
                 (message.file_name || '').toString(),
+                (message as any).is_pinned || (message as any).isPinned ? 1 : 0,
             ]
         );
     } catch (error) {
@@ -89,7 +90,8 @@ export const getMessages = async (conversationId: string): Promise<Message[]> =>
             isUnsent: !!row.is_unsent,
             file: row.file || null,
             file_type: row.file_type || null,
-            file_name: row.file_name || null
+            file_name: row.file_name || null,
+            is_pinned: !!row.is_pinned
         }));
     } catch (error) {
         console.error('Error getting messages:', error);
@@ -159,6 +161,52 @@ export const deleteConversation = async (conversationId: string) => {
         await db.runAsync('DELETE FROM conversations WHERE id = ?', [conversationId]);
     } catch (error) {
         console.error('Error deleting conversation:', error);
+    }
+};
+
+export const updateMessageText = async (messageId: string, text: string) => {
+    const db = await getDb();
+    try {
+        await db.runAsync('UPDATE messages SET text = ? WHERE id = ?', [text, messageId]);
+    } catch (error) {
+        console.error('Error updating message text:', error);
+    }
+};
+
+export const deleteMessage = async (messageId: string) => {
+    const db = await getDb();
+    try {
+        // Find if it has a file to delete first
+        const row: any = await db.getFirstAsync('SELECT file FROM messages WHERE id = ?', [messageId]);
+        if (row?.file && (row.file.startsWith('file://') || row.file.startsWith('/'))) {
+            try {
+                await FileSystem.deleteAsync(row.file, { idempotent: true });
+            } catch {}
+        }
+        await db.runAsync('DELETE FROM messages WHERE id = ?', [messageId]);
+    } catch (error) {
+        console.error('Error deleting message from DB:', error);
+    }
+};
+
+export const updateMessageReactions = async (messageId: string, reactions: any[]) => {
+    const db = await getDb();
+    try {
+        await db.runAsync('UPDATE messages SET reactions = ? WHERE id = ?', [JSON.stringify(reactions), messageId]);
+    } catch (error) {
+        console.error('Error updating message reactions:', error);
+    }
+};
+
+export const updateMessagePin = async (messageId: string, isPinned: boolean) => {
+    const db = await getDb();
+    try {
+        // Note: SQLite table might not have is_pinned column yet if not added in migration
+        // Let's check if it exists or add it to saveMessage logic
+        await db.runAsync('UPDATE messages SET is_pinned = ? WHERE id = ?', [isPinned ? 1 : 0, messageId]);
+    } catch (error) {
+        // Fallback or ignore if column missing for now
+        console.warn('Could not update pin status in DB (column might be missing):', error);
     }
 };
 
