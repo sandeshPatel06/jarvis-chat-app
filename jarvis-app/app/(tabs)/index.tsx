@@ -19,7 +19,6 @@ export default function ChatsScreen() {
 
   // Specific selectors to avoid unnecessary re-renders
   const chats = useStore(useCallback((state) => state.chats, []));
-  const fetchChats = useStore(useCallback((state) => state.fetchChats, []));
   const deleteChats = useStore(useCallback((state) => state.deleteChats, []));
   const user = useStore(useCallback((state) => state.user, []));
   const showAlert = useStore(useCallback((state) => state.showAlert, []));
@@ -60,9 +59,8 @@ export default function ChatsScreen() {
   useEffect(() => {
     if (user) {
       connectWebSocket();
-      fetchChats();
     }
-  }, [user, connectWebSocket, fetchChats]);
+  }, [user, connectWebSocket]);
 
   const formatTime = useCallback((date: Date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
