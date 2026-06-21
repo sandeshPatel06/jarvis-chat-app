@@ -116,25 +116,8 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
             if (msg.sender === 'them') {
                 actions.markDelivered(msg.conversation_id, msg.id);
 
-                // Check if user is in this chat for notifications
-                if (actions.getActiveChatId() !== msg.conversation_id) {
-                    try {
-                        let body = msg.text;
-                        if (msg.reply_to) {
-                            body = `Replying to you: ${msg.text}`;
-                        }
-
-                        Notifications.scheduleNotificationAsync({
-                            content: {
-                                title: 'New Message',
-                                body: body,
-                                data: { chatId: msg.conversation_id },
-                            },
-                            trigger: null,
-                        });
-                    } catch {
-                    }
-                }
+                // Message banners are handled centrally in firebaseMessaging.ts
+                // to avoid duplicate notifications from websocket + push handlers.
             }
 
             // Save to DB

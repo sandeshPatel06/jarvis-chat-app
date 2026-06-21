@@ -98,7 +98,7 @@ async function handleRemoteMessage(remoteMessage: any, context: 'foreground' | '
             });
 
             // Standardize field extraction with multiple fallbacks
-            const senderName = data?.sender_name || firebaseNotification?.title || 'New Message';
+            const senderName = data?.sender_name || 'Someone';
             const messageText = data?.text || data?.body || firebaseNotification?.body || 'You have a new message';
 
             let avatarUrl = data?.sender_avatar ? getMediaUrl(data.sender_avatar) : null;
@@ -159,7 +159,7 @@ async function handleRemoteMessage(remoteMessage: any, context: 'foreground' | '
 
             await notifee.displayNotification({
                 id: data?.message_id || Date.now().toString(),
-                title: senderName,
+                title: `New Message from ${senderName}`,
                 body: messageText,
                 data: {
                     type: 'message',
