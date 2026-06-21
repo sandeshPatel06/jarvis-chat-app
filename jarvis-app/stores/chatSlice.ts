@@ -1,11 +1,9 @@
 import { StateCreator } from 'zustand';
-import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as database from '@/services/database';
 import { api } from '@/services/api';
 import { Chat, Message } from '@/types';
-import { getMediaUrl, getLocalMediaUri, downloadMedia } from '@/utils/media';
-import { scheduleLocalNotification } from '@/utils/notifications';
+import { getMediaUrl, getLocalMediaUri } from '@/utils/media';
 import { downloadManager } from '@/services/downloadManager';
 import { AppState } from '@/store';
 import { handleWebSocketMessage } from '@/utils/websocket';
@@ -14,12 +12,15 @@ export interface ChatSlice {
     chats: Chat[];
     activeChatId: string | null;
     socket: WebSocket | null;
+    appIsActive: boolean;
     typingUsers: Record<string, string | null>;
     mutedChats: string[];
     setActiveChat: (chatId: string | null) => void;
+    setAppIsActive: (isActive: boolean) => void;
     setTyping: (chatId: string, username: string | null) => void;
     sendTyping: (chatId: string) => void;
     connectWebSocket: () => void;
+    teardownWebSocket: (reason?: 'background' | 'logout' | 'manual') => void;
     addMessage: (message: any) => void;
     sendMessage: (chatId: string, text: string, replyToId?: string) => Promise<void>;
     sendFileMessage: (chatId: string, file: any, text?: string, replyToId?: string, duration?: number) => Promise<void>;
@@ -57,6 +58,7 @@ export interface ChatSlice {
 
 let reconnectTimeout: any = null;
 let reconnectAttempts = 0;
+let reconnectPauseReason: 'background' | 'logout' | null = null;
 const messageFetchInFlight = new Set<string>();
 const messageFetchLastStartedAt = new Map<string, number>();
 const MESSAGE_FETCH_DEDUP_WINDOW_MS = 1500;
@@ -75,13 +77,42 @@ const dedupeMessagesById = (messages: any[]) => {
     return deduped;
 };
 
+const clearReconnectTimeout = () => {
+    if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+    }
+};
+
 export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, get) => ({
     chats: [],
     activeChatId: null,
     socket: null,
+    appIsActive: true,
     typingUsers: {},
     mutedChats: [],
     setActiveChat: (chatId) => set({ activeChatId: chatId }),
+    setAppIsActive: (isActive) => {
+        const state = get() as any;
+
+        if (state.appIsActive === isActive) {
+            return;
+        }
+
+        set({ appIsActive: isActive } as any);
+
+        if (!isActive) {
+            if (state.teardownWebSocket) {
+                state.teardownWebSocket('background');
+            }
+            return;
+        }
+
+        reconnectPauseReason = null;
+        if (state.token && !state.socket) {
+            state.connectWebSocket();
+        }
+    },
     setTyping: (chatId, username) => set((state) => ({
         typingUsers: { ...state.typingUsers, [chatId]: username }
     })),
@@ -92,8 +123,9 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
         }
     },
     connectWebSocket: () => {
-        const { token, socket, connectWebSocket } = get() as any;
-        if (socket || !token) return;
+        const { token, socket, connectWebSocket, appIsActive } = get() as any;
+        if (socket || !token || !appIsActive) return;
+        if (reconnectPauseReason === 'background') return;
 
         const wsUrl = process.env.EXPO_PUBLIC_WS_URL;
         if (!wsUrl) return;
@@ -104,7 +136,7 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
         ws.onopen = () => {
             console.log('[WS] Connected');
             reconnectAttempts = 0;
-            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            clearReconnectTimeout();
             (get() as any).syncMessages();
         };
 
@@ -133,24 +165,59 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
         };
 
         ws.onclose = () => {
+            const state = get() as any;
+
+            if (state.socket !== ws) {
+                console.log('[WS] Ignoring close event from stale socket');
+                return;
+            }
+
             console.log('[WS] Disconnected');
             set({ socket: null } as any);
+
+            if (reconnectPauseReason) {
+                console.log(`[WS] Reconnect suppressed due to ${reconnectPauseReason}`);
+                reconnectPauseReason = null;
+                return;
+            }
+
+            if (!state.token || !state.appIsActive) {
+                console.log('[WS] Reconnect skipped because app is inactive or token is missing');
+                return;
+            }
 
             // EXPONENTIAL BACKOFF RECONNECT
             const delay = Math.min(30000, Math.pow(2, reconnectAttempts) * 1000);
             reconnectAttempts++;
             console.log(`[WS] Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`);
             
-            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            clearReconnectTimeout();
             reconnectTimeout = setTimeout(() => {
                 const state = get() as any;
-                if (state.token && !state.socket) {
+                if (state.token && !state.socket && state.appIsActive && !reconnectPauseReason) {
                     connectWebSocket();
                 }
             }, delay);
         };
 
         set({ socket: ws } as any);
+    },
+
+    teardownWebSocket: (reason = 'manual') => {
+        const state = get() as any;
+        reconnectPauseReason = reason === 'background' ? 'background' : reason === 'logout' ? 'logout' : null;
+        clearReconnectTimeout();
+
+        if (state.socket) {
+            set({ socket: null } as any);
+            try {
+                state.socket.close();
+            } catch {
+                set({ socket: null } as any);
+            }
+        } else {
+            set({ socket: null } as any);
+        }
     },
 
     addMessage: (payload) => {
@@ -254,7 +321,7 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
     },
 
     sendMessage: async (chatId, text, replyToId) => {
-        const { socket, user, addMessage } = get() as any;
+        const { socket, addMessage } = get() as any;
         const tempId = `temp_${Date.now()}`;
         const newMessage = {
             id: tempId,

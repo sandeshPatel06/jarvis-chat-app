@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native
 import { useAudioRecorder, RecordingPresets } from 'expo-audio';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useStore } from '@/store';
 
 interface VoiceRecorderProps {
     onSend: (audioUri: string, duration: number) => void;
@@ -12,6 +13,7 @@ interface VoiceRecorderProps {
 export const VoiceRecorder = ({ onSend, onCancel }: VoiceRecorderProps) => {
     const { colors } = useAppTheme();
     const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+    const appIsActive = useStore((state: any) => state.appIsActive);
     const [duration, setDuration] = useState(0);
     const durationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
     const waveAnimation = useRef(new Animated.Value(1)).current;
@@ -19,6 +21,10 @@ export const VoiceRecorder = ({ onSend, onCancel }: VoiceRecorderProps) => {
     const startRecording = useCallback(async () => {
         try {
             await audioRecorder.record();
+
+            if (!useStore.getState().appIsActive) {
+                return;
+            }
 
             // Start duration counter
             durationInterval.current = setInterval(() => {
@@ -93,6 +99,13 @@ export const VoiceRecorder = ({ onSend, onCancel }: VoiceRecorderProps) => {
             }
         };
     }, [startRecording]);
+
+    React.useEffect(() => {
+        if (!appIsActive && durationInterval.current) {
+            clearInterval(durationInterval.current);
+            durationInterval.current = null;
+        }
+    }, [appIsActive]);
 
     return (
         <View style={[styles.container, { backgroundColor: colors.card }]}>

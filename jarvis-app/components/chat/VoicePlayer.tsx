@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useAudioPlayer } from 'expo-audio';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useStore } from '@/store';
 
 interface VoicePlayerProps {
     audioUri: string;
@@ -13,6 +14,7 @@ export const VoicePlayer = ({ audioUri, duration }: VoicePlayerProps) => {
     const { colors } = useAppTheme();
     const player = useAudioPlayer(audioUri);
     const playerRef = useRef(player);
+    const appIsActive = useStore((state: any) => state.appIsActive);
     const [position, setPosition] = useState(0);
     const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
 
@@ -37,7 +39,10 @@ export const VoicePlayer = ({ audioUri, duration }: VoicePlayerProps) => {
     }, [player]);
 
     useEffect(() => {
-        if (!player.playing) {
+        if (!player.playing || !appIsActive) {
+            if (!appIsActive && player.playing) {
+                player.pause();
+            }
             return;
         }
 
@@ -46,7 +51,7 @@ export const VoicePlayer = ({ audioUri, duration }: VoicePlayerProps) => {
         }, 100);
 
         return () => clearInterval(interval);
-    }, [player.playing]);
+    }, [player.playing, appIsActive, player]);
 
     useEffect(() => {
         setPosition(0);

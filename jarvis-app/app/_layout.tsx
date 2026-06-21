@@ -55,6 +55,7 @@ export default function RootLayout() {
 
   const token = useStore(state => state.token);
   const initApp = useStore(state => state.initApp);
+  const setAppIsActive = useStore(state => state.setAppIsActive);
 
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
@@ -87,8 +88,11 @@ export default function RootLayout() {
 
   useEffect(() => {
     // Handle AppState changes (minimize call when app goes to background)
+    setAppIsActive(AppState.currentState === 'active');
+
     const subscription = AppState.addEventListener('change', nextAppState => {
       const { callState, setIsMinimized } = useStore.getState();
+      setAppIsActive(nextAppState === 'active');
       if (nextAppState === 'background' && callState.isCalling && !callState.isMinimized && !callState.isRequestingPermissions) {
         console.log('[AppState] App going to background, minimizing active call');
         setIsMinimized(true);
@@ -98,7 +102,7 @@ export default function RootLayout() {
     return () => {
       subscription.remove();
     };
-  }, []);
+  }, [setAppIsActive]);
 
   useEffect(() => {
     // Prevent accidental app-exit on hardware 'Back' if a call is active
@@ -237,4 +241,3 @@ function RootLayoutNav() {
     </GestureHandlerRootView>
   );
 }
-

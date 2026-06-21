@@ -23,6 +23,7 @@ export default function CallScreen() {
     const connectionState = useStore((state: any) => state.callState.connectionState);
     const endCall = useStore((state: any) => state.endCall);
     const setIsMinimized = useStore((state: any) => state.setIsMinimized);
+    const appIsActive = useStore((state: any) => state.appIsActive);
     const chat = useStore(useCallback((state: any) => state.chats.find((c: any) => c.id === id) || null, [id]));
     const startTime = useStore((state: any) => state.callState.startTime);
     const callHasStarted = useRef(isCalling);
@@ -54,7 +55,7 @@ export default function CallScreen() {
         pulseLoopRef.current = null;
 
         const isRinging = !remoteStream && (connectionState === 'connecting' || connectionState === 'new' || !connectionState);
-        if (isCalling && isRinging && !isEnding) {
+        if (appIsActive && isCalling && isRinging && !isEnding) {
             pulseLoopRef.current = Animated.loop(
                 Animated.sequence([
                     Animated.timing(pulseAnim, {
@@ -81,7 +82,7 @@ export default function CallScreen() {
             pulseLoopRef.current?.stop();
             pulseLoopRef.current = null;
         };
-    }, [isCalling, remoteStream, connectionState, isEnding, pulseAnim]);
+    }, [appIsActive, isCalling, remoteStream, connectionState, isEnding, pulseAnim]);
 
     useEffect(() => {
         const backAction = () => {
@@ -115,7 +116,7 @@ export default function CallScreen() {
 
     useEffect(() => {
         let interval: any;
-        if (startTime && !isEnding) {
+        if (appIsActive && startTime && !isEnding) {
             interval = setInterval(() => {
                 const now = Date.now();
                 const diff = Math.floor((now - startTime) / 1000);
@@ -125,7 +126,7 @@ export default function CallScreen() {
             }, 1000);
         }
         return () => clearInterval(interval);
-    }, [startTime, isEnding]);
+    }, [appIsActive, startTime, isEnding]);
 
     const handleEndCall = useCallback(() => {
         setIsEnding(true);
