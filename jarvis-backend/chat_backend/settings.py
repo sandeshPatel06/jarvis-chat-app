@@ -98,39 +98,52 @@ USE_TZ = True
 
 
 def _redis_backend_url(env_name, default_db):
-    return os.environ.get(env_name, os.environ.get('REDIS_URL', f'redis://localhost:6379/{default_db}'))
+    return os.environ.get(env_name) or os.environ.get('REDIS_URL') or None
 
 
 # Redis Configuration
-REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/1')
-REDIS_CHANNEL_LAYER_URL = _redis_backend_url('REDIS_CHANNEL_LAYER_URL', 0)
-REDIS_CACHE_URL = _redis_backend_url('REDIS_CACHE_URL', 2)
-REDIS_CELERY_BROKER_URL = _redis_backend_url('REDIS_CELERY_BROKER_URL', 3)
-REDIS_CELERY_RESULT_BACKEND = _redis_backend_url('REDIS_CELERY_RESULT_BACKEND', 3)
+REDIS_URL = os.environ.get('REDIS_URL')
+REDIS_CHANNEL_LAYER_URL = os.environ.get('REDIS_CHANNEL_LAYER_URL') or REDIS_URL
+REDIS_CACHE_URL = os.environ.get('REDIS_CACHE_URL') or REDIS_URL
+REDIS_CELERY_BROKER_URL = os.environ.get('REDIS_CELERY_BROKER_URL') or REDIS_URL
+REDIS_CELERY_RESULT_BACKEND = os.environ.get('REDIS_CELERY_RESULT_BACKEND') or REDIS_URL
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [REDIS_CHANNEL_LAYER_URL],
+if REDIS_CHANNEL_LAYER_URL:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_CHANNEL_LAYER_URL],
+            },
         },
-    },
-}
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
 
-# Caching Configuration (Redis)
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_CACHE_URL,
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+# Caching Configuration
+if REDIS_CACHE_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_CACHE_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            }
         }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "jarvis-backend",
+        }
+    }
 
 # Celery Configuration
-CELERY_BROKER_URL = REDIS_CELERY_BROKER_URL
-CELERY_RESULT_BACKEND = REDIS_CELERY_RESULT_BACKEND
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -144,6 +157,12 @@ CELERY_TASK_ROUTES = {
     'chat.tasks.send_call_notification': {'queue': 'notifications'},
     'chat.tasks.process_message_media': {'queue': 'media'},
 }
+if REDIS_CELERY_BROKER_URL and REDIS_CELERY_RESULT_BACKEND:
+    CELERY_BROKER_URL = REDIS_CELERY_BROKER_URL
+    CELERY_RESULT_BACKEND = REDIS_CELERY_RESULT_BACKEND
+else:
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
 
 
 # Database

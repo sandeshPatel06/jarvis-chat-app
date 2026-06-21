@@ -1,0 +1,1092 @@
+openapi: 3.0.3
+info:
+  title: Jarvis Backend API
+  version: 1.0.0
+  description: REST and websocket surface for Jarvis chat, accounts, and calls.
+servers:
+  - url: http://localhost:8000
+tags:
+  - name: auth
+  - name: chat
+  - name: calls
+security:
+  - tokenAuth: []
+x-websocket-endpoints:
+  - path: /ws/chat/
+    description: Authenticated websocket for chat, delivery, typing, and signaling events.
+    auth:
+      queryParameter: token
+paths:
+  /ws/chat/:
+    get:
+      tags:
+        - chat
+      summary: Upgrade to chat websocket
+      description: Connect with `?token=<DRF token>` for authenticated realtime messaging.
+      parameters:
+        - in: query
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        '101':
+          description: Switching Protocols
+  /api/auth/request-otp/:
+    post:
+      tags:
+        - auth
+      summary: Request an OTP
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestOtpRequest'
+      responses:
+        '200':
+          description: OTP session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestOtpResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/auth/verify-otp/:
+    post:
+      tags:
+        - auth
+      summary: Verify an OTP
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOtpRequest'
+      responses:
+        '200':
+          description: OTP verified
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/VerifyOtpExistingUserResponse'
+                  - $ref: '#/components/schemas/VerifyOtpNewUserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/auth/complete-signup/:
+    post:
+      tags:
+        - auth
+      summary: Complete signup after OTP verification
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteSignupRequest'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenUserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/auth/login/:
+    post:
+      tags:
+        - auth
+      summary: Login with email or phone
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenUserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/check-contacts/:
+    post:
+      tags:
+        - auth
+      summary: Match phone numbers against users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckContactsRequest'
+      responses:
+        '200':
+          description: Matching users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/profile/:
+    get:
+      tags:
+        - auth
+      summary: Get current user profile
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags:
+        - auth
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserProfileUpdateRequest'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags:
+        - auth
+      summary: Replace current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserProfileUpdateRequest'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags:
+        - auth
+      summary: Delete current account
+      responses:
+        '204':
+          description: Account deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/users/{pk}/:
+    get:
+      tags:
+        - auth
+      summary: Get a public user profile
+      parameters:
+        - $ref: '#/components/parameters/PkPath'
+      responses:
+        '200':
+          description: Public profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/auth/block/:
+    get:
+      tags:
+        - auth
+      summary: List blocked user IDs
+      responses:
+        '200':
+          description: Blocked user ids
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - auth
+      summary: Block a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlockUserRequest'
+      responses:
+        '201':
+          description: User blocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - auth
+      summary: Unblock a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlockUserRequest'
+      responses:
+        '200':
+          description: User unblocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/auth/fcm-token/:
+    post:
+      tags:
+        - auth
+      summary: Update the push token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FcmTokenRequest'
+      responses:
+        '200':
+          description: Token updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/chat/conversations/:
+    get:
+      tags:
+        - chat
+      summary: List conversations
+      parameters:
+        - in: query
+          name: deleted
+          schema:
+            type: boolean
+          description: Return deleted conversations when true.
+      responses:
+        '200':
+          description: Conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Conversation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - chat
+      summary: Create or fetch a one-on-one conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationCreateRequest'
+      responses:
+        '201':
+          description: Conversation created or fetched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/chat/conversations/{pk}/:
+    delete:
+      tags:
+        - chat
+      summary: Soft delete a conversation
+      parameters:
+        - $ref: '#/components/parameters/PkPath'
+      responses:
+        '204':
+          description: Conversation deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/chat/conversations/{pk}/clear/:
+    post:
+      tags:
+        - chat
+      summary: Clear all messages in a conversation
+      parameters:
+        - $ref: '#/components/parameters/PkPath'
+      responses:
+        '200':
+          description: Conversation cleared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/chat/conversations/{conversation_id}/read/:
+    post:
+      tags:
+        - chat
+      summary: Mark conversation messages as read
+      parameters:
+        - in: path
+          name: conversation_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Conversation marked read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/chat/messages/{conversation_id}/:
+    get:
+      tags:
+        - chat
+      summary: List conversation messages
+      parameters:
+        - in: path
+          name: conversation_id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: before
+          schema:
+            type: string
+            format: date-time
+          description: Return messages older than this timestamp.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          description: Page size for limit/offset pagination.
+        - in: query
+          name: offset
+          schema:
+            type: integer
+          description: Page offset for limit/offset pagination.
+      responses:
+        '200':
+          description: Paginated message history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMessageList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/chat/messages/detail/{pk}/:
+    delete:
+      tags:
+        - chat
+      summary: Soft delete a message
+      parameters:
+        - $ref: '#/components/parameters/PkPath'
+      responses:
+        '204':
+          description: Message deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/chat/messages/{message_id}/react/:
+    post:
+      tags:
+        - chat
+      summary: Toggle a reaction on a message
+      parameters:
+        - in: path
+          name: message_id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReactionRequest'
+      responses:
+        '200':
+          description: Reaction removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '201':
+          description: Reaction added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/chat/messages/upload/:
+    post:
+      tags:
+        - chat
+      summary: Upload a text or media message
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MessageUploadRequest'
+      responses:
+        '201':
+          description: Message created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/chat/restore/:
+    post:
+      tags:
+        - chat
+      summary: Restore deleted conversations and messages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreChatRequest'
+      responses:
+        '200':
+          description: Restore completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestoreChatResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/calls/:
+    get:
+      tags:
+        - calls
+      summary: List call history
+      responses:
+        '200':
+          description: Calls
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Call'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - calls
+      summary: Create a call record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CallCreateRequest'
+      responses:
+        '201':
+          description: Call created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Call'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/calls/{pk}/:
+    delete:
+      tags:
+        - calls
+      summary: Delete a single call record
+      parameters:
+        - $ref: '#/components/parameters/PkPath'
+      responses:
+        '204':
+          description: Call deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/calls/clear/:
+    delete:
+      tags:
+        - calls
+      summary: Clear the authenticated user's call history
+      responses:
+        '204':
+          description: Call history cleared
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/calls/bulk-delete/:
+    post:
+      tags:
+        - calls
+      summary: Delete multiple calls by id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteCallsRequest'
+      responses:
+        '204':
+          description: Calls deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Use `Token <DRF token>`.
+  parameters:
+    PkPath:
+      in: path
+      name: pk
+      required: true
+      schema:
+        type: integer
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServerError:
+      description: Server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      additionalProperties: true
+    StatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+      additionalProperties: true
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone_number:
+          type: string
+          nullable: true
+        profile_picture:
+          type: string
+          format: uri
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        last_seen:
+          type: string
+          format: date-time
+          nullable: true
+        is_online:
+          type: boolean
+        privacy_last_seen:
+          type: string
+          enum: [everyone, contacts, nobody]
+        privacy_profile_photo:
+          type: string
+          enum: [everyone, contacts, nobody]
+        privacy_read_receipts:
+          type: boolean
+        privacy_disappearing_messages_timer:
+          type: integer
+        notifications_enabled:
+          type: boolean
+        notifications_sound:
+          type: boolean
+        notifications_groups_enabled:
+          type: boolean
+        security_notifications_enabled:
+          type: boolean
+        two_step_verification_enabled:
+          type: boolean
+        storage_auto_download_media:
+          type: boolean
+        chat_wallpaper:
+          type: string
+          nullable: true
+        app_language:
+          type: string
+      required:
+        - id
+        - username
+        - is_online
+    UserProfileUpdateRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        phone_number:
+          type: string
+        profile_picture:
+          type: string
+          format: binary
+        bio:
+          type: string
+        privacy_last_seen:
+          type: string
+          enum: [everyone, contacts, nobody]
+        privacy_profile_photo:
+          type: string
+          enum: [everyone, contacts, nobody]
+        privacy_read_receipts:
+          type: boolean
+        privacy_disappearing_messages_timer:
+          type: integer
+        notifications_enabled:
+          type: boolean
+        notifications_sound:
+          type: boolean
+        notifications_groups_enabled:
+          type: boolean
+        security_notifications_enabled:
+          type: boolean
+        two_step_verification_enabled:
+          type: boolean
+        storage_auto_download_media:
+          type: boolean
+        chat_wallpaper:
+          type: string
+        app_language:
+          type: string
+    RequestOtpRequest:
+      type: object
+      required: [identifier]
+      properties:
+        identifier:
+          type: string
+          description: Email address or phone number.
+    RequestOtpResponse:
+      type: object
+      properties:
+        session_id:
+          type: string
+        message:
+          type: string
+      required: [session_id, message]
+    VerifyOtpRequest:
+      type: object
+      required: [session_id, otp_code]
+      properties:
+        session_id:
+          type: string
+        otp_code:
+          type: string
+    VerifyOtpExistingUserResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: verified
+        user_exists:
+          type: boolean
+          enum: [true]
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+    VerifyOtpNewUserResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: verified
+        user_exists:
+          type: boolean
+          enum: [false]
+        session_id:
+          type: string
+    CompleteSignupRequest:
+      type: object
+      required: [session_id, username, password]
+      properties:
+        session_id:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+        phone_number:
+          type: string
+    LoginRequest:
+      type: object
+      required: [identifier, password]
+      properties:
+        identifier:
+          type: string
+        password:
+          type: string
+    TokenUserResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+      required: [token, user]
+    CheckContactsRequest:
+      type: object
+      required: [phone_numbers]
+      properties:
+        phone_numbers:
+          type: array
+          items:
+            type: string
+    BlockUserRequest:
+      type: object
+      required: [user_id]
+      properties:
+        user_id:
+          type: integer
+    FcmTokenRequest:
+      type: object
+      required: [fcm_token]
+      properties:
+        fcm_token:
+          type: string
+    ConversationCreateRequest:
+      type: object
+      required: [recipient]
+      properties:
+        recipient:
+          type: string
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        last_message:
+          $ref: '#/components/schemas/Message'
+        unread_count:
+          type: integer
+        other_user_id:
+          type: integer
+          nullable: true
+        is_deleted:
+          type: boolean
+      required: [id, participants, unread_count, is_deleted]
+    MessageReply:
+      type: object
+      properties:
+        id:
+          type: integer
+        text:
+          type: string
+          nullable: true
+        sender:
+          type: string
+      required: [id, sender]
+    Message:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversation:
+          type: integer
+        sender:
+          $ref: '#/components/schemas/User'
+        text:
+          type: string
+          nullable: true
+        message_type:
+          type: string
+          enum: [text, image, video, file, location, contact, voice]
+        file:
+          type: string
+          format: uri
+          nullable: true
+        file_type:
+          type: string
+          nullable: true
+        file_name:
+          type: string
+          nullable: true
+        media_processing_state:
+          type: string
+          enum: [ready, pending, processing, failed]
+        media_metadata:
+          type: object
+          additionalProperties: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        contact_name:
+          type: string
+          nullable: true
+        contact_phone:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        is_read:
+          type: boolean
+        is_delivered:
+          type: boolean
+        reactions:
+          type: array
+          items:
+            type: string
+        reply_to:
+          oneOf:
+            - type: integer
+            - $ref: '#/components/schemas/MessageReply'
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_pinned:
+          type: boolean
+      required:
+        - id
+        - conversation
+        - sender
+        - message_type
+        - timestamp
+        - is_read
+        - is_delivered
+        - reactions
+        - is_pinned
+    PaginatedMessageList:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+      required: [count, next, previous, results]
+    ReactionRequest:
+      type: object
+      required: [reaction]
+      properties:
+        reaction:
+          type: string
+    MessageUploadRequest:
+      type: object
+      properties:
+        conversation_id:
+          type: integer
+        recipient_username:
+          type: string
+        text:
+          type: string
+        file:
+          type: string
+          format: binary
+        file_type:
+          type: string
+        file_name:
+          type: string
+        reply_to_id:
+          type: integer
+    RestoreChatRequest:
+      type: object
+      required: [conversation_ids]
+      properties:
+        conversation_ids:
+          type: array
+          items:
+            type: integer
+        restore_messages_before:
+          type: string
+          format: date-time
+          nullable: true
+    RestoreChatResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        count:
+          type: integer
+      required: [status, count]
+    Call:
+      type: object
+      properties:
+        id:
+          type: integer
+        caller:
+          $ref: '#/components/schemas/User'
+        receiver:
+          $ref: '#/components/schemas/User'
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum: [ongoing, completed, missed, rejected]
+        is_video:
+          type: boolean
+      required: [id, caller, receiver, started_at, status, is_video]
+    CallCreateRequest:
+      type: object
+      required: [receiver_username]
+      properties:
+        receiver_username:
+          type: string
+        is_video:
+          type: boolean
+    BulkDeleteCallsRequest:
+      type: object
+      required: [call_ids]
+      properties:
+        call_ids:
+          type: array
+          items:
+            type: integer
