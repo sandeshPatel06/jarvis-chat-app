@@ -19,6 +19,34 @@ import { getMediaUrl } from '@/utils/media';
 import { api } from './api';
 import { useStore } from '@/store';
 
+const isIncomingCallPayload = (data: any) => {
+    if (!data) return false;
+
+    if (data.type === 'incoming_call') {
+        return true;
+    }
+
+    return Boolean(
+        data.callUUID ||
+        data.call_uuid ||
+        data.offer ||
+        data.is_video !== undefined ||
+        data.caller_name ||
+        data.caller_avatar
+    );
+};
+
+const normalizeIncomingCallPayload = (remoteMessage: any) => {
+    const { data = {}, notification: firebaseNotification } = remoteMessage;
+    return {
+        ...data,
+        callUUID: data.callUUID || data.call_uuid || data.uuid || Date.now().toString(),
+        callerName: data.caller_name || data.sender_name || firebaseNotification?.title || 'Unknown Caller',
+        callerAvatar: data.caller_avatar || data.sender_avatar || '',
+        isVideo: data.is_video === true || data.is_video === 'true',
+    };
+};
+
 // ============================================================================
 // CENTRALIZED NOTIFICATION HANDLER
 // ============================================================================
@@ -30,17 +58,15 @@ async function handleRemoteMessage(remoteMessage: any, context: 'foreground' | '
         const { data, notification: firebaseNotification } = remoteMessage;
 
         // 1. Handle Incoming Call
-        // Check for 'incoming_call' in both possible field locations
-        if (data?.type === 'incoming_call') {
+        // Prefer explicit call payloads before message handling so killed/background calls can ring.
+        if (isIncomingCallPayload(data)) {
             console.log(`[Firebase ${context}] 📞 Incoming call detected`);
 
-            const fcmData = {
-                type: data.type,
-                // Align backend 'call_uuid' or 'uuid' with frontend 'callUUID'
-                callUUID: data.call_uuid || data.uuid || data.callUUID || Date.now().toString(),
-                callerId: data.handle || data.callerId || data.sender_id || 'Unknown',
-                callerName: data.caller_name || data.sender_name || firebaseNotification?.title || 'Unknown Caller',
-            };
+            const fcmData = normalizeIncomingCallPayload(remoteMessage);
+
+            if (fcmData.type !== 'incoming_call') {
+                console.warn(`[Firebase ${context}] Incoming-call payload missing explicit type, using fallback routing`);
+            }
 
             await handleIncomingCallFCM(fcmData);
             console.log(`[Firebase ${context}] ✅ Call handled successfully`);
@@ -48,6 +74,13 @@ async function handleRemoteMessage(remoteMessage: any, context: 'foreground' | '
         // 2. Handle New Message
         else if (data?.type === 'message' || data?.conversation_id || firebaseNotification) {
             console.log(`[Firebase ${context}] 💬 New message detected`);
+
+            // Let the OS render notification payloads in background/killed state.
+            // This avoids a duplicate banner when the backend already sent a system notification.
+            if (context === 'background' && firebaseNotification) {
+                console.log('[Firebase background] Skipping local message notification because OS notification is already present');
+                return;
+            }
 
             // If we are in foreground, we might want to skip showing the notification 
             // if the user is already in that chat. 

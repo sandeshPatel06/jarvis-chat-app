@@ -109,9 +109,24 @@ export default function ChatDetailScreen() {
     const lastTypingSent = useRef<number>(0);
 
     const displayMessages = useMemo(() => {
-        if (!searchQuery) return chat?.messages || [];
+        const messages = chat?.messages || [];
+        const deduped = (() => {
+            const seen = new Set<string>();
+            const result: Message[] = [];
+
+            for (const message of messages) {
+                const messageId = message?.id?.toString();
+                if (!messageId || seen.has(messageId)) continue;
+                seen.add(messageId);
+                result.push(message);
+            }
+
+            return result;
+        })();
+
+        if (!searchQuery) return deduped;
         const query = searchQuery.toLowerCase();
-        return (chat?.messages || []).filter((m: any) => 
+        return deduped.filter((m: any) => 
             m.text?.toLowerCase().includes(query)
         );
     }, [chat?.messages, searchQuery]);
@@ -175,7 +190,7 @@ export default function ChatDetailScreen() {
     }, [chat?.messages?.length, animationsEnabled]);
 
     useEffect(() => {
-        unreadMessageIds.forEach((messageId) => {
+        unreadMessageIds.forEach((messageId: string) => {
             markRead(chat.id, messageId);
         });
     }, [chat?.id, unreadMessageIds, markRead]);

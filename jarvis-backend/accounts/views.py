@@ -168,7 +168,7 @@ class CompleteSignupView(APIView):
             if User.objects.filter(username=username).exists():
                 return Response({"error": "Username already taken"}, status=status.HTTP_400_BAD_REQUEST)
 
-            email = pending.identifier if '@' in pending.identifier else f"{session_id[:8]}@phone.local"
+            email = pending.identifier if '@' in pending.identifier else None
             phone = phone_number or (pending.identifier if '@' not in pending.identifier else None)
 
             if phone and User.objects.filter(phone_number=phone).exists():

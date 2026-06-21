@@ -57,6 +57,23 @@ export interface ChatSlice {
 
 let reconnectTimeout: any = null;
 let reconnectAttempts = 0;
+const messageFetchInFlight = new Set<string>();
+const messageFetchLastStartedAt = new Map<string, number>();
+const MESSAGE_FETCH_DEDUP_WINDOW_MS = 1500;
+
+const dedupeMessagesById = (messages: any[]) => {
+    const seen = new Set<string>();
+    const deduped: any[] = [];
+
+    for (const message of messages) {
+        const id = message?.id?.toString();
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        deduped.push(message);
+    }
+
+    return deduped;
+};
 
 export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, get) => ({
     chats: [],
@@ -205,6 +222,7 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
 
             // Standardize Sorting: Newest messages at index 0 for inverted list
             newMessages.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+            newMessages = dedupeMessagesById(newMessages);
 
             // 4. Update chat preview
             chat.messages = [...newMessages];
@@ -380,12 +398,31 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
 
     fetchMessages: async (chatId) => {
         const { token, user } = get() as any;
+        const now = Date.now();
+        const lastStartedAt = messageFetchLastStartedAt.get(chatId) || 0;
+
+        if (messageFetchInFlight.has(chatId)) {
+            console.log(`[ChatSlice] Skipping duplicate fetch for ${chatId} (already in flight)`);
+            return;
+        }
+
+        if (now - lastStartedAt < MESSAGE_FETCH_DEDUP_WINDOW_MS) {
+            console.log(`[ChatSlice] Skipping duplicate fetch for ${chatId} (started ${now - lastStartedAt}ms ago)`);
+            return;
+        }
+
+        messageFetchInFlight.add(chatId);
+        messageFetchLastStartedAt.set(chatId, now);
+
         const local = await database.getMessages(chatId);
         set((state: any) => ({
             chats: state.chats.map((c: any) => c.id === chatId ? { ...c, messages: local } : c)
         }));
 
-        if (!token) return;
+        if (!token) {
+            messageFetchInFlight.delete(chatId);
+            return;
+        }
         try {
             const remote = await api.chat.getMessages(token, chatId, 20, 0);
             const mapped = await Promise.all(remote.map(async (m: any) => {
@@ -441,14 +478,7 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
                 chats: state.chats.map((c: any) => {
                     if (c.id === chatId) {
                         // Merge remote messages with local, avoiding duplicates
-                        const existingIds = new Set(c.messages.map((m: any) => m.id.toString()));
-                        const newMessages = [...c.messages];
-                        
-                        mapped.forEach((msg: any) => {
-                            if (!existingIds.has(msg.id.toString())) {
-                                newMessages.push(msg);
-                            }
-                        });
+                        const newMessages = dedupeMessagesById([...mapped, ...c.messages]);
 
                         // Sort newest first for inverted list
                         newMessages.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
@@ -465,6 +495,8 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
             }
         } catch (e) {
             console.error('Fetch messages failed', e);
+        } finally {
+            messageFetchInFlight.delete(chatId);
         }
     },
 
@@ -570,11 +602,7 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
             set((state: any) => ({
                 chats: state.chats.map((c: any) => {
                     if (c.id === chatId) {
-                        const existingIds = new Set(c.messages.map((m: any) => m.id.toString()));
-                        const combined = [...c.messages];
-                        mapped.forEach(m => {
-                            if (!existingIds.has(m.id.toString())) combined.push(m);
-                        });
+                        const combined = dedupeMessagesById([...mapped, ...c.messages]);
                         combined.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
                         return { ...c, messages: combined };
                     }
@@ -730,4 +758,3 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
         } catch (e) { console.error(e); }
     },
 });
-

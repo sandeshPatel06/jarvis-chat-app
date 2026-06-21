@@ -1,60 +1,83 @@
-import notifee, { AndroidImportance, AndroidVisibility, EventType, AndroidCategory } from '@notifee/react-native';
+import notifee, { AndroidImportance, AndroidVisibility, AndroidCategory } from '@notifee/react-native';
+import { getMediaUrl } from '@/utils/media';
 
 /**
  * Handles incoming call data from FCM and displays a notification.
  */
+const CALL_CHANNEL_ID = 'jarvis_voice_calls_v2';
+
 export async function handleIncomingCallFCM(data: any) {
     console.log('[BackgroundCallHelper] 📞 Handling incoming call FCM data:', data);
 
-    const { callUUID, callerName } = data;
+    const { callUUID, callerName, callerAvatar, isVideo } = data;
+    let avatarUrl = callerAvatar ? getMediaUrl(callerAvatar) : null;
+
+    if (avatarUrl && !avatarUrl.startsWith('http') && !avatarUrl.startsWith('file')) {
+        avatarUrl = null;
+    }
 
     // Create a channel with a new ID to bypass any previously cached OS configurations
     const channelId = await notifee.createChannel({
-        id: 'jarvis_voice_calls',
+        id: CALL_CHANNEL_ID,
         name: 'Incoming Voice/Video Calls',
         importance: AndroidImportance.HIGH,
         visibility: AndroidVisibility.PUBLIC,
         vibration: true,
         bypassDnd: true, // Allow calls to bypass Do Not Disturb mode
+        sound: 'default',
     });
 
     // Display a robust, un-swipeable incoming call notification
+    const androidConfig: any = {
+        channelId,
+        importance: AndroidImportance.HIGH,
+        visibility: AndroidVisibility.PUBLIC,
+        sound: 'default',
+        ongoing: true, // Prevents the user or OS from swiping away the notification while it's ringing
+        autoCancel: false,
+        lightUpScreen: true, // Forces the screen to wake up (crucial for lock screen)
+        pressAction: {
+            id: 'default',
+            launchActivity: 'default',
+        },
+        actions: [
+            {
+                title: 'Answer',
+                pressAction: { id: 'answer_call', launchActivity: 'default' },
+            },
+            {
+                title: 'Decline',
+                pressAction: { id: 'decline_call' },
+            },
+        ],
+        fullScreenAction: {
+            id: 'full_screen',
+            launchActivity: 'default',
+        },
+        category: AndroidCategory.CALL,
+    };
+
+    if (avatarUrl) {
+        androidConfig.largeIcon = avatarUrl;
+    }
+
     await notifee.displayNotification({
         id: callUUID || 'incoming_call',
         title: 'Incoming Call',
         body: `${callerName || 'Someone'} is calling you...`,
-        android: {
-            channelId,
-            importance: AndroidImportance.HIGH,
-            visibility: AndroidVisibility.PUBLIC,
+        android: androidConfig,
+        ios: {
             sound: 'default',
-            ongoing: true, // Prevents the user or OS from swiping away the notification while it's ringing
-            autoCancel: false,
-            lightUpScreen: true, // Forces the screen to wake up (crucial for lock screen)
-            pressAction: {
-                id: 'default',
-                launchActivity: 'default',
-            },
-            actions: [
-                {
-                    title: 'Answer',
-                    pressAction: { id: 'answer_call', launchActivity: 'default' },
-                },
-                {
-                    title: 'Decline',
-                    pressAction: { id: 'decline_call' },
-                },
-            ],
-            fullScreenAction: {
-                id: 'full_screen',
-                launchActivity: 'default',
-            },
-            category: AndroidCategory.CALL,
+            interruptionLevel: 'timeSensitive',
         },
         data: {
             callUUID,
             type: 'incoming_call',
+            conversation_id: data.conversation_id || data.chat_id || null,
+            chat_id: data.chat_id || data.conversation_id || null,
+            caller_name: callerName || 'Someone',
+            caller_avatar: callerAvatar || '',
+            is_video: isVideo ? 'true' : 'false',
         },
     });
 }
-

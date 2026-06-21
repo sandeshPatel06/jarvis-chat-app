@@ -11,6 +11,8 @@ class User(AbstractUser):
     is_online = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
+        if not self.email:
+            self.email = None
         if self.phone_number:
             from utils.formatting import normalize_phone
             self.normalized_phone_number = normalize_phone(self.phone_number)

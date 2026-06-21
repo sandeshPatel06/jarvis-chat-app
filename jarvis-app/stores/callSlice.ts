@@ -274,6 +274,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 isMinimized: false,
                 isRequestingPermissions: false,
                 connectionState: 'closed',
+                startTime: null,
             }
         }));
     },
