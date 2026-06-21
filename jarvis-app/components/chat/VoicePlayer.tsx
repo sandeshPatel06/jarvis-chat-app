@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useAudioPlayer } from 'expo-audio';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useStore } from '@/store';
 
 interface VoicePlayerProps {
     audioUri: string;
@@ -12,18 +13,49 @@ interface VoicePlayerProps {
 export const VoicePlayer = ({ audioUri, duration }: VoicePlayerProps) => {
     const { colors } = useAppTheme();
     const player = useAudioPlayer(audioUri);
+    const playerRef = useRef(player);
+    const appIsActive = useStore((state: any) => state.appIsActive);
     const [position, setPosition] = useState(0);
     const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
 
+    const waveformBars = useMemo(() => {
+        const seedSource = `${audioUri}:${duration}`;
+        let seed = 0;
+
+        for (let i = 0; i < seedSource.length; i += 1) {
+            seed = (seed * 31 + seedSource.charCodeAt(i)) >>> 0;
+        }
+
+        const nextRandom = () => {
+            seed = (1664525 * seed + 1013904223) >>> 0;
+            return seed / 0xffffffff;
+        };
+
+        return Array.from({ length: 20 }, () => 10 + nextRandom() * 20);
+    }, [audioUri, duration]);
+
     useEffect(() => {
-        const interval = setInterval(() => {
-            if (player.playing) {
-                setPosition(player.currentTime);
+        playerRef.current = player;
+    }, [player]);
+
+    useEffect(() => {
+        if (!player.playing || !appIsActive) {
+            if (!appIsActive && player.playing) {
+                player.pause();
             }
+            return;
+        }
+
+        const interval = setInterval(() => {
+            setPosition(playerRef.current.currentTime);
         }, 100);
 
         return () => clearInterval(interval);
-    }, [player.playing, player.currentTime]);
+    }, [player.playing, appIsActive, player]);
+
+    useEffect(() => {
+        setPosition(0);
+    }, [audioUri]);
 
     const togglePlayback = () => {
         if (player.playing) {
@@ -60,13 +92,13 @@ export const VoicePlayer = ({ audioUri, duration }: VoicePlayerProps) => {
 
             <View style={styles.progressContainer}>
                 <View style={styles.waveform}>
-                    {[...Array(20)].map((_, i) => (
+                    {waveformBars.map((barHeight, i) => (
                         <View
                             key={i}
                             style={[
                                 styles.waveBar,
                                 {
-                                    height: Math.random() * 20 + 10,
+                                    height: barHeight,
                                     backgroundColor: i < (position / duration) * 20 ? colors.primary : 'rgba(255,255,255,0.3)',
                                 }
                             ]}

@@ -5,6 +5,8 @@ from .serializers import ConversationSerializer, MessageSerializer, ReactionSeri
 from django.db.models import Q, Count, OuterRef, Subquery, Prefetch
 from django.contrib.auth import get_user_model
 from rest_framework.views import APIView
+from .pagination import MessageHistoryPagination, apply_history_cursor
+from utils.chat_utils import get_or_create_1on1_conversation
 
 User = get_user_model()
 try:
@@ -26,17 +28,21 @@ class ConversationListView(generics.ListCreateAPIView):
             conversation=OuterRef('pk')
         ).exclude(sender=user).filter(is_read=False).values('conversation').annotate(cnt=Count('id')).values('cnt')
 
-        # Limit prefetched messages to recent ones? 
-        # Django Prefetch doesn't support easy slicing, but we can prefetch senders and replies to avoid N+1 inside MessageSerializer
-        recent_messages = Message.objects.order_by('-timestamp').select_related('sender', 'reply_to', 'reply_to__sender').prefetch_related('reactions', 'reactions__user')
+        recent_messages = Message.objects.select_related(
+            'sender',
+            'reply_to',
+            'reply_to__sender',
+        ).prefetch_related('reactions', 'reactions__user').order_by('-timestamp')[:1]
 
         return user.conversations.filter(is_deleted=is_deleted).annotate(
             unread_count_annotated=Subquery(unread_count_qs)
         ).prefetch_related(
             'participants',
-            # This is tricky: if we prefetch ALL messages, it's slow. 
-            # But the serializer calls .first() which triggers a query anyway if not pre-fetched.
-            # For now, we prefetch basic fields to avoid N+1 on participants.
+            Prefetch(
+                'messages',
+                queryset=recent_messages,
+                to_attr='_prefetched_messages',
+            ),
         ).order_by('-id')
 
     def create(self, request, *args, **kwargs):
@@ -50,7 +56,6 @@ class ConversationListView(generics.ListCreateAPIView):
 
         try:
             recipient = User.objects.get(username=recipient_username)
-            from utils.chat_utils import get_or_create_1on1_conversation
             conversation, created = get_or_create_1on1_conversation(request.user, recipient)
             
             response_serializer = self.get_serializer(conversation)
@@ -72,12 +77,10 @@ class ConversationDetailView(generics.DestroyAPIView):
         instance.is_deleted = True
         instance.save()
 
-from rest_framework.pagination import LimitOffsetPagination
-
 class MessageListView(generics.ListAPIView):
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = LimitOffsetPagination
+    pagination_class = MessageHistoryPagination
 
     def get_queryset(self):
         conversation_id = self.kwargs['conversation_id']
@@ -95,12 +98,14 @@ class MessageListView(generics.ListAPIView):
         # Filter out messages where sender is in blocked_senders AND message is not delivered (pending)
         # We want to keep historical messages (which are presumably delivered/read)
         
-        return Message.objects.filter(
+        queryset = Message.objects.filter(
             conversation_id=conversation_id
         ).select_related('sender', 'reply_to', 'reply_to__sender').prefetch_related('reactions', 'reactions__user').exclude(
             sender__in=blocked_senders,
             is_delivered=False 
         ).order_by('-timestamp')
+
+        return apply_history_cursor(queryset, self.request)
 
 class MessageDetailView(generics.DestroyAPIView):
     queryset = Message.objects.all()
@@ -229,7 +234,6 @@ class MessageUploadView(APIView):
             if not conversation and recipient_username:
                 try:
                     recipient = User.objects.get(username=recipient_username)
-                    from utils.chat_utils import get_or_create_1on1_conversation
                     conversation, _ = get_or_create_1on1_conversation(request.user, recipient)
                 except User.DoesNotExist:
                     pass
@@ -255,6 +259,7 @@ class MessageUploadView(APIView):
             if reply_to_id:
                 reply_to_message = Message.objects.filter(id=reply_to_id).first()
 
+            message_type = _infer_message_type(file, file_type, text)
             message = Message.objects.create(
                 conversation=conversation,
                 sender=request.user,
@@ -262,11 +267,17 @@ class MessageUploadView(APIView):
                 file=file,
                 file_type=file_type,
                 file_name=file_name,
-                reply_to=reply_to_message
+                reply_to=reply_to_message,
+                message_type=message_type,
+                media_processing_state='pending' if file else 'ready',
             )
 
             serializer = MessageSerializer(message)
             data = serializer.data
+
+            if file:
+                from .tasks import process_message_media
+                process_message_media.delay(message.id)
 
             # Broadcast via WebSocket
             channel_layer = get_channel_layer()
@@ -292,12 +303,12 @@ class MessageUploadView(APIView):
                      # Send FCM if it's the recipient
                      if participant.id != request.user.id:
                          try:
-                             from utils.notifications import send_fcm_notification
-                             send_fcm_notification(
-                                 user=participant,
-                                 title=f"New message from {request.user.username}",
-                                 body=text[:100] if text else "Sent a file",
-                                 data={
+                             from .tasks import send_message_notification
+                             send_message_notification.delay(
+                                 participant.id,
+                                 f"New message from {request.user.username}",
+                                 text[:100] if text else "Sent a file",
+                                 {
                                      "type": "chat_message",
                                      "conversation_id": str(conversation.id),
                                      "sender_id": str(request.user.id),
@@ -370,3 +381,19 @@ class ClearMessagesView(APIView):
             return Response({"status": "cleared"}, status=status.HTTP_200_OK)
         except Conversation.DoesNotExist:
             return Response({"error": "Conversation not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+def _infer_message_type(file_obj, file_type, text):
+    if not file_obj:
+        return 'text'
+
+    content_type = (file_type or getattr(file_obj, 'content_type', '') or '').lower()
+    if content_type.startswith('image/'):
+        return 'image'
+    if content_type.startswith('video/'):
+        return 'video'
+    if content_type.startswith('audio/'):
+        return 'voice'
+    if content_type == 'application/pdf':
+        return 'file'
+    return 'file'

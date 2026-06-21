@@ -3,8 +3,13 @@ from django.conf import settings
 
 class Conversation(models.Model):
     participants = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='conversations')
-    created_at = models.DateTimeField(auto_now_add=True)
     is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['is_deleted', 'created_at']),
+        ]
 
     def __str__(self):
         return f"Conversation {self.id}"
@@ -27,6 +32,17 @@ class Message(models.Model):
     file = models.FileField(upload_to='chat_files/', null=True, blank=True)
     file_type = models.CharField(max_length=50, null=True, blank=True)
     file_name = models.CharField(max_length=255, null=True, blank=True)
+    media_processing_state = models.CharField(
+        max_length=20,
+        default='ready',
+        choices=[
+            ('ready', 'Ready'),
+            ('pending', 'Pending'),
+            ('processing', 'Processing'),
+            ('failed', 'Failed'),
+        ],
+    )
+    media_metadata = models.JSONField(default=dict, blank=True)
     
     # Location fields
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
@@ -42,6 +58,16 @@ class Message(models.Model):
     reply_to = models.ForeignKey('self', null=True, blank=True, related_name='replies', on_delete=models.SET_NULL)
     deleted_at = models.DateTimeField(null=True, blank=True)
     is_pinned = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['conversation', 'timestamp']),
+            models.Index(fields=['conversation', 'is_read', 'timestamp']),
+            models.Index(fields=['conversation', 'deleted_at', 'timestamp']),
+            models.Index(fields=['sender', 'timestamp']),
+            models.Index(fields=['message_type']),
+        ]
+        ordering = ['-timestamp']
 
     def __str__(self):
         return f"{self.sender.username}: {self.text[:20]}"

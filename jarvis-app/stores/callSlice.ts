@@ -18,6 +18,7 @@ interface CallState {
     isVideo?: boolean;
     isRequestingPermissions: boolean;
     connectionState: string;
+    startTime: number | null;
 }
 
 export interface CallSlice {
@@ -86,6 +87,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
         isMinimized: false,
         isRequestingPermissions: false,
         connectionState: 'new',
+        startTime: null,
     },
     setIsMinimized: (isMinimized) => set((state) => ({
         callState: { ...state.callState, isMinimized }
@@ -114,7 +116,11 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
         webrtcService.onConnectionStateChange = (state) => {
             console.log('[CallSlice] 🌐 Connection State:', state);
             set((s) => ({
-                callState: { ...s.callState, connectionState: state }
+                callState: { 
+                    ...s.callState, 
+                    connectionState: state,
+                    startTime: (state === 'connected' && !s.callState.startTime) ? Date.now() : s.callState.startTime
+                }
             }));
             
             if (state === 'connected') {
@@ -268,6 +274,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 isMinimized: false,
                 isRequestingPermissions: false,
                 connectionState: 'closed',
+                startTime: null,
             }
         }));
     },

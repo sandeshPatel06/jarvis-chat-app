@@ -1,0 +1,23 @@
+name: "🏗️ Quality: Type Check"
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths: [ 'jarvis-app/**' ]
+
+jobs:
+  type-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: jarvis-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: jarvis-app/package-lock.json
+      - run: npm ci
+      - name: Hard Logic Check
+        run: npx tsc --noEmit

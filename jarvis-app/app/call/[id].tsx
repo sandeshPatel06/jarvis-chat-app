@@ -23,16 +23,21 @@ export default function CallScreen() {
     const connectionState = useStore((state: any) => state.callState.connectionState);
     const endCall = useStore((state: any) => state.endCall);
     const setIsMinimized = useStore((state: any) => state.setIsMinimized);
+    const appIsActive = useStore((state: any) => state.appIsActive);
     const chat = useStore(useCallback((state: any) => state.chats.find((c: any) => c.id === id) || null, [id]));
+    const startTime = useStore((state: any) => state.callState.startTime);
     const callHasStarted = useRef(isCalling);
 
     const [isMuted, setIsMuted] = useState(false);
     const [isVideoEnabled, setIsVideoEnabled] = useState(true);
     const [isSpeakerOn, setIsSpeakerOn] = useState(true);
     const [isEnding, setIsEnding] = useState(false);
+    const [duration, setDuration] = useState('00:00');
 
     // Animation for pulsing avatar
     const pulseAnim = useRef(new Animated.Value(1)).current;
+    const pulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+    const endRedirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         setIsMinimized(false);
@@ -46,9 +51,12 @@ export default function CallScreen() {
     }, [isCalling]);
 
     useEffect(() => {
+        pulseLoopRef.current?.stop();
+        pulseLoopRef.current = null;
+
         const isRinging = !remoteStream && (connectionState === 'connecting' || connectionState === 'new' || !connectionState);
-        if (isCalling && isRinging && !isEnding) {
-            Animated.loop(
+        if (appIsActive && isCalling && isRinging && !isEnding) {
+            pulseLoopRef.current = Animated.loop(
                 Animated.sequence([
                     Animated.timing(pulseAnim, {
                         toValue: 1.3,
@@ -63,12 +71,18 @@ export default function CallScreen() {
                         useNativeDriver: true,
                     })
                 ])
-            ).start();
+            );
+            pulseLoopRef.current.start();
         } else {
             pulseAnim.stopAnimation();
             pulseAnim.setValue(1);
         }
-    }, [isCalling, remoteStream, connectionState, isEnding, pulseAnim]);
+
+        return () => {
+            pulseLoopRef.current?.stop();
+            pulseLoopRef.current = null;
+        };
+    }, [appIsActive, isCalling, remoteStream, connectionState, isEnding, pulseAnim]);
 
     useEffect(() => {
         const backAction = () => {
@@ -88,20 +102,52 @@ export default function CallScreen() {
     useEffect(() => {
         if (!isCalling && callHasStarted.current && !isEnding) {
             setIsEnding(true);
-            const timer = setTimeout(() => {
+            endRedirectTimeoutRef.current = setTimeout(() => {
                 router.replace('/(tabs)');
             }, 3000);
-            return () => clearTimeout(timer);
+            return () => {
+                if (endRedirectTimeoutRef.current) {
+                    clearTimeout(endRedirectTimeoutRef.current);
+                    endRedirectTimeoutRef.current = null;
+                }
+            };
         }
     }, [isCalling, isEnding, router]);
+
+    useEffect(() => {
+        let interval: any;
+        if (appIsActive && startTime && !isEnding) {
+            interval = setInterval(() => {
+                const now = Date.now();
+                const diff = Math.floor((now - startTime) / 1000);
+                const mm = Math.floor(diff / 60).toString().padStart(2, '0');
+                const ss = (diff % 60).toString().padStart(2, '0');
+                setDuration(`${mm}:${ss}`);
+            }, 1000);
+        }
+        return () => clearInterval(interval);
+    }, [appIsActive, startTime, isEnding]);
 
     const handleEndCall = useCallback(() => {
         setIsEnding(true);
         endCall();
-        setTimeout(() => {
+        if (endRedirectTimeoutRef.current) {
+            clearTimeout(endRedirectTimeoutRef.current);
+        }
+        endRedirectTimeoutRef.current = setTimeout(() => {
             router.replace('/(tabs)');
         }, 3000);
     }, [endCall, router]);
+
+    useEffect(() => {
+        return () => {
+            pulseLoopRef.current?.stop();
+            if (endRedirectTimeoutRef.current) {
+                clearTimeout(endRedirectTimeoutRef.current);
+                endRedirectTimeoutRef.current = null;
+            }
+        };
+    }, []);
 
     const toggleMute = useCallback(() => {
         setIsMuted(prev => {
@@ -132,7 +178,7 @@ export default function CallScreen() {
     }, []);
 
     const renderCallStatus = () => {
-        if (connectionState === 'connected' || remoteStream) return '00:00';
+        if (connectionState === 'connected' || remoteStream) return duration;
         if (connectionState === 'connecting') return 'Connecting...';
         return 'Ringing...';
     };

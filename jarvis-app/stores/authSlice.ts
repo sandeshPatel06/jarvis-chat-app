@@ -51,7 +51,11 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
     logout: async () => {
         // Access other slices via get() if needed
         const state = get() as any;
-        if (state.socket) state.socket.close();
+        if (state.teardownWebSocket) {
+            state.teardownWebSocket('logout');
+        } else if (state.socket) {
+            state.socket.close();
+        }
 
         await SecureStore.deleteItemAsync('token');
         await SecureStore.deleteItemAsync('user');

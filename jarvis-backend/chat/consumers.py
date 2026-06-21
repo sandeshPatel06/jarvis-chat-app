@@ -2,6 +2,7 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 import logging
 
 logger = logging.getLogger(__name__)
@@ -329,26 +330,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def trigger_call_notification(self, recipient_id, chat_id, text_data_json):
-        from utils.notifications import send_fcm_notification
+        from .tasks import send_call_notification
         try:
-            recipient_user = User.objects.get(id=recipient_id)
-            logger.info(f"[WS] 📲 Sending FCM for Incoming Call to user_{recipient_id}")
-            send_fcm_notification(
-                user=recipient_user,
-                title="Incoming Call",
-                body="Incoming video call...",
-                ttl=0, # Now or never for calls
-                data={
-                    "type": "incoming_call",
-                    "chatId": str(chat_id),
-                    "callerName": self.user.username,
-                    "callerAvatar": str(self.user.profile_picture.url) if self.user.profile_picture else None,
-                    "isVideo": "true" if text_data_json.get('is_video') else "false",
-                    "uuid": text_data_json.get('offer', {}).get('sdp', '')[:10] # Unique-ish ID
-                }
+            logger.info(f"[WS] 📲 Queueing FCM for Incoming Call to user_{recipient_id}")
+            send_call_notification.delay(
+                recipient_id,
+                str(chat_id),
+                self.user.username,
+                str(self.user.profile_picture.url) if self.user.profile_picture else None,
+                text_data_json.get('is_video'),
+                text_data_json.get('offer', {}).get('sdp', '')[:10],
             )
-        except User.DoesNotExist:
-            logger.error(f"[WS] Recipient user {recipient_id} not found for call notification")
         except Exception as e:
             logger.error(f"[WS] Error triggering call notification: {e}")
 
@@ -398,9 +390,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def update_user_status(self, is_online):
         from django.utils import timezone
+        timestamp = timezone.now()
         User.objects.filter(id=self.user.id).update(
             is_online=is_online,
-            last_seen=timezone.now()
+            last_seen=timestamp
+        )
+        cache.set(
+            f"presence:user:{self.user.id}",
+            {
+                "is_online": is_online,
+                "last_seen": timestamp.isoformat(),
+            },
+            timeout=300,
         )
 
     @database_sync_to_async
@@ -434,7 +435,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         from .models import Conversation, Message
         from .serializers import MessageSerializer
         from django.db.models import Q
-        from utils.notifications import send_fcm_notification
+        from .tasks import send_message_notification
 
         try:
             conversation = None
@@ -489,12 +490,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 # Check if this is the first message (optional context) or just send notification
                 if derived_recipient_id and derived_recipient_id != self.user.id and not is_blocked:
                     try:
-                        recipient_user = User.objects.get(id=derived_recipient_id)
-                        send_fcm_notification(
-                            user=recipient_user,
-                            title=f"New message from {self.user.username}",
-                            body=message_text[:100] if message_text else "Sent a file",
-                            data={
+                        send_message_notification.delay(
+                            derived_recipient_id,
+                            f"New message from {self.user.username}",
+                            message_text[:100] if message_text else "Sent a file",
+                            {
                                 "type": "chat_message",
                                 "conversation_id": str(conversation.id),
                                 "sender_id": str(self.user.id),

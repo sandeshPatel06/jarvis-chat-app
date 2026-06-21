@@ -91,26 +91,104 @@ TEMPLATES = [
 WSGI_APPLICATION = 'chat_backend.wsgi.application'
 ASGI_APPLICATION = 'chat_backend.asgi.application'
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer"
+LANGUAGE_CODE = 'en-us'
+TIME_ZONE = os.environ.get('DJANGO_TIME_ZONE', 'UTC')
+USE_I18N = True
+USE_TZ = True
+
+
+def _redis_backend_url(env_name, default_db):
+    return os.environ.get(env_name) or os.environ.get('REDIS_URL') or None
+
+
+# Redis Configuration
+REDIS_URL = os.environ.get('REDIS_URL')
+REDIS_CHANNEL_LAYER_URL = os.environ.get('REDIS_CHANNEL_LAYER_URL') or REDIS_URL
+REDIS_CACHE_URL = os.environ.get('REDIS_CACHE_URL') or REDIS_URL
+REDIS_CELERY_BROKER_URL = os.environ.get('REDIS_CELERY_BROKER_URL') or REDIS_URL
+REDIS_CELERY_RESULT_BACKEND = os.environ.get('REDIS_CELERY_RESULT_BACKEND') or REDIS_URL
+
+if REDIS_CHANNEL_LAYER_URL:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_CHANNEL_LAYER_URL],
+            },
+        },
     }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
+
+# Caching Configuration
+if REDIS_CACHE_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_CACHE_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            }
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "jarvis-backend",
+        }
+    }
+
+# Celery Configuration
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60 # 30 minutes
+CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60
+CELERY_TASK_DEFAULT_QUEUE = 'default'
+CELERY_TASK_ROUTES = {
+    'chat.tasks.send_message_notification': {'queue': 'notifications'},
+    'chat.tasks.send_call_notification': {'queue': 'notifications'},
+    'chat.tasks.process_message_media': {'queue': 'media'},
 }
+if REDIS_CELERY_BROKER_URL and REDIS_CELERY_RESULT_BACKEND:
+    CELERY_BROKER_URL = REDIS_CELERY_BROKER_URL
+    CELERY_RESULT_BACKEND = REDIS_CELERY_RESULT_BACKEND
+else:
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
 
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-import dj_database_url
+try:
+    import dj_database_url
+except ModuleNotFoundError:
+    dj_database_url = None
 
 # Use PostgreSQL from DATABASE_URL environment variable, fallback to SQLite for local development
-DATABASES = {
-    'default': dj_database_url.config(
-        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
-}
+if dj_database_url:
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -130,18 +208,6 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
-
-
-# Internationalization
-# https://docs.djangoproject.com/en/5.0/topics/i18n/
-
-LANGUAGE_CODE = 'en-us'
-
-TIME_ZONE = 'UTC'
-
-USE_I18N = True
-
-USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)
@@ -216,4 +282,3 @@ EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_TIMEOUT = 60
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER or 'noreply@jarvis.chat'
-

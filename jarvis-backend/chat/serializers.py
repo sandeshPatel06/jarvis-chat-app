@@ -18,7 +18,29 @@ class MessageSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Message
-        fields = ['id', 'conversation', 'sender', 'text', 'message_type', 'file', 'file_type', 'file_name', 'latitude', 'longitude', 'contact_name', 'contact_phone', 'timestamp', 'is_read', 'is_delivered', 'reactions', 'reply_to', 'deleted_at', 'is_pinned']
+        fields = [
+            'id',
+            'conversation',
+            'sender',
+            'text',
+            'message_type',
+            'file',
+            'file_type',
+            'file_name',
+            'media_processing_state',
+            'media_metadata',
+            'latitude',
+            'longitude',
+            'contact_name',
+            'contact_phone',
+            'timestamp',
+            'is_read',
+            'is_delivered',
+            'reactions',
+            'reply_to',
+            'deleted_at',
+            'is_pinned',
+        ]
 
     def to_representation(self, instance):
         # Pass context to PublicUserSerializer for privacy masking
@@ -76,5 +98,4 @@ class ConversationSerializer(serializers.ModelSerializer):
             return other_user.id if other_user else None
         
         return None
-
 

@@ -28,3 +28,11 @@ Pillow==11.0.0
 
 # WebSockets (Channels dependencies)
 daphne==4.1.0
+channels-redis==4.2.1
+
+# Redis & Caching
+redis==5.2.1
+django-redis==5.4.0
+
+# Task Queue
+celery==5.4.0

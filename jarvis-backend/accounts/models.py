@@ -2,7 +2,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 class User(AbstractUser):
-    email = models.EmailField(unique=True)
+    email = models.EmailField(unique=True, blank=True, null=True)
     phone_number = models.CharField(max_length=15, blank=True, null=True, unique=True)
     normalized_phone_number = models.CharField(max_length=15, blank=True, null=True, unique=True, db_index=True)
     profile_picture = models.ImageField(upload_to='profile_pics/', blank=True, null=True)
@@ -11,6 +11,8 @@ class User(AbstractUser):
     is_online = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
+        if not self.email:
+            self.email = None
         if self.phone_number:
             from utils.formatting import normalize_phone
             self.normalized_phone_number = normalize_phone(self.phone_number)
