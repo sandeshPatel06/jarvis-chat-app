@@ -14,7 +14,7 @@ import { AppState, BackHandler, useColorScheme, Platform } from 'react-native';
 import Colors from '@/constants/Colors';
 import { useStore } from '@/store';
 import { logger } from '@/services/logger';
-import { requestFirebasePermission, setupForegroundHandler, setupNotificationOpenedHandler, setupTokenRefreshListener, syncTokenWithBackend } from '@/services/firebaseMessaging';
+import { requestFirebasePermission, restorePendingCallIntent, setupForegroundHandler, setupNotificationOpenedHandler, setupTokenRefreshListener, syncTokenWithBackend } from '@/services/firebaseMessaging';
 import CustomToast from '@/components/CustomToast';
 import CustomAlert from '@/components/CustomAlert';
 import IncomingCallModal from '@/components/IncomingCallModal';
@@ -26,13 +26,6 @@ import { LockScreen } from '@/components/LockScreen';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 logger.init();
-
-// Initialize Firebase listeners at module level if needed
-setupNotificationOpenedHandler();
-
-
-
-
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -66,6 +59,14 @@ export default function RootLayout() {
     initApp();
   }, [initApp]); // Run only once on mount
 
+  useEffect(() => {
+    const unsubscribeNotificationOpened = setupNotificationOpenedHandler();
+    void restorePendingCallIntent();
+
+    return () => {
+      unsubscribeNotificationOpened();
+    };
+  }, []);
 
   useEffect(() => {
     if (token) {
@@ -93,6 +94,9 @@ export default function RootLayout() {
     const subscription = AppState.addEventListener('change', nextAppState => {
       const { callState, setIsMinimized } = useStore.getState();
       setAppIsActive(nextAppState === 'active');
+      if (nextAppState === 'active') {
+        void restorePendingCallIntent();
+      }
       if (nextAppState === 'background' && callState.isCalling && !callState.isMinimized && !callState.isRequestingPermissions) {
         console.log('[AppState] App going to background, minimizing active call');
         setIsMinimized(true);

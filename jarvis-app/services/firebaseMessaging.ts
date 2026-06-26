@@ -14,10 +14,53 @@ import notifee, { AndroidImportance, AndroidVisibility, AndroidStyle, EventType 
 import * as SecureStore from 'expo-secure-store';
 
 import { handleIncomingCallFCM } from '@/helper/backgroundCallHelper';
-// import { registerForPushNotificationsAsync } from '../utils/notifications'; // Deprecated in favor of FCM
+import { clearPendingCallIntent, consumePendingCallIntent, persistPendingCallIntent, type PendingCallIntent } from '@/services/pendingCallIntent';
 import { getMediaUrl } from '@/utils/media';
 import { api } from './api';
 import { useStore } from '@/store';
+
+interface NormalizedIncomingCallPayload {
+    chatId: string;
+    callUUID: string;
+    callerName: string;
+    callerAvatar: string;
+    isVideo: boolean;
+    offer: { type?: string; sdp?: string } | null;
+    notificationId?: string;
+}
+
+const isTrue = (value: any) => value === true || value === 'true' || value === 1 || value === '1';
+
+const parseIncomingCallOffer = (data: any): { type?: string; sdp?: string } | null => {
+    if (!data) {
+        return null;
+    }
+
+    if (data.offer && typeof data.offer === 'object') {
+        return data.offer;
+    }
+
+    if (typeof data.offer === 'string' && data.offer.trim()) {
+        try {
+            const parsedOffer = JSON.parse(data.offer);
+            if (parsedOffer && typeof parsedOffer === 'object') {
+                return parsedOffer;
+            }
+        } catch {
+        }
+    }
+
+    const offerType = data.offerType || data.offer_type;
+    const offerSdp = data.offerSdp || data.offer_sdp;
+    if (typeof offerSdp === 'string' && offerSdp.trim()) {
+        return {
+            type: typeof offerType === 'string' && offerType.trim() ? offerType : 'offer',
+            sdp: offerSdp,
+        };
+    }
+
+    return null;
+};
 
 const isIncomingCallPayload = (data: any) => {
     if (!data) return false;
@@ -29,22 +72,85 @@ const isIncomingCallPayload = (data: any) => {
     return Boolean(
         data.callUUID ||
         data.call_uuid ||
+        data.uuid ||
         data.offer ||
+        data.isVideo !== undefined ||
         data.is_video !== undefined ||
+        data.callerName ||
         data.caller_name ||
+        data.callerAvatar ||
         data.caller_avatar
     );
 };
 
-const normalizeIncomingCallPayload = (remoteMessage: any) => {
-    const { data = {}, notification: firebaseNotification } = remoteMessage;
+const normalizeIncomingCallPayload = (payload: any, notificationId?: string): NormalizedIncomingCallPayload | null => {
+    const data = payload?.data ?? payload ?? {};
+    const firebaseNotification = payload?.notification;
+    const chatId = data.chatId || data.chat_id || data.conversation_id;
+
+    if (!chatId) {
+        return null;
+    }
+
     return {
-        ...data,
-        callUUID: data.callUUID || data.call_uuid || data.uuid || Date.now().toString(),
-        callerName: data.caller_name || data.sender_name || firebaseNotification?.title || 'Unknown Caller',
-        callerAvatar: data.caller_avatar || data.sender_avatar || '',
-        isVideo: data.is_video === true || data.is_video === 'true',
+        chatId: String(chatId),
+        callUUID: String(data.callUUID || data.call_uuid || data.uuid || notificationId || Date.now()),
+        callerName: data.callerName || data.caller_name || firebaseNotification?.title || 'Unknown Caller',
+        callerAvatar: data.callerAvatar || data.caller_avatar || '',
+        isVideo: isTrue(data.isVideo) || isTrue(data.is_video),
+        offer: parseIncomingCallOffer(data),
+        notificationId,
     };
+};
+
+const seedIncomingCallState = (payload: NormalizedIncomingCallPayload, source: 'notification' | 'fcm') => {
+    useStore.getState().seedIncomingCall({
+        chatId: payload.chatId,
+        offer: payload.offer,
+        isVideo: payload.isVideo,
+        callerName: payload.callerName,
+        callerAvatar: payload.callerAvatar,
+        callUUID: payload.callUUID,
+        source,
+        awaitingOffer: !payload.offer,
+    });
+};
+
+const buildPendingCallIntent = (
+    payload: NormalizedIncomingCallPayload,
+    source: PendingCallIntent['source'],
+    action?: string
+): PendingCallIntent => {
+    return {
+        type: 'incoming_call',
+        chatId: payload.chatId,
+        callUUID: payload.callUUID,
+        callerName: payload.callerName,
+        callerAvatar: payload.callerAvatar,
+        isVideo: payload.isVideo,
+        offer: payload.offer,
+        action,
+        source,
+        notificationId: payload.notificationId || payload.callUUID,
+        timestamp: Date.now(),
+    };
+};
+
+const handleCallNotificationOpen = async (
+    payload: NormalizedIncomingCallPayload | null,
+    source: 'notification' | 'fcm',
+    action?: string
+) => {
+    if (!payload) {
+        return false;
+    }
+
+    if (source === 'notification') {
+        await persistPendingCallIntent(buildPendingCallIntent(payload, source, action));
+    }
+
+    seedIncomingCallState(payload, source);
+    return true;
 };
 
 // ============================================================================
@@ -63,12 +169,16 @@ async function handleRemoteMessage(remoteMessage: any, context: 'foreground' | '
             console.log(`[Firebase ${context}] 📞 Incoming call detected`);
 
             const fcmData = normalizeIncomingCallPayload(remoteMessage);
-
-            if (fcmData.type !== 'incoming_call') {
-                console.warn(`[Firebase ${context}] Incoming-call payload missing explicit type, using fallback routing`);
+            if (!fcmData) {
+                console.warn(`[Firebase ${context}] Incoming-call payload missing chat identifier`);
+                return;
             }
 
-            await handleIncomingCallFCM(fcmData);
+            if (context === 'foreground') {
+                seedIncomingCallState(fcmData, 'fcm');
+            } else {
+                await handleIncomingCallFCM(fcmData);
+            }
             console.log(`[Firebase ${context}] ✅ Call handled successfully`);
         }
         // 2. Handle New Message
@@ -199,61 +309,42 @@ setBackgroundMessageHandler(messaging, async (remoteMessage) => {
 
 console.log('[Firebase] ✅ Background message handler registered (headless task)');
 
-
-// ============================================================================
-// FOREGROUND MESSAGE HANDLER
-// ============================================================================
-onMessage(messaging, async (remoteMessage) => {
-    await handleRemoteMessage(remoteMessage, 'foreground');
-});
-
-console.log('[Firebase] ✅ Foreground message handler registered');
-
-// ============================================================================
-// NOTIFICATION OPENED HANDLER
-// ============================================================================
-onNotificationOpenedApp(messaging, (remoteMessage) => {
-    const data = remoteMessage.data;
-    console.log('[Firebase] 📱 Notification opened app from background:', remoteMessage);
-
-    if (data?.type === 'incoming_call') {
-        console.log('[Firebase] User tapped incoming call notification');
-    } else if (data?.type === 'message' || data?.conversation_id) {
-        // Router navigation should be handled by the specialized listener or root layout
-        console.log('[Firebase] User tapped message notification');
-    }
-});
-
-getInitialNotification(messaging).then((remoteMessage) => {
-    if (remoteMessage) {
-        console.log('[Firebase] 📱 App opened from killed state by notification:', remoteMessage);
-    }
-});
-
 // ============================================================================
 // NOTIFEE BACKGROUND EVENTS (Reply/Mark Read / Call Actions)
 // ============================================================================
 notifee.onBackgroundEvent(async ({ type, detail }) => {
     const { notification, pressAction, input } = detail;
+    const actionId = pressAction?.id;
+    const callPayload = normalizeIncomingCallPayload(notification?.data, notification?.id);
+
+    if (callPayload && type === EventType.PRESS) {
+        await persistPendingCallIntent(buildPendingCallIntent(callPayload, 'notification', actionId || 'press'));
+        if (notification?.id) {
+            await notifee.cancelNotification(notification.id);
+        }
+        return;
+    }
 
     if (type === EventType.ACTION_PRESS) {
-        // 1. Handle Call Answer (Background)
-        if (pressAction?.id === 'answer_call') {
-            console.log('[Notifee] User answered call from notification');
-            // Notification is cleared automatically in some OS, but we force it
-            if (notification?.id) await notifee.cancelNotification(notification.id);
-            // Business logic for answering is handled in foreground once app launches
-        } 
-        
-        // 2. Handle Call Decline (Background)
-        else if (pressAction?.id === 'decline_call') {
-            console.log('[Notifee] User declined call from notification');
-            if (notification?.id) await notifee.cancelNotification(notification.id);
-            // TODO: Notify server that the call was declined
+        if (callPayload && (actionId === 'answer_call' || actionId === 'default' || actionId === 'full_screen')) {
+            console.log('[Notifee] User opened call notification in background');
+            await persistPendingCallIntent(buildPendingCallIntent(callPayload, 'notification', actionId));
+            if (notification?.id) {
+                await notifee.cancelNotification(notification.id);
+            }
+            return;
         }
 
-        // 3. Handle Message Reply (Background)
-        else if (pressAction?.id === 'reply' && input) {
+        if (callPayload && actionId === 'decline_call') {
+            console.log('[Notifee] User declined call from notification');
+            await clearPendingCallIntent();
+            if (notification?.id) {
+                await notifee.cancelNotification(notification.id);
+            }
+            return;
+        }
+
+        if (actionId === 'reply' && input) {
             const conversationId = notification?.data?.conversation_id as string;
             const replyText = input as string;
 
@@ -274,10 +365,7 @@ notifee.onBackgroundEvent(async ({ type, detail }) => {
                     console.error('[Notifee] Failed to send background reply:', error);
                 }
             }
-        } 
-        
-        // 4. Handle Mark as Read (Background)
-        else if (pressAction?.id === 'mark_as_read') {
+        } else if (actionId === 'mark_as_read') {
             const conversationId = notification?.data?.conversation_id as string;
             const messageId = notification?.data?.message_id as string;
 
@@ -299,27 +387,11 @@ notifee.onBackgroundEvent(async ({ type, detail }) => {
             }
         }
 
-        // Always clear the notification after action if not already done
         if (notification?.id) {
             await notifee.cancelNotification(notification.id);
         }
     }
 });
-
-// ============================================================================
-// NOTIFEE FOREGROUND EVENTS (Answer/Cancel)
-// ============================================================================
-notifee.onForegroundEvent(async ({ type, detail }) => {
-    const { notification, pressAction } = detail;
-    if (type === EventType.ACTION_PRESS) {
-        if (pressAction?.id === 'answer_call' || pressAction?.id === 'decline_call') {
-            if (notification?.id) {
-                await notifee.cancelNotification(notification.id);
-            }
-        }
-    }
-});
-
 
 // ============================================================================
 // PERMISSIONS & TOKEN
@@ -375,11 +447,6 @@ export async function syncTokenWithBackend() {
     }
 }
 
-onTokenRefresh(messaging, async (token) => {
-    console.log('[Firebase] 🔄 FCM Token refreshed:', token);
-    await syncTokenWithBackend();
-});
-
 console.log('[Firebase] ✅ Firebase messaging service initialized');
 
 export const setupForegroundHandler = () => {
@@ -389,21 +456,102 @@ export const setupForegroundHandler = () => {
 };
 
 export const setupTokenRefreshListener = () => {
-    return onTokenRefresh(messaging, async (tokenVal) => {
+    return onTokenRefresh(messaging, async (token) => {
+        console.log('[Firebase] 🔄 FCM Token refreshed:', token);
         await syncTokenWithBackend();
     });
 };
 
 export const setupNotificationOpenedHandler = () => {
-    onNotificationOpenedApp(messaging, (remoteMessage) => {
+    const unsubscribeNotificationOpened = onNotificationOpenedApp(messaging, async (remoteMessage) => {
         console.log('[Firebase] 📱 Notification opened app from background:', remoteMessage);
-    });
-
-    getInitialNotification(messaging).then((remoteMessage) => {
-        if (remoteMessage) {
-            console.log('[Firebase] 📱 App opened from killed state by notification:', remoteMessage);
+        const payload = normalizeIncomingCallPayload(remoteMessage);
+        if (await handleCallNotificationOpen(payload, 'fcm', 'open_app')) {
+            await clearPendingCallIntent();
         }
     });
+
+    const unsubscribeForegroundEvents = notifee.onForegroundEvent(async ({ type, detail }) => {
+        const { notification, pressAction } = detail;
+        const actionId = pressAction?.id;
+        const callPayload = normalizeIncomingCallPayload(notification?.data, notification?.id);
+
+        if (callPayload && type === EventType.PRESS) {
+            if (notification?.id) {
+                await notifee.cancelNotification(notification.id);
+            }
+            await clearPendingCallIntent();
+            await handleCallNotificationOpen(callPayload, 'notification', actionId || 'press');
+            return;
+        }
+
+        if (callPayload && type === EventType.ACTION_PRESS) {
+            if (actionId === 'decline_call') {
+                await clearPendingCallIntent();
+                useStore.getState().clearIncomingCall();
+                if (notification?.id) {
+                    await notifee.cancelNotification(notification.id);
+                }
+                return;
+            }
+
+            if (actionId === 'answer_call' || actionId === 'default' || actionId === 'full_screen') {
+                if (notification?.id) {
+                    await notifee.cancelNotification(notification.id);
+                }
+                await clearPendingCallIntent();
+                await handleCallNotificationOpen(callPayload, 'notification', actionId);
+            }
+        }
+    });
+
+    return () => {
+        unsubscribeNotificationOpened();
+        unsubscribeForegroundEvents();
+    };
+};
+
+export const restorePendingCallIntent = async () => {
+    try {
+        const initialNotification = await notifee.getInitialNotification();
+        const initialNotificationPayload = normalizeIncomingCallPayload(
+            initialNotification?.notification?.data,
+            initialNotification?.notification?.id
+        );
+
+        if (initialNotificationPayload) {
+            if (initialNotification?.notification?.id) {
+                await notifee.cancelNotification(initialNotification.notification.id);
+            }
+            await clearPendingCallIntent();
+            seedIncomingCallState(initialNotificationPayload, 'notification');
+            return;
+        }
+
+        const initialRemoteMessage = await getInitialNotification(messaging);
+        const initialRemotePayload = normalizeIncomingCallPayload(initialRemoteMessage);
+        if (initialRemotePayload) {
+            await clearPendingCallIntent();
+            seedIncomingCallState(initialRemotePayload, 'fcm');
+            return;
+        }
+
+        const pendingCallIntent = await consumePendingCallIntent();
+        if (pendingCallIntent) {
+            if (pendingCallIntent.notificationId) {
+                await notifee.cancelNotification(pendingCallIntent.notificationId).catch(() => {});
+            }
+            seedIncomingCallState(
+                {
+                    ...pendingCallIntent,
+                    offer: pendingCallIntent.offer ?? null,
+                },
+                pendingCallIntent.source || 'notification'
+            );
+        }
+    } catch (error) {
+        console.error('[Firebase] ❌ Failed to restore pending call intent:', error);
+    }
 };
 
 export default messaging;

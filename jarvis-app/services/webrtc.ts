@@ -231,6 +231,23 @@ class WebRTCService {
         }
         try {
             const description = sdp instanceof RTCSessionDescription ? sdp : new RTCSessionDescription(sdp);
+            const signalingState = this.peerConnection.signalingState;
+
+            if (description.type === 'answer') {
+                if (
+                    signalingState === 'stable' &&
+                    this.peerConnection.remoteDescription?.type === 'answer'
+                ) {
+                    console.warn('[WebRTC] Ignoring duplicate remote answer while already stable');
+                    return;
+                }
+
+                if (signalingState !== 'have-local-offer') {
+                    console.warn(`[WebRTC] Ignoring remote answer in unexpected signaling state: ${signalingState}`);
+                    return;
+                }
+            }
+
             console.log('[WebRTC] Setting remote description, type:', description.type);
             await this.peerConnection.setRemoteDescription(description);
             console.log('[WebRTC] Remote description set successfully, new state:', this.peerConnection?.signalingState);

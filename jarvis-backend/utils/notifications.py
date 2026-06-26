@@ -54,27 +54,23 @@ def send_fcm_notification(user, title, body, data=None, ttl=None, priority='high
     try:
         # Standardize data fields for the app to consume
         payload_data = data or {}
-        # Ensure fallback for title/body in data payload
-        if 'sender_name' not in payload_data:
-            payload_data['sender_name'] = title
-        if 'text' not in payload_data:
-            payload_data['text'] = body
-            
-        # Standardize call fields if it's an incoming call
-        if payload_data.get('type') == 'incoming_call':
-            # Frontend expects: type, callUUID, callerId, callerName
-            if 'call_uuid' not in payload_data and 'uuid' in payload_data:
-                payload_data['callUUID'] = payload_data['uuid'] # Map for frontend
-            elif 'call_uuid' in payload_data:
-                 payload_data['callUUID'] = payload_data['call_uuid']
+        is_incoming_call = payload_data.get('type') == 'incoming_call'
 
-            if 'caller_name' not in payload_data:
-                payload_data['callerName'] = title
-            else:
-                 payload_data['callerName'] = payload_data['caller_name']
-            
-            if 'callerId' not in payload_data:
-                 payload_data['callerId'] = payload_data.get('sender_username', 'Unknown')
+        if is_incoming_call:
+            # Canonical frontend contract for call notifications.
+            payload_data['callUUID'] = payload_data.get('callUUID') or payload_data.get('call_uuid') or payload_data.get('uuid')
+            payload_data['chatId'] = str(payload_data.get('chatId') or payload_data.get('chat_id') or payload_data.get('conversation_id') or '')
+            payload_data['callerName'] = payload_data.get('callerName') or payload_data.get('caller_name') or title
+            payload_data['callerAvatar'] = payload_data.get('callerAvatar') or payload_data.get('caller_avatar') or ''
+            payload_data['isVideo'] = payload_data.get('isVideo') if payload_data.get('isVideo') is not None else payload_data.get('is_video')
+            payload_data['offerType'] = payload_data.get('offerType') or payload_data.get('offer_type') or 'offer'
+            payload_data['offerSdp'] = payload_data.get('offerSdp') or payload_data.get('offer_sdp') or ''
+        else:
+            # Ensure fallback for title/body in data payload
+            if 'sender_name' not in payload_data:
+                payload_data['sender_name'] = title
+            if 'text' not in payload_data:
+                payload_data['text'] = body
 
         # Config kwargs
         android_config = {

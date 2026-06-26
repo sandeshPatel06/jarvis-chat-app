@@ -42,9 +42,13 @@ def test_send_notification(username, type='chat'):
              body = "Incoming call..."
              data = {
                 "type": "incoming_call",
-                "uuid": "test-uuid-123456",
-                "caller_name": "Test Caller",
-                "sender_username": "test_caller"
+                "callUUID": "test-uuid-123456",
+                "chatId": "1",
+                "callerName": "Test Caller",
+                "callerAvatar": "",
+                "isVideo": "false",
+                "offerType": "offer",
+                "offerSdp": "v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\nc=IN IP4 0.0.0.0\r\na=mid:0\r\n"
              }
         else:
             logger.error(f"Unknown type: {type}")

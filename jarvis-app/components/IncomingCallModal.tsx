@@ -37,6 +37,7 @@ export default function IncomingCallModal() {
     const { callState, acceptCall, endCall, chats } = useStore();
     const { incomingCall } = callState;
     const router = useRouter();
+    const isWaitingForOffer = !!incomingCall?.awaitingOffer;
 
     const chat = incomingCall ? chats.find(c => String(c.id) === String(incomingCall.chatId)) : null;
     const rawAvatar = incomingCall?.callerAvatar || chat?.avatar;
@@ -90,8 +91,13 @@ export default function IncomingCallModal() {
                         </View>
                         <Text style={styles.callerName}>{incomingCall.callerName || chat?.name || 'Unknown Caller'}</Text>
                         <Text style={styles.callStatus}>
-                            Incoming {incomingCall.isVideo ? 'Video' : 'Voice'} Call...
+                            {isWaitingForOffer
+                                ? 'Reconnecting to call...'
+                                : `Incoming ${incomingCall.isVideo ? 'Video' : 'Voice'} Call...`}
                         </Text>
+                        {isWaitingForOffer ? (
+                            <Text style={styles.callHint}>Waiting for the caller connection to resume.</Text>
+                        ) : null}
                     </View>
 
                     <View style={styles.actions}>
@@ -108,15 +114,16 @@ export default function IncomingCallModal() {
 
                         <View style={styles.actionButtonContainer}>
                             <TouchableOpacity
-                                style={[styles.button, styles.acceptButton]}
+                                style={[styles.button, styles.acceptButton, isWaitingForOffer && styles.acceptButtonDisabled]}
                                 onPress={handleAccept}
                                 activeOpacity={0.8}
+                                disabled={isWaitingForOffer}
                             >
                                 <Animated.View>
                                     <MaterialIcons name="call" size={40} color="white" />
                                 </Animated.View>
                             </TouchableOpacity>
-                            <Text style={styles.buttonText}>Accept</Text>
+                            <Text style={styles.buttonText}>{isWaitingForOffer ? 'Waiting' : 'Accept'}</Text>
                         </View>
                     </View>
                 </View>
@@ -192,6 +199,13 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         letterSpacing: 1,
     },
+    callHint: {
+        color: 'rgba(255, 255, 255, 0.72)',
+        fontSize: 15,
+        marginTop: 12,
+        textAlign: 'center',
+        paddingHorizontal: 32,
+    },
     actions: {
         flexDirection: 'row',
         justifyContent: 'space-evenly',
@@ -217,6 +231,10 @@ const styles = StyleSheet.create({
     acceptButton: {
         backgroundColor: '#34C759', // iOS green
         shadowColor: '#34C759',
+    },
+    acceptButtonDisabled: {
+        backgroundColor: 'rgba(52, 199, 89, 0.45)',
+        shadowColor: 'transparent',
     },
     declineButton: {
         backgroundColor: '#FF3B30', // iOS red
