@@ -426,7 +426,9 @@ export const MessageItem = React.memo(MessageItemComponent, (prevProps, nextProp
         prevProps.item.isUploading === nextProps.item.isUploading &&
         prevProps.item.error === nextProps.item.error &&
         prevProps.selectionMode === nextProps.selectionMode &&
-        prevProps.isSelected === nextProps.isSelected
+        prevProps.isSelected === nextProps.isSelected &&
+        JSON.stringify(prevProps.item.reactions) === JSON.stringify(nextProps.item.reactions) &&
+        (prevProps.item as any).is_pinned === (nextProps.item as any).is_pinned
     );
 });
 

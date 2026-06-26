@@ -9,6 +9,24 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { Avatar } from '@/components/ui/Avatar';
+const formatLastSeen = (lastSeenValue: string | Date | undefined) => {
+    if (!lastSeenValue) return 'Offline';
+    const date = new Date(lastSeenValue);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    if (diffDays === 0 && date.getDate() === now.getDate()) {
+        return `Last seen today at ${timeStr}`;
+    } else if (diffDays <= 1 && date.getDate() === new Date(now.getTime() - 86400000).getDate()) {
+        return `Last seen yesterday at ${timeStr}`;
+    } else {
+        const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        return `Last seen on ${dateStr} at ${timeStr}`;
+    }
+};
 
 export default function UserProfileScreen() {
     const { id } = useLocalSearchParams<{ id: string }>(); // This is user ID
@@ -187,19 +205,41 @@ export default function UserProfileScreen() {
                     {userProfile.bio && (
                         <>
                             <View style={styles.item}>
-                                <Text style={[styles.label, { color: colors.text }]}>About</Text>
+                                <Text style={[styles.label, { color: colors.textSecondary }]}>About</Text>
                                 <Text style={[styles.value, { color: colors.text }]}>{userProfile.bio}</Text>
                             </View>
                             <View style={[styles.separator, { backgroundColor: colors.itemSeparator }]} />
                         </>
                     )}
                     {userProfile.phone_number && (
-                        <View style={styles.item}>
-                            <Text style={[styles.label, { color: colors.text }]}>Phone</Text>
-                            <Text style={[styles.value, { color: colors.text }]}>{userProfile.phone_number}</Text>
-                            <Text style={styles.subValue}>Mobile</Text>
-                        </View>
+                        <>
+                            <View style={styles.item}>
+                                <Text style={[styles.label, { color: colors.textSecondary }]}>Phone</Text>
+                                <Text style={[styles.value, { color: colors.text }]}>{userProfile.phone_number}</Text>
+                                <Text style={styles.subValue}>Mobile</Text>
+                            </View>
+                            <View style={[styles.separator, { backgroundColor: colors.itemSeparator }]} />
+                        </>
                     )}
+                    {userProfile.email && (
+                        <>
+                            <View style={styles.item}>
+                                <Text style={[styles.label, { color: colors.textSecondary }]}>Email</Text>
+                                <Text style={[styles.value, { color: colors.text }]}>{userProfile.email}</Text>
+                                <Text style={styles.subValue}>Email Address</Text>
+                            </View>
+                            <View style={[styles.separator, { backgroundColor: colors.itemSeparator }]} />
+                        </>
+                    )}
+                    <View style={styles.item}>
+                        <Text style={[styles.label, { color: colors.textSecondary }]}>Status</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                            <View style={[styles.statusDot, { backgroundColor: userProfile.is_online ? '#4ade80' : '#9ca3af' }]} />
+                            <Text style={[styles.value, { color: userProfile.is_online ? '#4ade80' : colors.text }]}>
+                                {userProfile.is_online ? 'Online' : formatLastSeen(userProfile.last_seen)}
+                            </Text>
+                        </View>
+                    </View>
                 </View>
 
                 {/* Operations */}
@@ -323,6 +363,12 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: 'gray',
         marginTop: 2,
+    },
+    statusDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        marginRight: 8,
     },
     separator: {
         height: StyleSheet.hairlineWidth,

@@ -556,9 +556,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
             if not message.conversation.participants.filter(id=self.user.id).exists():
                return []
             
-            existing = Reaction.objects.filter(message=message, user=self.user, emoji=emoji).first()
+            existing = Reaction.objects.filter(message=message, user=self.user).first()
             if existing:
-                existing.delete()
+                if existing.emoji == emoji:
+                    existing.delete()
+                else:
+                    existing.emoji = emoji
+                    existing.save()
             else:
                 Reaction.objects.create(message=message, user=self.user, emoji=emoji)
             

@@ -45,9 +45,9 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
             const { message_id, conversation_id, new_text } = data;
             const chats = actions.getChats();
             const updatedChats = chats.map((chat) => {
-                if (chat.id === conversation_id) {
+                if (String(chat.id) === String(conversation_id)) {
                     const newMessages = chat.messages.map((msg: Message) =>
-                        msg.id === message_id ? { ...msg, text: new_text } : msg
+                        String(msg.id) === String(message_id) ? { ...msg, text: new_text } : msg
                     );
                     const lastMsg = newMessages[newMessages.length - 1];
                     return { ...chat, messages: newMessages, lastMessage: lastMsg ? lastMsg.text : chat.lastMessage };
@@ -60,8 +60,8 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
             const { message_id, conversation_id } = data;
             const chats = actions.getChats();
             const updatedChats = chats.map((chat) => {
-                if (chat.id === conversation_id) {
-                    const newMessages = chat.messages.filter((msg: Message) => msg.id !== message_id);
+                if (String(chat.id) === String(conversation_id)) {
+                    const newMessages = chat.messages.filter((msg: Message) => String(msg.id) !== String(message_id));
                     const lastMsg = newMessages.length > 0 ? newMessages[newMessages.length - 1].text : '';
                     return { ...chat, messages: newMessages, lastMessage: lastMsg };
                 }
@@ -73,9 +73,9 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
             const { message_id, conversation_id, reactions } = data;
             const chats = actions.getChats();
             const updatedChats = chats.map((chat) => {
-                if (chat.id === conversation_id) {
+                if (String(chat.id) === String(conversation_id)) {
                     const newMessages = chat.messages.map((msg: Message) =>
-                        msg.id === message_id ? { ...msg, reactions: reactions } : msg
+                        String(msg.id) === String(message_id) ? { ...msg, reactions: reactions } : msg
                     );
                     return { ...chat, messages: newMessages };
                 }
@@ -85,16 +85,16 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
             database.updateMessageReactions(message_id, reactions);
 
             // Reaction Notification
-            if (actions.getActiveChatId() !== conversation_id) {
+            if (String(actions.getActiveChatId()) !== String(conversation_id)) {
                 try {
-                    const chat = chats.find(c => c.id === conversation_id);
+                    const chat = chats.find(c => String(c.id) === String(conversation_id));
                     const senderName = chat?.name || 'Someone';
 
                     Notifications.scheduleNotificationAsync({
                         content: {
                             title: 'New Reaction',
                             body: `${senderName} reacted ${reactions[0]} to a message`,
-                            data: { chatId: conversation_id },
+                            data: { chatId: String(conversation_id) },
                         },
                         trigger: null,
                     });

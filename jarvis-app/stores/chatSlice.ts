@@ -621,7 +621,12 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
     reactToMessage: (chatId, messageId, reaction) => {
         const { socket } = get() as any;
         if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ type: 'react_message', message_id: messageId, reaction }));
+            socket.send(JSON.stringify({ 
+                type: 'react_message', 
+                message_id: messageId, 
+                conversation_id: chatId, 
+                reaction 
+            }));
         }
     },
 
@@ -737,12 +742,14 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
     },
 
     updateMessageRead: (messageId, chatId) => {
+        const msgIdStr = messageId?.toString();
+        const chatIdStr = chatId?.toString();
         set((state: any) => ({
             chats: state.chats.map((c: any) => {
-                if (chatId ? c.id === chatId : true) {
+                if (chatIdStr ? c.id.toString() === chatIdStr : true) {
                     return {
                         ...c,
-                        messages: c.messages.map((m: any) => m.id === messageId ? { ...m, isRead: true } : m)
+                        messages: c.messages.map((m: any) => m.id.toString() === msgIdStr ? { ...m, isRead: true } : m)
                     };
                 }
                 return c;
@@ -751,12 +758,14 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
     },
 
     updateMessageDelivered: (messageId, chatId) => {
+        const msgIdStr = messageId?.toString();
+        const chatIdStr = chatId?.toString();
         set((state: any) => ({
             chats: state.chats.map((c: any) => {
-                if (chatId ? c.id === chatId : true) {
+                if (chatIdStr ? c.id.toString() === chatIdStr : true) {
                     return {
                         ...c,
-                        messages: c.messages.map((m: any) => m.id === messageId ? { ...m, isDelivered: true } : m)
+                        messages: c.messages.map((m: any) => m.id.toString() === msgIdStr ? { ...m, isDelivered: true } : m)
                     };
                 }
                 return c;
@@ -801,13 +810,15 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
     },
 
     toggleMessagePin: (chatId, messageId, isPinned) => {
+        const chatIdStr = chatId?.toString();
+        const msgIdStr = messageId?.toString();
         set((state: any) => ({
             chats: state.chats.map((c: any) => {
-                if (c.id === chatId) {
+                if (c.id.toString() === chatIdStr) {
                     return {
                         ...c,
                         messages: c.messages.map((m: any) => 
-                            m.id === messageId ? { ...m, is_pinned: isPinned } : m
+                            m.id.toString() === msgIdStr ? { ...m, is_pinned: isPinned } : m
                         )
                     };
                 }
