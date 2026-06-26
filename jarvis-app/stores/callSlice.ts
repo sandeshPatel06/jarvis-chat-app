@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { webrtcService } from '@/services/webrtc';
 import { clearPendingCallIntent } from '@/services/pendingCallIntent';
 import { AppState } from '@/store';
+import { api } from '@/services/api';
 
 type IncomingCallSource = 'signaling' | 'notification' | 'fcm';
 
@@ -34,6 +35,7 @@ interface CallState {
     isRequestingPermissions: boolean;
     connectionState: string;
     startTime: number | null;
+    isInitiator?: boolean;
 }
 
 export interface CallSlice {
@@ -195,6 +197,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
         isRequestingPermissions: false,
         connectionState: 'new',
         startTime: null,
+        isInitiator: false,
     },
     setIsMinimized: (isMinimized) => set((state) => ({
         callState: { ...state.callState, isMinimized }
@@ -270,7 +273,8 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 isMinimized: false,
                 bufferedCandidates: [],
                 isVideo,
-                isRequestingPermissions: true
+                isRequestingPermissions: true,
+                isInitiator: true
             }
         }));
         try {
@@ -358,7 +362,8 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 activeCallUUID: callUUID || null,
                 isVideo, 
                 isRequestingPermissions: true,
-                incomingCall: null // Clear incoming call immediately to force UI remount
+                incomingCall: null, // Clear incoming call immediately to force UI remount
+                isInitiator: false
             }
         }));
         try {
@@ -436,6 +441,32 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 ...(callState.activeCallUUID ? { call_uuid: callState.activeCallUUID } : {}),
             });
         }
+
+        const token = (get() as any).token;
+        const chats = (get() as any).chats;
+        const activeChat = chats?.find((c: any) => c.id.toString() === callState.activeChatId?.toString());
+        const receiverUsername = activeChat ? activeChat.name : null;
+
+        if (token && callState.isInitiator && callState.activeChatId && receiverUsername) {
+            const endedAt = new Date().toISOString();
+            const startedAt = callState.startTime 
+                ? new Date(callState.startTime).toISOString() 
+                : new Date().toISOString();
+            const status = callState.startTime ? 'completed' : 'missed';
+            
+            console.log(`[CallSlice] Logging call to history for: ${receiverUsername}, status: ${status}`);
+            void api.chat.logCall(token, {
+                receiver_username: receiverUsername,
+                started_at: startedAt,
+                ended_at: endedAt,
+                status: status,
+                is_video: !!callState.isVideo
+            }).then(() => {
+                void (get() as any).fetchCalls?.(false);
+            }).catch((err) => {
+                console.error('[CallSlice] Failed to log call:', err);
+            });
+        }
         set((state) => ({
             callState: {
                 isCalling: false,
@@ -449,6 +480,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 isRequestingPermissions: false,
                 connectionState: 'closed',
                 startTime: null,
+                isInitiator: false,
             }
         }));
     },
