@@ -59,6 +59,7 @@ export interface ChatSlice {
 let reconnectTimeout: any = null;
 let reconnectAttempts = 0;
 let reconnectPauseReason: 'background' | 'logout' | null = null;
+let pendingSocket: WebSocket | null = null;
 const messageFetchInFlight = new Set<string>();
 const messageFetchLastStartedAt = new Map<string, number>();
 const MESSAGE_FETCH_DEDUP_WINDOW_MS = 1500;
@@ -124,7 +125,7 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
     },
     connectWebSocket: () => {
         const { token, socket, connectWebSocket, appIsActive } = get() as any;
-        if (socket || !token || !appIsActive) return;
+        if (socket || pendingSocket || !token || !appIsActive) return;
         if (reconnectPauseReason === 'background') return;
 
         const wsUrl = process.env.EXPO_PUBLIC_WS_URL;
@@ -132,8 +133,21 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
 
         console.log('[WS] Connecting...');
         const ws = new WebSocket(`${wsUrl}?token=${token}`);
+        pendingSocket = ws;
 
         ws.onopen = () => {
+            const state = get() as any;
+            if (pendingSocket === ws) {
+                pendingSocket = null;
+            }
+            if (state.socket !== ws) {
+                console.log('[WS] Ignoring open event from stale socket');
+                try {
+                    ws.close();
+                } catch {
+                }
+                return;
+            }
             console.log('[WS] Connected');
             reconnectAttempts = 0;
             clearReconnectTimeout();
@@ -142,6 +156,10 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
 
         ws.onmessage = async (e) => {
             const state = get() as any;
+            if (state.socket !== ws) {
+                console.log('[WS] Ignoring message from stale socket');
+                return;
+            }
             const signalingTypes = ['webrtc_offer', 'webrtc_answer', 'webrtc_ice_candidate', 'call_ended'];
             const data = JSON.parse(e.data);
             
@@ -166,6 +184,9 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
 
         ws.onclose = () => {
             const state = get() as any;
+            if (pendingSocket === ws) {
+                pendingSocket = null;
+            }
 
             if (state.socket !== ws) {
                 console.log('[WS] Ignoring close event from stale socket');
@@ -207,6 +228,7 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
         const state = get() as any;
         reconnectPauseReason = reason === 'background' ? 'background' : reason === 'logout' ? 'logout' : null;
         clearReconnectTimeout();
+        pendingSocket = null;
 
         if (state.socket) {
             set({ socket: null } as any);

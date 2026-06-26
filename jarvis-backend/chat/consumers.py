@@ -340,6 +340,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 str(self.user.profile_picture.url) if self.user.profile_picture else None,
                 text_data_json.get('is_video'),
                 text_data_json.get('offer', {}).get('sdp', '')[:10],
+                text_data_json.get('offer', {}).get('type', 'offer'),
+                text_data_json.get('offer', {}).get('sdp', ''),
             )
         except Exception as e:
             logger.error(f"[WS] Error triggering call notification: {e}")

@@ -23,7 +23,7 @@ def send_message_notification(self, user_id, title, body, data=None):
 
 
 @shared_task(queue='notifications', bind=True, max_retries=3, default_retry_delay=30)
-def send_call_notification(self, user_id, chat_id, caller_name, caller_avatar, is_video, uuid):
+def send_call_notification(self, user_id, chat_id, caller_name, caller_avatar, is_video, call_uuid, offer_type='offer', offer_sdp=''):
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
@@ -38,10 +38,12 @@ def send_call_notification(self, user_id, chat_id, caller_name, caller_avatar, i
         data={
             "type": "incoming_call",
             "chatId": str(chat_id),
+            "callUUID": call_uuid,
             "callerName": caller_name,
-            "callerAvatar": caller_avatar,
+            "callerAvatar": caller_avatar or "",
             "isVideo": "true" if is_video else "false",
-            "uuid": uuid,
+            "offerType": offer_type or "offer",
+            "offerSdp": offer_sdp or "",
         },
     )
 

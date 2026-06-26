@@ -10,6 +10,8 @@ export async function handleIncomingCallFCM(data: any) {
     console.log('[BackgroundCallHelper] 📞 Handling incoming call FCM data:', data);
 
     const { callUUID, callerName, callerAvatar, isVideo } = data;
+    const chatId = data.chatId || data.chat_id || data.conversation_id || null;
+    const offer = data.offer && typeof data.offer === 'object' ? data.offer : null;
     let avatarUrl = callerAvatar ? getMediaUrl(callerAvatar) : null;
 
     if (avatarUrl && !avatarUrl.startsWith('http') && !avatarUrl.startsWith('file')) {
@@ -73,11 +75,12 @@ export async function handleIncomingCallFCM(data: any) {
         data: {
             callUUID,
             type: 'incoming_call',
-            conversation_id: data.conversation_id || data.chat_id || null,
-            chat_id: data.chat_id || data.conversation_id || null,
-            caller_name: callerName || 'Someone',
-            caller_avatar: callerAvatar || '',
-            is_video: isVideo ? 'true' : 'false',
+            chatId,
+            callerName: callerName || 'Someone',
+            callerAvatar: callerAvatar || '',
+            isVideo: isVideo ? 'true' : 'false',
+            offerType: offer?.type || '',
+            offerSdp: offer?.sdp || '',
         },
     });
 }

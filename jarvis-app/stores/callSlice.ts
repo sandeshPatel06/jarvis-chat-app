@@ -5,11 +5,25 @@ import * as KeepAwake from 'expo-keep-awake';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { webrtcService } from '@/services/webrtc';
+import { clearPendingCallIntent } from '@/services/pendingCallIntent';
 import { AppState } from '@/store';
+
+type IncomingCallSource = 'signaling' | 'notification' | 'fcm';
+
+export interface IncomingCallState {
+    chatId: string;
+    offer: any | null;
+    isVideo: boolean;
+    callerName?: string;
+    callerAvatar?: string;
+    callUUID?: string;
+    source: IncomingCallSource;
+    awaitingOffer: boolean;
+}
 
 interface CallState {
     isCalling: boolean;
-    incomingCall: { chatId: string, offer: any, isVideo: boolean, callerName?: string, callerAvatar?: string } | null;
+    incomingCall: IncomingCallState | null;
     remoteStream: MediaStream | null;
     localStream: MediaStream | null;
     activeChatId: string | null;
@@ -26,6 +40,8 @@ export interface CallSlice {
     startCall: (chatId: string, isVideo?: boolean) => Promise<void>;
     endCall: () => void;
     acceptCall: () => Promise<void>;
+    seedIncomingCall: (incomingCall: Omit<IncomingCallState, 'offer' | 'awaitingOffer'> & { offer?: any | null; awaitingOffer?: boolean }) => void;
+    clearIncomingCall: () => void;
     handleSignalingMessage: (message: any) => Promise<void>;
     setIsMinimized: (isMinimized: boolean) => void;
     setupWebRTCListeners: (chatId: string) => void;
@@ -34,6 +50,8 @@ export interface CallSlice {
 // These would normally be inside the component or a dedicated service, but kept for parity
 let callSound: any = null;
 let ringtoneActive = false;
+const SIGNALING_SOCKET_WAIT_MS = 4000;
+const SIGNALING_SOCKET_POLL_MS = 100;
 
 const playRingtone = async (isIncoming: boolean) => {
     try {
@@ -76,6 +94,75 @@ const stopRingtone = async () => {
     }
 };
 
+const getOpenSignalingSocket = (get: () => AppState): WebSocket | null => {
+    const socket = (get() as any).socket as WebSocket | null;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        return socket;
+    }
+    return null;
+};
+
+const waitForOpenSignalingSocket = async (get: () => AppState): Promise<WebSocket | null> => {
+    const state = get() as any;
+    if (state.connectWebSocket) {
+        state.connectWebSocket();
+    }
+
+    const deadline = Date.now() + SIGNALING_SOCKET_WAIT_MS;
+    while (Date.now() < deadline) {
+        const socket = getOpenSignalingSocket(get);
+        if (socket) {
+            return socket;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, SIGNALING_SOCKET_POLL_MS));
+    }
+
+    return null;
+};
+
+const sendSignalingMessage = async (
+    get: () => AppState,
+    payload: Record<string, any> & { type: string },
+    options: { waitForOpen?: boolean } = {}
+) => {
+    let socket = getOpenSignalingSocket(get);
+    if (!socket && options.waitForOpen) {
+        socket = await waitForOpenSignalingSocket(get);
+    }
+
+    if (!socket) {
+        console.warn(`[CallSlice] Signaling socket is not open for ${payload.type}`);
+        return false;
+    }
+
+    try {
+        socket.send(JSON.stringify(payload));
+        return true;
+    } catch (error) {
+        console.error(`[CallSlice] Failed to send ${payload.type}:`, error);
+        return false;
+    }
+};
+
+const buildIncomingCallState = (
+    nextIncomingCall: Omit<IncomingCallState, 'offer' | 'awaitingOffer'> & { offer?: any | null; awaitingOffer?: boolean },
+    existingIncomingCall: IncomingCallState | null
+): IncomingCallState => {
+    const offer = nextIncomingCall.offer ?? existingIncomingCall?.offer ?? null;
+
+    return {
+        chatId: nextIncomingCall.chatId,
+        offer,
+        isVideo: nextIncomingCall.isVideo,
+        callerName: nextIncomingCall.callerName ?? existingIncomingCall?.callerName ?? '',
+        callerAvatar: nextIncomingCall.callerAvatar ?? existingIncomingCall?.callerAvatar ?? '',
+        callUUID: nextIncomingCall.callUUID ?? existingIncomingCall?.callUUID,
+        source: nextIncomingCall.source ?? existingIncomingCall?.source ?? 'notification',
+        awaitingOffer: nextIncomingCall.awaitingOffer ?? !offer,
+    };
+};
+
 export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, get) => ({
     callState: {
         isCalling: false,
@@ -92,9 +179,33 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
     setIsMinimized: (isMinimized) => set((state) => ({
         callState: { ...state.callState, isMinimized }
     })),
-    setupWebRTCListeners: (chatId: string) => {
-        const { socket } = get() as any;
+    seedIncomingCall: (incomingCall) => {
+        const { callState } = get();
+        if (callState.isCalling && callState.activeChatId && callState.activeChatId !== incomingCall.chatId) {
+            console.log('[CallSlice] Ignoring incoming call while another call is active');
+            return;
+        }
 
+        set((state) => ({
+            callState: {
+                ...state.callState,
+                incomingCall: buildIncomingCallState(incomingCall, state.callState.incomingCall),
+                isMinimized: false,
+            }
+        }));
+        playRingtone(true);
+    },
+    clearIncomingCall: () => {
+        void clearPendingCallIntent();
+        stopRingtone();
+        set((state) => ({
+            callState: {
+                ...state.callState,
+                incomingCall: null,
+            }
+        }));
+    },
+    setupWebRTCListeners: (chatId: string) => {
         webrtcService.onRemoteStream = (stream) => {
             console.log('[CallSlice] 📺 Remote stream received, tracks:', stream.getTracks().length);
             set((state) => ({
@@ -102,28 +213,27 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
             }));
         };
 
-        webrtcService.onIceCandidate = (candidate) => {
-            if (socket) {
-                console.log(`[CallSlice] 🧊 Sending ICE Candidate for chat: ${chatId}`);
-                socket.send(JSON.stringify({
+        webrtcService.onIceCandidate = async (candidate) => {
+            console.log(`[CallSlice] 🧊 Sending ICE Candidate for chat: ${chatId}`);
+            await sendSignalingMessage(get, {
                     type: 'webrtc_ice_candidate',
                     chat_id: chatId, // Changed from conversation_id
                     candidate
-                }));
-            }
+                }, { waitForOpen: true });
         };
 
         webrtcService.onConnectionStateChange = (state) => {
-            console.log('[CallSlice] 🌐 Connection State:', state);
+            const normalizedState = state || 'unknown';
+            console.log('[CallSlice] 🌐 Connection State:', normalizedState);
             set((s) => ({
                 callState: { 
                     ...s.callState, 
-                    connectionState: state,
-                    startTime: (state === 'connected' && !s.callState.startTime) ? Date.now() : s.callState.startTime
+                    connectionState: normalizedState,
+                    startTime: (normalizedState === 'connected' && !s.callState.startTime) ? Date.now() : s.callState.startTime
                 }
             }));
             
-            if (state === 'connected') {
+            if (normalizedState === 'connected') {
                 stopRingtone();
             }
         };
@@ -155,19 +265,29 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
             set((state) => ({
                 callState: { ...state.callState, localStream: stream }
             }));
-            
+
+            const signalingSocket = await waitForOpenSignalingSocket(get);
+            if (!signalingSocket) {
+                (get() as any).showToast('error', 'Call unavailable', 'Still connecting to chat server. Please try again in a moment.');
+                get().endCall();
+                return;
+            }
+
             (get() as any).setupWebRTCListeners(chatId);
             const offer = await webrtcService.createOffer();
-            const { socket } = get() as any;
-            if (socket) {
-                console.log(`[CallSlice] 📡 Sending webrtc_offer for chat: ${chatId}, Video: ${isVideo}`);
-                socket.send(JSON.stringify({
+            const offerSent = await sendSignalingMessage(get, {
                     type: 'webrtc_offer',
                     chat_id: chatId, // Changed from conversation_id
                     offer,
                     is_video: isVideo // Added missing field
-                }));
+                });
+
+            if (!offerSent) {
+                (get() as any).showToast('error', 'Call unavailable', 'Still connecting to chat server. Please try again in a moment.');
+                get().endCall();
+                return;
             }
+            console.log(`[CallSlice] 📡 Sent webrtc_offer for chat: ${chatId}, Video: ${isVideo}`);
         } catch (e) {
             console.error('[CallSlice] ❌ Start call failed:', e);
             get().endCall();
@@ -187,8 +307,15 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
         }
 
         const { chatId, offer, isVideo } = callState.incomingCall;
+        if (!offer) {
+            console.warn('[AcceptCall] Missing WebRTC offer, waiting for signaling to catch up');
+            get().showToast('info', 'Reconnecting to call', 'Waiting for the caller connection to resume.');
+            return;
+        }
+
         console.log('[AcceptCall] Accepting from:', chatId, 'isVideo:', isVideo, 'offerPrefix:', offer?.sdp?.substring(0, 50));
         stopRingtone();
+        void clearPendingCallIntent();
         
         // Instantly transition state to lock out additional taps and dismiss modals
         set((state) => ({
@@ -223,19 +350,29 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
             set((state) => ({
                 callState: { ...state.callState, localStream: stream }
             }));
-            
+
+            const signalingSocket = await waitForOpenSignalingSocket(get);
+            if (!signalingSocket) {
+                (get() as any).showToast('error', 'Call unavailable', 'Lost connection to the chat server while answering.');
+                get().endCall();
+                return;
+            }
+
             (get() as any).setupWebRTCListeners(chatId);
             const answer = await webrtcService.createAnswer(offer);
-            const { socket } = get() as any;
-            if (socket) {
-                console.log(`[CallSlice] ✅ Sending webrtc_answer for chat: ${chatId}`);
-                socket.send(JSON.stringify({
+            const answerSent = await sendSignalingMessage(get, {
                     type: 'webrtc_answer',
                     chat_id: chatId, // Changed from conversation_id
                     answer,
                     is_video: isVideo // Consistent with offer
-                }));
+                });
+
+            if (!answerSent) {
+                (get() as any).showToast('error', 'Call unavailable', 'Lost connection to the chat server while answering.');
+                get().endCall();
+                return;
             }
+            console.log(`[CallSlice] ✅ Sent webrtc_answer for chat: ${chatId}`);
             if (callState.bufferedCandidates.length > 0) {
                 console.log('[AcceptCall] 🚰 Draining', callState.bufferedCandidates.length, 'buffered candidates');
                 for (const candidate of callState.bufferedCandidates) {
@@ -251,17 +388,18 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
         }
     },
     endCall: () => {
-        const { callState, socket } = get() as any;
+        const { callState } = get() as any;
         console.log('[EndCall] Cleaning up call state');
+        void clearPendingCallIntent();
         stopRingtone();
         webrtcService.closeConnection();
         KeepAwake.deactivateKeepAwake();
-        if (socket && callState.activeChatId) {
+        if (callState.activeChatId) {
             console.log(`[CallSlice] 🔴 Sending call_ended for chat: ${callState.activeChatId}`);
-            socket.send(JSON.stringify({
+            void sendSignalingMessage(get, {
                 type: 'call_ended',
                 chat_id: callState.activeChatId // Changed from conversation_id
-            }));
+            });
         }
         set((state) => ({
             callState: {
@@ -288,18 +426,30 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                     // Optional: send busy signal
                     return;
                 }
-                set((state) => ({
-                    callState: { 
-                        ...state.callState, 
-                        incomingCall: { 
-                            chatId: data.chat_id || data.conversation_id, // Fallback for safety
-                            offer: data.offer, 
-                            isVideo: !!data.is_video,
-                            callerName: data.caller_name || '',
-                            callerAvatar: data.caller_avatar || ''
-                        } 
-                    }
-                }));
+                set((state) => {
+                    const chatId = String(data.chat_id || data.conversation_id);
+                    const existingIncomingCall = state.callState.incomingCall;
+                    const isSamePendingCall = existingIncomingCall?.chatId === chatId;
+
+                    return {
+                        callState: {
+                            ...state.callState,
+                            incomingCall: buildIncomingCallState(
+                                {
+                                    chatId,
+                                    offer: data.offer,
+                                    isVideo: !!data.is_video,
+                                    callerName: data.caller_name || existingIncomingCall?.callerName || '',
+                                    callerAvatar: data.caller_avatar || existingIncomingCall?.callerAvatar || '',
+                                    callUUID: existingIncomingCall?.callUUID,
+                                    source: isSamePendingCall ? existingIncomingCall.source : 'signaling',
+                                    awaitingOffer: false,
+                                },
+                                isSamePendingCall ? existingIncomingCall : null
+                            )
+                        }
+                    };
+                });
                 playRingtone(true);
                 break;
             case 'webrtc_answer':
@@ -320,6 +470,15 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 break;
             case 'call_ended':
                 console.log('[Signaling] Call ended by remote for chat:', data.chat_id || data.conversation_id);
+                if (
+                    callState.incomingCall &&
+                    !callState.isCalling &&
+                    callState.incomingCall.chatId === String(data.chat_id || data.conversation_id)
+                ) {
+                    get().clearIncomingCall();
+                    get().showToast('info', 'Call ended', 'The caller hung up before the call could reconnect.');
+                    return;
+                }
                 get().endCall();
                 break;
         }
