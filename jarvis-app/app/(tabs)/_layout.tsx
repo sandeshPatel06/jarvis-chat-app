@@ -113,9 +113,6 @@ export default function TabLayout() {
               >
                 <FontAwesome name="search" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.headerIconButton}>
-                <FontAwesome name="ellipsis-v" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
             </View>
           ),
         }}

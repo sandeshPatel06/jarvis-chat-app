@@ -433,12 +433,15 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
         stopRingtone();
         webrtcService.closeConnection();
         KeepAwake.deactivateKeepAwake();
-        if (callState.activeChatId) {
-            console.log(`[CallSlice] 🔴 Sending call_ended for chat: ${callState.activeChatId}`);
+        const chatIdToSend = callState.activeChatId || callState.incomingCall?.chatId;
+        const callUUIDToSend = callState.activeCallUUID || callState.incomingCall?.callUUID;
+
+        if (chatIdToSend) {
+            console.log(`[CallSlice] 🔴 Sending call_ended for chat: ${chatIdToSend}`);
             void sendSignalingMessage(get, {
                 type: 'call_ended',
-                chat_id: callState.activeChatId, // Changed from conversation_id
-                ...(callState.activeCallUUID ? { call_uuid: callState.activeCallUUID } : {}),
+                chat_id: chatIdToSend,
+                ...(callUUIDToSend ? { call_uuid: callUUIDToSend } : {}),
             });
         }
 

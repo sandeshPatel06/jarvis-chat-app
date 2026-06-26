@@ -11,11 +11,13 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { FlatList, StyleSheet, TextInput, TouchableOpacity, LayoutAnimation, Platform } from 'react-native';
 
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ChatItem from '@/components/chat/ChatItem';
 
 export default function ChatsScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
 
   // Specific selectors to avoid unnecessary re-renders
   const chats = useStore(useCallback((state) => state.chats, []));
@@ -221,7 +223,7 @@ export default function ChatsScreen() {
       />
 
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { bottom: 60 + insets.bottom + 16 }]}
         onPress={() => router.push('/contacts/select')}
         activeOpacity={0.8}
       >
@@ -363,7 +365,6 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 100, 
     right: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
