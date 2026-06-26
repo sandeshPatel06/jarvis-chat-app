@@ -5,15 +5,32 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, BackHandler, Animated, Easing } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, BackHandler, Animated, Easing, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RTCView } from 'react-native-webrtc';
 import { Avatar } from '@/components/ui/Avatar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 
+
 export default function CallScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
+    const { width, height } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
+
+    const isLandscape = width > height;
+    const isShortScreen = height < 700;
+    const isTabletOrWeb = width >= 600;
+
+    // Responsive measurements
+    const avatarSize = isLandscape ? 80 : (isShortScreen ? 100 : 140);
+    const avatarMarginBottom = isLandscape ? 10 : (isShortScreen ? 16 : 30);
+    const callerNameSize = isLandscape ? 22 : (isShortScreen ? 26 : 32);
+    const callerNameMarginBottom = isLandscape ? 4 : 10;
+    const callStatusSize = isLandscape ? 14 : 18;
+    const controlButtonSize = isLandscape ? 46 : 56;
+    const endCallButtonSize = isLandscape ? 60 : 76;
 
     // Granular selectors to isolate re-renders
     const localStream = useStore((state: any) => state.callState.localStream);
@@ -105,14 +122,9 @@ export default function CallScreen() {
             endRedirectTimeoutRef.current = setTimeout(() => {
                 router.replace('/(tabs)');
             }, 3000);
-            return () => {
-                if (endRedirectTimeoutRef.current) {
-                    clearTimeout(endRedirectTimeoutRef.current);
-                    endRedirectTimeoutRef.current = null;
-                }
-            };
         }
-    }, [isCalling, isEnding, router]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isCalling, router]);
 
     useEffect(() => {
         let interval: any;
@@ -211,12 +223,15 @@ export default function CallScreen() {
                     </View>
                 ) : isVideo && remoteStream ? null : (
                     // Voice Call / Connection UI
-                    <View style={styles.voiceCallContainer}>
-                        <View style={styles.avatarWrapper}>
+                    <View style={[styles.voiceCallContainer, isLandscape && { flexDirection: 'row', alignItems: 'center', gap: 30 }]}>
+                        <View style={[styles.avatarWrapper, { marginBottom: isLandscape ? 0 : avatarMarginBottom }]}>
                             {/* Animated Pulse Ring */}
                             <Animated.View style={[
                                 styles.pulseRing,
                                 {
+                                    width: avatarSize + 20,
+                                    height: avatarSize + 20,
+                                    borderRadius: (avatarSize + 20) / 2,
                                     transform: [{ scale: pulseAnim }],
                                     opacity: pulseAnim.interpolate({
                                         inputRange: [1, 1.3],
@@ -226,20 +241,32 @@ export default function CallScreen() {
                             ]} />
                             <Avatar
                                 source={chat?.avatar}
-                                size={140}
+                                size={avatarSize}
                                 style={styles.premiumAvatar}
                             />
                         </View>
                         
-                        <Text style={styles.callerName}>{chat?.name || 'Unknown'}</Text>
-                        <Text style={styles.callStatus}>{renderCallStatus()}</Text>
+                        <View style={isLandscape ? { alignItems: 'flex-start' } : { alignItems: 'center' }}>
+                            <Text style={[styles.callerName, { fontSize: callerNameSize, marginBottom: callerNameMarginBottom }]}>{chat?.name || 'Unknown'}</Text>
+                            <Text style={[styles.callStatus, { fontSize: callStatusSize }]}>{renderCallStatus()}</Text>
+                        </View>
                     </View>
                 )}
             </View>
 
             {/* Local Stream (PIP) - Only for video calls */}
             {isVideo && localStream && isVideoEnabled && !isEnding && (
-                <View style={[styles.localStreamContainer, remoteStream ? styles.localStreamPip : styles.localStreamFull]}>
+                <View 
+                    style={[
+                        styles.localStreamContainer, 
+                        remoteStream ? {
+                            top: Math.max(insets.top, 16),
+                            right: 20,
+                            width: isTabletOrWeb ? 150 : 110,
+                            height: isTabletOrWeb ? 220 : 160,
+                        } : styles.localStreamFull
+                    ]}
+                >
                     <RTCView
                         key={localStream.toURL()}
                         streamURL={localStream.toURL()}
@@ -253,47 +280,108 @@ export default function CallScreen() {
 
             {/* Premium Controls */}
             {!isEnding && (
-                <BlurView intensity={80} tint="dark" style={styles.controlsContainer}>
+                <BlurView 
+                    intensity={80} 
+                    tint="dark" 
+                    style={[
+                        styles.controlsContainer, 
+                        { 
+                            paddingBottom: Math.max(insets.bottom, 24),
+                            paddingTop: isLandscape ? 15 : 30,
+                            borderWidth: width >= 550 ? 1 : 0,
+                        }
+                    ]}
+                >
                     <TouchableOpacity 
-                        style={[styles.controlButton, { backgroundColor: isMuted ? '#fff' : 'rgba(255,255,255,0.15)' }]} 
+                        style={[
+                            styles.controlButton, 
+                            { 
+                                width: controlButtonSize, 
+                                height: controlButtonSize, 
+                                borderRadius: controlButtonSize / 2,
+                                backgroundColor: isMuted ? '#fff' : 'rgba(255,255,255,0.15)' 
+                            }
+                        ]} 
                         onPress={toggleMute}
                     >
-                        <FontAwesome name={isMuted ? "microphone-slash" : "microphone"} size={22} color={isMuted ? '#000' : '#fff'} />
+                        <FontAwesome name={isMuted ? "microphone-slash" : "microphone"} size={isLandscape ? 18 : 22} color={isMuted ? '#000' : '#fff'} />
                     </TouchableOpacity>
 
                     {isVideo && (
                         <TouchableOpacity 
-                            style={[styles.controlButton, { backgroundColor: !isVideoEnabled ? '#fff' : 'rgba(255,255,255,0.15)' }]} 
+                            style={[
+                                styles.controlButton, 
+                                { 
+                                    width: controlButtonSize, 
+                                    height: controlButtonSize, 
+                                    borderRadius: controlButtonSize / 2,
+                                    backgroundColor: !isVideoEnabled ? '#fff' : 'rgba(255,255,255,0.15)' 
+                                }
+                            ]} 
                             onPress={toggleVideo}
                         >
-                            <FontAwesome name="video-camera" size={22} color={!isVideoEnabled ? '#000' : '#fff'} />
-                            {!isVideoEnabled && <View style={styles.slashLine} />}
+                            <FontAwesome name="video-camera" size={isLandscape ? 18 : 22} color={!isVideoEnabled ? '#000' : '#fff'} />
+                            {!isVideoEnabled && <View style={[styles.slashLine, { width: controlButtonSize * 0.7 }]} />}
                         </TouchableOpacity>
                     )}
 
                     {/* Main End Call Button */}
-                    <TouchableOpacity style={styles.endCallButton} onPress={handleEndCall}>
-                        <MaterialIcons name="call-end" size={36} color="white" />
+                    <TouchableOpacity 
+                        style={[
+                            styles.endCallButton,
+                            {
+                                width: endCallButtonSize,
+                                height: endCallButtonSize,
+                                borderRadius: endCallButtonSize / 2,
+                            }
+                        ]} 
+                        onPress={handleEndCall}
+                    >
+                        <MaterialIcons name="call-end" size={isLandscape ? 28 : 36} color="white" />
                     </TouchableOpacity>
 
                     {isVideo && (
-                        <TouchableOpacity style={[styles.controlButton, { backgroundColor: 'rgba(255,255,255,0.15)' }]} onPress={switchCamera}>
-                            <MaterialIcons name="flip-camera-ios" size={24} color="#fff" />
+                        <TouchableOpacity 
+                            style={[
+                                styles.controlButton, 
+                                { 
+                                    width: controlButtonSize, 
+                                    height: controlButtonSize, 
+                                    borderRadius: controlButtonSize / 2,
+                                    backgroundColor: 'rgba(255,255,255,0.15)' 
+                                }
+                            ]} 
+                            onPress={switchCamera}
+                        >
+                            <MaterialIcons name="flip-camera-ios" size={isLandscape ? 20 : 24} color="#fff" />
                         </TouchableOpacity>
                     )}
 
                     <TouchableOpacity 
-                        style={[styles.controlButton, { backgroundColor: isSpeakerOn ? '#fff' : 'rgba(255,255,255,0.15)' }]} 
+                        style={[
+                            styles.controlButton, 
+                            { 
+                                width: controlButtonSize, 
+                                height: controlButtonSize, 
+                                borderRadius: controlButtonSize / 2,
+                                backgroundColor: isSpeakerOn ? '#fff' : 'rgba(255,255,255,0.15)' 
+                            }
+                        ]} 
                         onPress={toggleSpeaker}
                     >
-                        <MaterialIcons name={isSpeakerOn ? "volume-up" : "volume-off"} size={26} color={isSpeakerOn ? '#000' : '#fff'} />
+                        <MaterialIcons name={isSpeakerOn ? "volume-up" : "volume-off"} size={isLandscape ? 20 : 26} color={isSpeakerOn ? '#000' : '#fff'} />
                     </TouchableOpacity>
                 </BlurView>
             )}
 
             {!isEnding && (
                 <TouchableOpacity
-                    style={styles.minimizeButton}
+                    style={[
+                        styles.minimizeButton,
+                        {
+                            top: Math.max(insets.top, 16),
+                        }
+                    ]}
                     onPress={() => {
                         setIsMinimized(true);
                         router.back();
@@ -384,11 +472,6 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         borderWidth: 2,
         borderColor: 'rgba(255,255,255,0.7)',
-        elevation: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.6,
-        shadowRadius: 8,
         backgroundColor: '#1a1a1a',
         zIndex: 5,
     },
@@ -415,46 +498,30 @@ const styles = StyleSheet.create({
     controlsContainer: {
         position: 'absolute',
         bottom: 0,
-        left: 0,
-        right: 0,
+        alignSelf: 'center',
+        width: '100%',
+        maxWidth: 550,
         flexDirection: 'row',
         justifyContent: 'space-evenly',
         alignItems: 'center',
-        paddingBottom: 40,
-        paddingTop: 30,
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
         overflow: 'hidden',
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderBottomWidth: 0,
         zIndex: 10,
     },
     controlButton: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 4,
     },
     endCallButton: {
-        width: 76,
-        height: 76,
-        borderRadius: 38,
         backgroundColor: '#ff3b30',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#ff3b30',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        elevation: 8,
     },
     slashLine: {
         position: 'absolute',
-        width: '70%',
         height: 2.5,
         backgroundColor: '#000',
         transform: [{ rotate: '45deg' }],
@@ -462,7 +529,6 @@ const styles = StyleSheet.create({
     },
     minimizeButton: {
         position: 'absolute',
-        top: 50,
         left: 20,
         width: 50,
         height: 50,

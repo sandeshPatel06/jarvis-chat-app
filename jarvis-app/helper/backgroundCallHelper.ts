@@ -11,7 +11,14 @@ export async function handleIncomingCallFCM(data: any) {
 
     const { callUUID, callerName, callerAvatar, isVideo } = data;
     const chatId = data.chatId || data.chat_id || data.conversation_id || null;
-    const offer = data.offer && typeof data.offer === 'object' ? data.offer : null;
+    const offer = data.offer && typeof data.offer === 'object'
+        ? data.offer
+        : (typeof data.offerSdp === 'string' && data.offerSdp.trim()
+            ? {
+                type: typeof data.offerType === 'string' && data.offerType.trim() ? data.offerType : 'offer',
+                sdp: data.offerSdp,
+            }
+            : null);
     let avatarUrl = callerAvatar ? getMediaUrl(callerAvatar) : null;
 
     if (avatarUrl && !avatarUrl.startsWith('http') && !avatarUrl.startsWith('file')) {

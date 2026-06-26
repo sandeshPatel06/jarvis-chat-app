@@ -145,7 +145,7 @@ export default function SelectContactScreen() {
 
         // Try to find an existing 1-1 chat with this user
         const existingChat = useStore.getState().chats.find(chat => 
-            (chat.user_id && chat.user_id.toString() === contact.id) || 
+            (chat.user_id && String(chat.user_id) === String(contact.id)) || 
             chat.name === contact.username
         );
 

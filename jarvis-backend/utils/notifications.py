@@ -3,6 +3,7 @@ from firebase_admin import credentials, messaging
 from django.conf import settings
 import os
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,12 @@ def send_fcm_notification(user, title, body, data=None, ttl=None, priority='high
 
         if is_incoming_call:
             # Canonical frontend contract for call notifications.
-            payload_data['callUUID'] = payload_data.get('callUUID') or payload_data.get('call_uuid') or payload_data.get('uuid')
+            payload_data['callUUID'] = (
+                payload_data.get('callUUID')
+                or payload_data.get('call_uuid')
+                or payload_data.get('uuid')
+                or str(uuid.uuid4())
+            )
             payload_data['chatId'] = str(payload_data.get('chatId') or payload_data.get('chat_id') or payload_data.get('conversation_id') or '')
             payload_data['callerName'] = payload_data.get('callerName') or payload_data.get('caller_name') or title
             payload_data['callerAvatar'] = payload_data.get('callerAvatar') or payload_data.get('caller_avatar') or ''

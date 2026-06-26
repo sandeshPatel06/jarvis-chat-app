@@ -75,7 +75,10 @@ export default function UserProfileScreen() {
     }, [id, token, fetchBlockedUsers, showToast]);
 
     // Find the chat with this user to navigate back to it
-    const chat = chats.find((c) => c.user_id === parseInt(id));
+    const chat = chats.find((c) => 
+        (c.user_id && String(c.user_id) === String(id)) || 
+        (userProfile && c.name === userProfile.username)
+    );
 
     const handleMessage = async () => {
         if (chat) {

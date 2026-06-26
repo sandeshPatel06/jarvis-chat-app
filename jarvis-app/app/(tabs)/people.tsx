@@ -162,7 +162,10 @@ export default function PeopleScreen() {
     const handleChatWithContact = async (contact: Contact) => {
         try {
             // 1. Check if conversation already exists in our store
-            const existingChat = chats.find((c: any) => c.user_id === contact.id);
+            const existingChat = chats.find((c: any) => 
+                (c.user_id && String(c.user_id) === String(contact.id)) || 
+                c.name === contact.username
+            );
             
             if (existingChat) {
                 router.push(`/chat/${existingChat.id}`);

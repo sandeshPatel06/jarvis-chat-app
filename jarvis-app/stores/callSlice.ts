@@ -27,6 +27,7 @@ interface CallState {
     remoteStream: MediaStream | null;
     localStream: MediaStream | null;
     activeChatId: string | null;
+    activeCallUUID: string | null;
     bufferedCandidates: any[];
     isMinimized: boolean;
     isVideo?: boolean;
@@ -44,7 +45,7 @@ export interface CallSlice {
     clearIncomingCall: () => void;
     handleSignalingMessage: (message: any) => Promise<void>;
     setIsMinimized: (isMinimized: boolean) => void;
-    setupWebRTCListeners: (chatId: string) => void;
+    setupWebRTCListeners: (chatId: string, callUUID?: string | null) => void;
 }
 
 // These would normally be inside the component or a dedicated service, but kept for parity
@@ -52,6 +53,8 @@ let callSound: any = null;
 let ringtoneActive = false;
 const SIGNALING_SOCKET_WAIT_MS = 4000;
 const SIGNALING_SOCKET_POLL_MS = 100;
+
+const createCallUUID = () => `call_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 
 const playRingtone = async (isIncoming: boolean) => {
     try {
@@ -163,6 +166,22 @@ const buildIncomingCallState = (
     };
 };
 
+const isSameCall = (
+    existingIncomingCall: IncomingCallState | null,
+    chatId: string,
+    callUUID?: string | null
+) => {
+    if (!existingIncomingCall) {
+        return false;
+    }
+
+    if (callUUID && existingIncomingCall.callUUID) {
+        return existingIncomingCall.callUUID === callUUID;
+    }
+
+    return existingIncomingCall.chatId === chatId;
+};
+
 export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, get) => ({
     callState: {
         isCalling: false,
@@ -170,6 +189,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
         remoteStream: null,
         localStream: null,
         activeChatId: null,
+        activeCallUUID: null,
         bufferedCandidates: [],
         isMinimized: false,
         isRequestingPermissions: false,
@@ -205,7 +225,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
             }
         }));
     },
-    setupWebRTCListeners: (chatId: string) => {
+    setupWebRTCListeners: (chatId: string, callUUID?: string | null) => {
         webrtcService.onRemoteStream = (stream) => {
             console.log('[CallSlice] 📺 Remote stream received, tracks:', stream.getTracks().length);
             set((state) => ({
@@ -218,6 +238,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
             await sendSignalingMessage(get, {
                     type: 'webrtc_ice_candidate',
                     chat_id: chatId, // Changed from conversation_id
+                    ...(callUUID ? { call_uuid: callUUID } : {}),
                     candidate
                 }, { waitForOpen: true });
         };
@@ -239,8 +260,18 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
         };
     },
     startCall: async (chatId, isVideo = true) => {
+        const callUUID = createCallUUID();
         set((state) => ({
-            callState: { ...state.callState, isCalling: true, activeChatId: chatId, isMinimized: false, bufferedCandidates: [], isVideo, isRequestingPermissions: true }
+            callState: {
+                ...state.callState,
+                isCalling: true,
+                activeChatId: chatId,
+                activeCallUUID: callUUID,
+                isMinimized: false,
+                bufferedCandidates: [],
+                isVideo,
+                isRequestingPermissions: true
+            }
         }));
         try {
             const audioStatus = await Audio.requestRecordingPermissionsAsync();
@@ -273,11 +304,12 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 return;
             }
 
-            (get() as any).setupWebRTCListeners(chatId);
+            (get() as any).setupWebRTCListeners(chatId, callUUID);
             const offer = await webrtcService.createOffer();
             const offerSent = await sendSignalingMessage(get, {
                     type: 'webrtc_offer',
                     chat_id: chatId, // Changed from conversation_id
+                    call_uuid: callUUID,
                     offer,
                     is_video: isVideo // Added missing field
                 });
@@ -306,7 +338,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
             return;
         }
 
-        const { chatId, offer, isVideo } = callState.incomingCall;
+        const { chatId, callUUID, offer, isVideo } = callState.incomingCall;
         if (!offer) {
             console.warn('[AcceptCall] Missing WebRTC offer, waiting for signaling to catch up');
             get().showToast('info', 'Reconnecting to call', 'Waiting for the caller connection to resume.');
@@ -323,6 +355,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 ...state.callState, 
                 isCalling: true, 
                 activeChatId: chatId, 
+                activeCallUUID: callUUID || null,
                 isVideo, 
                 isRequestingPermissions: true,
                 incomingCall: null // Clear incoming call immediately to force UI remount
@@ -358,11 +391,12 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 return;
             }
 
-            (get() as any).setupWebRTCListeners(chatId);
+            (get() as any).setupWebRTCListeners(chatId, callUUID);
             const answer = await webrtcService.createAnswer(offer);
             const answerSent = await sendSignalingMessage(get, {
                     type: 'webrtc_answer',
                     chat_id: chatId, // Changed from conversation_id
+                    ...(callUUID ? { call_uuid: callUUID } : {}),
                     answer,
                     is_video: isVideo // Consistent with offer
                 });
@@ -398,7 +432,8 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
             console.log(`[CallSlice] 🔴 Sending call_ended for chat: ${callState.activeChatId}`);
             void sendSignalingMessage(get, {
                 type: 'call_ended',
-                chat_id: callState.activeChatId // Changed from conversation_id
+                chat_id: callState.activeChatId, // Changed from conversation_id
+                ...(callState.activeCallUUID ? { call_uuid: callState.activeCallUUID } : {}),
             });
         }
         set((state) => ({
@@ -408,6 +443,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 remoteStream: null,
                 localStream: null,
                 activeChatId: null,
+                activeCallUUID: null,
                 bufferedCandidates: [],
                 isMinimized: false,
                 isRequestingPermissions: false,
@@ -428,8 +464,9 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 }
                 set((state) => {
                     const chatId = String(data.chat_id || data.conversation_id);
+                    const callUUID = data.call_uuid || data.callUUID || null;
                     const existingIncomingCall = state.callState.incomingCall;
-                    const isSamePendingCall = existingIncomingCall?.chatId === chatId;
+                    const isSamePendingCall = isSameCall(existingIncomingCall, chatId, callUUID);
 
                     return {
                         callState: {
@@ -441,8 +478,8 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                                     isVideo: !!data.is_video,
                                     callerName: data.caller_name || existingIncomingCall?.callerName || '',
                                     callerAvatar: data.caller_avatar || existingIncomingCall?.callerAvatar || '',
-                                    callUUID: existingIncomingCall?.callUUID,
-                                    source: isSamePendingCall ? existingIncomingCall.source : 'signaling',
+                                    callUUID: callUUID || existingIncomingCall?.callUUID,
+                                    source: isSamePendingCall ? (existingIncomingCall?.source ?? 'signaling') : 'signaling',
                                     awaitingOffer: false,
                                 },
                                 isSamePendingCall ? existingIncomingCall : null
@@ -473,7 +510,11 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 if (
                     callState.incomingCall &&
                     !callState.isCalling &&
-                    callState.incomingCall.chatId === String(data.chat_id || data.conversation_id)
+                    isSameCall(
+                        callState.incomingCall,
+                        String(data.chat_id || data.conversation_id),
+                        data.call_uuid || data.callUUID || null
+                    )
                 ) {
                     get().clearIncomingCall();
                     get().showToast('info', 'Call ended', 'The caller hung up before the call could reconnect.');

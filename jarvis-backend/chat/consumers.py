@@ -1,4 +1,5 @@
 import json
+import uuid
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth import get_user_model
@@ -264,6 +265,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
             recipient_id = await self.get_recipient_from_conversation(chat_id)
             if recipient_id:
+                if message_type == 'webrtc_offer':
+                    call_uuid = (
+                        text_data_json.get('call_uuid')
+                        or text_data_json.get('callUUID')
+                        or str(uuid.uuid4())
+                    )
+                    text_data_json['call_uuid'] = call_uuid
+                    text_data_json['callUUID'] = call_uuid
+
                 # Inject caller info for reliability on receiver end
                 text_data_json['caller_name'] = self.user.username
                 text_data_json['caller_avatar'] = self.user.profile_picture.url if getattr(self.user, 'profile_picture', None) else ""
@@ -294,7 +304,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     f"user_{recipient_id}",
                     {
                         'type': 'call_ended',
-                        'chat_id': chat_id
+                        'chat_id': chat_id,
+                        'call_uuid': text_data_json.get('call_uuid') or text_data_json.get('callUUID'),
                     }
                 )
             return
@@ -330,16 +341,16 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def trigger_call_notification(self, recipient_id, chat_id, text_data_json):
-        from .tasks import send_call_notification
+        from .tasks import send_call_notification_now
         try:
-            logger.info(f"[WS] 📲 Queueing FCM for Incoming Call to user_{recipient_id}")
-            send_call_notification.delay(
+            logger.info(f"[WS] 📲 Sending FCM for Incoming Call to user_{recipient_id}")
+            send_call_notification_now(
                 recipient_id,
                 str(chat_id),
                 self.user.username,
                 str(self.user.profile_picture.url) if self.user.profile_picture else None,
                 text_data_json.get('is_video'),
-                text_data_json.get('offer', {}).get('sdp', '')[:10],
+                text_data_json.get('call_uuid') or text_data_json.get('callUUID') or str(uuid.uuid4()),
                 text_data_json.get('offer', {}).get('type', 'offer'),
                 text_data_json.get('offer', {}).get('sdp', ''),
             )

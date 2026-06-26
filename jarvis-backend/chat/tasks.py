@@ -11,6 +11,31 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+def send_call_notification_now(user_id, chat_id, caller_name, caller_avatar, is_video, call_uuid, offer_type='offer', offer_sdp=''):
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        logger.warning("Call notification skipped for missing user_id=%s", user_id)
+        return False
+
+    return send_fcm_notification(
+        user=user,
+        title="Incoming Call",
+        body="Incoming video call..." if is_video else "Incoming voice call...",
+        ttl=0,
+        data={
+            "type": "incoming_call",
+            "chatId": str(chat_id),
+            "callUUID": call_uuid,
+            "callerName": caller_name,
+            "callerAvatar": caller_avatar or "",
+            "isVideo": "true" if is_video else "false",
+            "offerType": offer_type or "offer",
+            "offerSdp": offer_sdp or "",
+        },
+    )
+
+
 @shared_task(queue='notifications', bind=True, max_retries=3, default_retry_delay=30)
 def send_message_notification(self, user_id, title, body, data=None):
     try:
@@ -24,27 +49,15 @@ def send_message_notification(self, user_id, title, body, data=None):
 
 @shared_task(queue='notifications', bind=True, max_retries=3, default_retry_delay=30)
 def send_call_notification(self, user_id, chat_id, caller_name, caller_avatar, is_video, call_uuid, offer_type='offer', offer_sdp=''):
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        logger.warning("Call notification skipped for missing user_id=%s", user_id)
-        return False
-
-    return send_fcm_notification(
-        user=user,
-        title="Incoming Call",
-        body="Incoming video call...",
-        ttl=0,
-        data={
-            "type": "incoming_call",
-            "chatId": str(chat_id),
-            "callUUID": call_uuid,
-            "callerName": caller_name,
-            "callerAvatar": caller_avatar or "",
-            "isVideo": "true" if is_video else "false",
-            "offerType": offer_type or "offer",
-            "offerSdp": offer_sdp or "",
-        },
+    return send_call_notification_now(
+        user_id,
+        chat_id,
+        caller_name,
+        caller_avatar,
+        is_video,
+        call_uuid,
+        offer_type,
+        offer_sdp,
     )
 
 
