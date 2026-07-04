@@ -1,17 +1,19 @@
-import { Text, View } from '@/components/Themed';
 import { api } from '@/services/api';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useRouter } from 'expo-router';
 import { useStore } from '@/store';
-import React, { useState } from 'react';
-import { 
-    ActivityIndicator, 
-    StyleSheet, 
-    TextInput, 
-    TouchableOpacity, 
-    useWindowDimensions,
+import React, { useRef, useState } from 'react';
+import {
+    ActivityIndicator,
+    Animated,
+    Image,
     Platform,
-    Image 
+    StyleSheet,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View,
+    Text,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
@@ -21,7 +23,8 @@ import { Ionicons } from '@expo/vector-icons';
 export default function SignupScreen() {
     const { width } = useWindowDimensions();
     const isSmallDevice = width < 375;
-    
+    const isTablet = width >= 768;
+
     const [step, setStep] = useState(1); // 1: Email, 2: OTP, 3: Details
     const [email, setEmail] = useState('');
     const [otpCode, setOtpCode] = useState('');
@@ -31,7 +34,10 @@ export default function SignupScreen() {
     const [sessionId, setSessionId] = useState('');
     const [loading, setLoading] = useState(false);
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-    
+    const [inputFocused, setInputFocused] = useState<string | null>(null);
+
+    const buttonScale = useRef(new Animated.Value(1)).current;
+
     const generatePassword = () => {
         const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
         let retVal = "";
@@ -41,19 +47,40 @@ export default function SignupScreen() {
         setPassword(retVal);
         setIsPasswordVisible(true);
     };
-    
+
     const router = useRouter();
     const { setUser, showAlert } = useStore();
     const { colors, isDark } = useAppTheme();
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const isEmailValid = emailRegex.test(email);
+    const usernameRegex = /^[a-zA-Z0-9_]{3,15}$/;
+    const isEmailValid = emailRegex.test(email.trim());
+
+    // Validations
+    const isUsernameValid = usernameRegex.test(username.trim());
+    const isPasswordValid = password.length >= 6;
+
+    const animateButton = () => {
+        Animated.sequence([
+            Animated.timing(buttonScale, { toValue: 0.97, duration: 80, useNativeDriver: true }),
+            Animated.timing(buttonScale, { toValue: 1, duration: 80, useNativeDriver: true }),
+        ]).start();
+    };
 
     const handleRequestOTP = async () => {
-        if (!isEmailValid) return;
+        const cleanEmail = email.trim();
+        if (!cleanEmail) {
+            showAlert('Validation Error', 'Please enter your email address.');
+            return;
+        }
+        if (!emailRegex.test(cleanEmail)) {
+            showAlert('Validation Error', 'Please enter a valid email address.');
+            return;
+        }
+        animateButton();
         setLoading(true);
         try {
-            const response = await api.auth.requestOTP(email);
+            const response = await api.auth.requestOTP(cleanEmail);
             setSessionId(response.session_id);
             setStep(2);
         } catch (error: any) {
@@ -64,7 +91,11 @@ export default function SignupScreen() {
     };
 
     const handleVerifyOTP = async () => {
-        if (otpCode.length !== 6) return;
+        if (otpCode.length !== 6) {
+            showAlert('Validation Error', 'Verification code must be exactly 6 digits.');
+            return;
+        }
+        animateButton();
         setLoading(true);
         try {
             const response = await api.auth.verifyOTP({ session_id: sessionId, otp_code: otpCode });
@@ -83,17 +114,32 @@ export default function SignupScreen() {
     };
 
     const handleCompleteSignup = async () => {
-        if (!username || !password) {
-            showAlert('Error', 'Username and password are required');
+        const cleanUsername = username.trim();
+        if (!cleanUsername) {
+            showAlert('Validation Error', 'Please choose a username.');
             return;
         }
+        if (!isUsernameValid) {
+            showAlert('Validation Error', 'Username must be 3-15 characters and contain only letters, numbers, or underscores.');
+            return;
+        }
+        if (!password) {
+            showAlert('Validation Error', 'Please choose a password.');
+            return;
+        }
+        if (!isPasswordValid) {
+            showAlert('Validation Error', 'Password must be at least 6 characters.');
+            return;
+        }
+
+        animateButton();
         setLoading(true);
         try {
             const response = await api.auth.completeSignup({
                 session_id: sessionId,
-                username,
+                username: cleanUsername,
                 password,
-                phone_number: phone
+                phone_number: phone.trim()
             });
             setUser(response.user, response.token);
             router.replace('/(tabs)');
@@ -104,172 +150,292 @@ export default function SignupScreen() {
         }
     };
 
+    const logoSize = Math.min(width * 0.22, 90);
+    const contentWidth = isTablet ? '65%' : '100%';
+    const contentMaxWidth = 440;
+    const screenPadding = width * 0.06;
+
     const renderStep = () => {
         switch (step) {
             case 1:
                 return (
                     <>
                         <View style={styles.header}>
-                             <View style={styles.logoContainer}>
+                            <View style={[
+                                styles.logoContainer,
+                                {
+                                    backgroundColor: isDark ? 'rgba(142,134,255,0.1)' : 'rgba(108,99,255,0.06)',
+                                    width: logoSize,
+                                    height: logoSize,
+                                    borderRadius: logoSize * 0.3,
+                                }
+                            ]}>
                                 <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
                             </View>
                             <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
                             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Enter your email to get started</Text>
                         </View>
-                        
+
                         <View style={styles.inputWrapper}>
                             <Text style={[styles.label, { color: colors.textSecondary }]}>Email Address *</Text>
                             <View style={[
-                                styles.inputContainer, 
-                                { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: email ? (isEmailValid ? colors.success : colors.error) : colors.border }
+                                styles.inputContainer,
+                                {
+                                    backgroundColor: isDark ? colors.surfaceSecondary : '#F8F8FC',
+                                    borderColor: inputFocused === 'email' ? colors.primary : (email ? (isEmailValid ? colors.success : colors.error) : (isDark ? colors.border : '#E0E0E8'))
+                                }
                             ]}>
-                                <Ionicons name="mail-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                                <Ionicons name="mail-outline" size={18} color={inputFocused === 'email' ? colors.primary : colors.textSecondary} style={styles.inputIcon} />
                                 <TextInput
                                     style={[styles.input, { color: colors.text }]}
                                     value={email}
                                     onChangeText={setEmail}
                                     placeholder="name@example.com"
-                                    placeholderTextColor={colors.textSecondary + '80'}
+                                    placeholderTextColor={colors.textSecondary + '60'}
                                     keyboardType="email-address"
                                     autoCapitalize="none"
+                                    autoCorrect={false}
+                                    returnKeyType="next"
+                                    onSubmitEditing={handleRequestOTP}
+                                    onFocus={() => setInputFocused('email')}
+                                    onBlur={() => setInputFocused(null)}
                                 />
-                                {isEmailValid && <Ionicons name="checkmark-circle" size={20} color={colors.success} />}
+                                {isEmailValid && <Ionicons name="checkmark-circle" size={18} color={colors.success} />}
                             </View>
                         </View>
 
-                        <TouchableOpacity 
-                            onPress={handleRequestOTP} 
-                            disabled={loading || !isEmailValid}
-                            style={[styles.submitButton, (!isEmailValid || loading) && { opacity: 0.6 }]}
-                        >
-                            <LinearGradient
-                                colors={[colors.primary, colors.secondary]}
-                                style={styles.gradient}
-                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                        <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+                            <TouchableOpacity
+                                onPress={handleRequestOTP}
+                                disabled={loading || !isEmailValid}
+                                style={[styles.submitButton, { shadowColor: colors.primary, opacity: (!isEmailValid || loading) ? 0.6 : 1 }]}
+                                activeOpacity={0.88}
                             >
-                                {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Continue</Text>}
-                            </LinearGradient>
-                        </TouchableOpacity>
+                                <LinearGradient
+                                    colors={[colors.primary, colors.secondary]}
+                                    style={styles.gradient}
+                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                >
+                                    {loading ? <ActivityIndicator color="white" size="small" /> : (
+                                        <View style={styles.buttonContent}>
+                                            <Text style={styles.buttonText}>Continue</Text>
+                                            <Ionicons name="arrow-forward" size={16} color="white" style={{ marginLeft: 8 }} />
+                                        </View>
+                                    )}
+                                </LinearGradient>
+                            </TouchableOpacity>
+                        </Animated.View>
                     </>
                 );
             case 2:
                 return (
                     <>
                         <View style={styles.header}>
-                             <View style={styles.logoContainer}>
+                            <View style={[
+                                styles.logoContainer,
+                                {
+                                    backgroundColor: isDark ? 'rgba(142,134,255,0.1)' : 'rgba(108,99,255,0.06)',
+                                    width: logoSize,
+                                    height: logoSize,
+                                    borderRadius: logoSize * 0.3,
+                                }
+                            ]}>
                                 <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
                             </View>
                             <Text style={[styles.title, { color: colors.text }]}>Verify Email</Text>
-                            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Check your inbox for the 6-digit code</Text>
+                            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Check your inbox for the verification code</Text>
                         </View>
 
-                        <View style={styles.inputWrapper}>
-                            <Text style={[styles.label, { color: colors.textSecondary }]}>Verification Code</Text>
-                            <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}>
+                        <View style={[styles.otpBanner, { backgroundColor: isDark ? 'rgba(142,134,255,0.08)' : 'rgba(108,99,255,0.04)', borderColor: colors.primary + '20' }]}>
+                            <Ionicons name="mail-open-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
+                            <Text style={[styles.otpBannerText, { color: colors.textSecondary }]}>
+                                Verification code sent to{' '}
+                                <Text style={{ color: colors.text, fontWeight: '700' }}>{email}</Text>
+                            </Text>
+                        </View>
+
+                        <View style={[styles.inputWrapper, { marginBottom: 8 }]}>
+                            <Text style={[styles.label, { color: colors.textSecondary, textAlign: 'center', marginBottom: 12 }]}>Enter Code</Text>
+                            <View style={[
+                                styles.inputContainer,
+                                styles.otpContainer,
+                                {
+                                    backgroundColor: isDark ? colors.surfaceSecondary : '#F8F8FC',
+                                    borderColor: colors.primary + '50',
+                                }
+                            ]}>
                                 <TextInput
                                     style={[styles.input, styles.otpInput, { color: colors.text }]}
                                     value={otpCode}
                                     onChangeText={setOtpCode}
-                                    placeholder="000000"
-                                    placeholderTextColor={colors.textSecondary + '80'}
+                                    placeholder="••••••"
+                                    placeholderTextColor={colors.textSecondary + '40'}
                                     keyboardType="number-pad"
                                     maxLength={6}
+                                    autoFocus
+                                    returnKeyType="done"
+                                    onSubmitEditing={handleVerifyOTP}
                                 />
                             </View>
-                            <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                                Sent to {email}
-                            </Text>
+                            <TouchableOpacity
+                                onPress={() => setStep(1)}
+                                style={styles.changeEmailRow}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                                <Text style={[styles.changeEmailText, { color: colors.primary }]}>Change Email Address</Text>
+                            </TouchableOpacity>
                         </View>
 
-                        <TouchableOpacity onPress={handleVerifyOTP} disabled={loading || otpCode.length !== 6} style={styles.submitButton}>
-                            <LinearGradient
-                                colors={[colors.primary, colors.secondary]}
-                                style={styles.gradient}
-                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                        <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+                            <TouchableOpacity
+                                onPress={handleVerifyOTP}
+                                disabled={loading || otpCode.length !== 6}
+                                style={[styles.submitButton, { shadowColor: colors.primary, opacity: otpCode.length !== 6 && !loading ? 0.6 : 1 }]}
+                                activeOpacity={0.88}
                             >
-                                {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Verify Code</Text>}
-                            </LinearGradient>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity onPress={() => setStep(1)} style={styles.backButton}>
-                            <Text style={{ color: colors.primary, fontWeight: '600' }}>Change Email</Text>
-                        </TouchableOpacity>
+                                <LinearGradient
+                                    colors={[colors.primary, colors.secondary]}
+                                    style={styles.gradient}
+                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                >
+                                    {loading ? <ActivityIndicator color="white" size="small" /> : (
+                                        <View style={styles.buttonContent}>
+                                            <Text style={styles.buttonText}>Verify Code</Text>
+                                            <Ionicons name="checkmark-circle-outline" size={16} color="white" style={{ marginLeft: 8 }} />
+                                        </View>
+                                    )}
+                                </LinearGradient>
+                            </TouchableOpacity>
+                        </Animated.View>
                     </>
                 );
             case 3:
                 return (
                     <>
                         <View style={styles.header}>
-                             <View style={styles.logoContainer}>
+                            <View style={[
+                                styles.logoContainer,
+                                {
+                                    backgroundColor: isDark ? 'rgba(142,134,255,0.1)' : 'rgba(108,99,255,0.06)',
+                                    width: logoSize,
+                                    height: logoSize,
+                                    borderRadius: logoSize * 0.3,
+                                }
+                            ]}>
                                 <Image source={require('@/assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
                             </View>
-                            <Text style={[styles.title, { color: colors.text }]}>Set Profile</Text>
-                            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Almost there! Just a few more details</Text>
+                            <Text style={[styles.title, { color: colors.text }]}>Setup Profile</Text>
+                            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Choose a username and password</Text>
                         </View>
 
                         <View style={styles.inputWrapper}>
                             <Text style={[styles.label, { color: colors.textSecondary }]}>Username *</Text>
-                            <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}>
-                                <Ionicons name="at-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                            <View style={[
+                                styles.inputContainer,
+                                {
+                                    backgroundColor: isDark ? colors.surfaceSecondary : '#F8F8FC',
+                                    borderColor: inputFocused === 'username' ? colors.primary : (isDark ? colors.border : '#E0E0E8')
+                                }
+                            ]}>
+                                <Ionicons name="at-outline" size={18} color={inputFocused === 'username' ? colors.primary : colors.textSecondary} style={styles.inputIcon} />
                                 <TextInput
                                     style={[styles.input, { color: colors.text }]}
                                     value={username}
                                     onChangeText={setUsername}
                                     placeholder="johndoe"
-                                    placeholderTextColor={colors.textSecondary + '80'}
+                                    placeholderTextColor={colors.textSecondary + '60'}
                                     autoCapitalize="none"
+                                    autoCorrect={false}
+                                    returnKeyType="next"
+                                    onFocus={() => setInputFocused('username')}
+                                    onBlur={() => setInputFocused(null)}
                                 />
                             </View>
                         </View>
 
                         <View style={styles.inputWrapper}>
                             <Text style={[styles.label, { color: colors.textSecondary }]}>Password *</Text>
-                            <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}>
-                                <Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                            <View style={[
+                                styles.inputContainer,
+                                {
+                                    backgroundColor: isDark ? colors.surfaceSecondary : '#F8F8FC',
+                                    borderColor: inputFocused === 'password' ? colors.primary : (isDark ? colors.border : '#E0E0E8')
+                                }
+                            ]}>
+                                <Ionicons name="lock-closed-outline" size={18} color={inputFocused === 'password' ? colors.primary : colors.textSecondary} style={styles.inputIcon} />
                                 <TextInput
                                     style={[styles.input, { color: colors.text }]}
                                     value={password}
                                     onChangeText={setPassword}
                                     placeholder="••••••••"
-                                    placeholderTextColor={colors.textSecondary + '80'}
+                                    placeholderTextColor={colors.textSecondary + '60'}
                                     secureTextEntry={!isPasswordVisible}
+                                    returnKeyType="next"
+                                    onFocus={() => setInputFocused('password')}
+                                    onBlur={() => setInputFocused(null)}
                                 />
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     onPress={generatePassword}
-                                    style={{ marginRight: 10 }}
+                                    style={{ marginRight: 8 }}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                 >
-                                    <Ionicons name="key-outline" size={20} color={colors.primary} />
+                                    <Ionicons name="key-outline" size={18} color={colors.primary} />
                                 </TouchableOpacity>
-                                <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
-                                    <Ionicons name={isPasswordVisible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textSecondary} />
+                                <TouchableOpacity
+                                    onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                >
+                                    <Ionicons name={isPasswordVisible ? "eye-off-outline" : "eye-outline"} size={18} color={colors.textSecondary} />
                                 </TouchableOpacity>
                             </View>
                         </View>
 
                         <View style={styles.inputWrapper}>
                             <Text style={[styles.label, { color: colors.textSecondary }]}>Phone Number (Optional)</Text>
-                            <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}>
-                                <Ionicons name="call-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                            <View style={[
+                                styles.inputContainer,
+                                {
+                                    backgroundColor: isDark ? colors.surfaceSecondary : '#F8F8FC',
+                                    borderColor: inputFocused === 'phone' ? colors.primary : (isDark ? colors.border : '#E0E0E8')
+                                }
+                            ]}>
+                                <Ionicons name="call-outline" size={18} color={inputFocused === 'phone' ? colors.primary : colors.textSecondary} style={styles.inputIcon} />
                                 <TextInput
                                     style={[styles.input, { color: colors.text }]}
                                     value={phone}
                                     onChangeText={setPhone}
-                                    placeholder="+1234567890"
-                                    placeholderTextColor={colors.textSecondary + '80'}
+                                    placeholder="+1 234 567 890"
+                                    placeholderTextColor={colors.textSecondary + '60'}
                                     keyboardType="phone-pad"
+                                    returnKeyType="done"
+                                    onSubmitEditing={handleCompleteSignup}
+                                    onFocus={() => setInputFocused('phone')}
+                                    onBlur={() => setInputFocused(null)}
                                 />
                             </View>
                         </View>
 
-                        <TouchableOpacity onPress={handleCompleteSignup} disabled={loading} style={styles.submitButton}>
-                            <LinearGradient
-                                colors={[colors.primary, colors.secondary]}
-                                style={styles.gradient}
-                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                        <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+                            <TouchableOpacity
+                                onPress={handleCompleteSignup}
+                                disabled={loading}
+                                style={[styles.submitButton, { shadowColor: colors.primary }]}
+                                activeOpacity={0.88}
                             >
-                                {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Complete Signup</Text>}
-                            </LinearGradient>
-                        </TouchableOpacity>
+                                <LinearGradient
+                                    colors={[colors.primary, colors.secondary]}
+                                    style={styles.gradient}
+                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                >
+                                    {loading ? <ActivityIndicator color="white" size="small" /> : (
+                                        <View style={styles.buttonContent}>
+                                            <Text style={styles.buttonText}>Complete Setup</Text>
+                                            <Ionicons name="checkmark-done" size={16} color="white" style={{ marginLeft: 8 }} />
+                                        </View>
+                                    )}
+                                </LinearGradient>
+                            </TouchableOpacity>
+                        </Animated.View>
                     </>
                 );
         }
@@ -278,22 +444,33 @@ export default function SignupScreen() {
     return (
         <ScreenWrapper style={{ backgroundColor: colors.background }}>
             <KeyboardAwareScrollView
-                bottomOffset={Platform.OS === 'ios' ? 100 : 0}
+                bottomOffset={Platform.OS === 'ios' ? 40 : 0}
                 contentContainerStyle={[
                     styles.scrollContent,
-                    { paddingHorizontal: isSmallDevice ? 20 : 40 }
+                    { paddingHorizontal: screenPadding }
                 ]}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
-                <View style={styles.content}>
-                    {renderStep()}
+                <View style={styles.innerContainer}>
+                    <View style={[
+                        styles.card,
+                        {
+                            backgroundColor: isDark ? colors.surface : '#FFFFFF',
+                            borderColor: isDark ? colors.cardBorder : 'rgba(0,0,0,0.06)',
+                            width: contentWidth,
+                            maxWidth: contentMaxWidth,
+                            shadowColor: isDark ? '#000' : colors.primary,
+                        }
+                    ]}>
+                        {renderStep()}
+                    </View>
 
                     {step === 1 && (
                         <View style={styles.footer}>
                             <Text style={[styles.footerText, { color: colors.textSecondary }]}>Already have an account? </Text>
                             <Link href="/auth/login" asChild>
-                                <TouchableOpacity>
+                                <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
                                     <Text style={[styles.link, { color: colors.primary }]}>Sign In</Text>
                                 </TouchableOpacity>
                             </Link>
@@ -308,119 +485,147 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
     scrollContent: {
         flexGrow: 1,
+    },
+    innerContainer: {
+        flexGrow: 1,
         justifyContent: 'center',
-        paddingVertical: 40,
+        alignItems: 'center',
+        paddingVertical: '8%',
     },
     header: {
         alignItems: 'center',
-        marginBottom: 40,
+        marginBottom: '6%',
         backgroundColor: 'transparent',
     },
     logoContainer: {
-        width: 100,
-        height: 100,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 16,
     },
     logo: {
-        width: '100%',
-        height: '100%',
-    },
-    content: {
-        backgroundColor: 'transparent',
-        width: '100%',
-        maxWidth: 420,
-        alignSelf: 'center',
+        width: '60%',
+        height: '60%',
     },
     title: {
-        fontSize: 28,
         fontWeight: '800',
+        fontSize: 26,
         marginBottom: 8,
-    },
-    subtitle: {
-        fontSize: 16,
+        letterSpacing: -0.5,
         textAlign: 'center',
     },
+    subtitle: {
+        fontSize: 14,
+        textAlign: 'center',
+        lineHeight: 20,
+        paddingHorizontal: 16,
+    },
+    card: {
+        alignSelf: 'center',
+        borderRadius: 20,
+        padding: '6%',
+        borderWidth: 1,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
+        elevation: 3,
+    },
     inputWrapper: {
-        marginBottom: 20,
+        marginBottom: 16,
         backgroundColor: 'transparent',
     },
     label: {
-        fontSize: 14,
-        fontWeight: '700',
-        marginBottom: 8,
-        marginLeft: 4,
+        fontSize: 12.5,
+        fontWeight: '600',
+        marginBottom: 6,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 16,
-        paddingHorizontal: 16,
+        borderRadius: 12,
+        paddingHorizontal: 12,
         borderWidth: 1.5,
-        height: 60,
+    },
+    otpContainer: {
+        justifyContent: 'center',
     },
     inputIcon: {
-        marginRight: 14,
+        marginRight: 10,
     },
     input: {
         flex: 1,
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '500',
-        paddingVertical: Platform.OS === 'android' ? 0 : 4,
-        textAlignVertical: 'center',
+        paddingVertical: Platform.OS === 'ios' ? 14 : 10,
     },
     otpInput: {
-        fontSize: 26,
+        fontSize: 24,
         textAlign: 'center',
-        paddingLeft: 14,
-        letterSpacing: 14,
+        letterSpacing: Platform.OS === 'ios' ? 14 : 10,
         fontWeight: '800',
-        paddingVertical: 0,
+        paddingVertical: Platform.OS === 'ios' ? 14 : 10,
+        paddingLeft: Platform.OS === 'ios' ? 14 : 10,
     },
-    infoText: {
-        fontSize: 13,
-        marginTop: 8,
-        textAlign: 'center',
+    otpBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 10,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+    },
+    otpBannerText: {
+        fontSize: 12,
+        flex: 1,
+        lineHeight: 16,
+    },
+    changeEmailRow: {
+        alignItems: 'center',
+        marginTop: 10,
+    },
+    changeEmailText: {
+        fontSize: 12,
+        fontWeight: '600',
     },
     submitButton: {
-        borderRadius: 18,
+        borderRadius: 14,
         overflow: 'hidden',
-        marginTop: 12,
-        height: 56,
-        elevation: 6,
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.3,
-        shadowRadius: 10,
+        shadowRadius: 8,
+        elevation: 4,
+        marginTop: 4,
     },
     gradient: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
+        paddingVertical: 14,
+    },
+    buttonContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     buttonText: {
         color: 'white',
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '700',
-        letterSpacing: 0.5,
-    },
-    backButton: {
-        alignItems: 'center',
-        marginTop: 20,
+        letterSpacing: 0.2,
     },
     footer: {
         flexDirection: 'row',
         justifyContent: 'center',
-        marginTop: 40,
+        alignItems: 'center',
+        marginTop: 24,
         backgroundColor: 'transparent',
     },
     footerText: {
-        fontSize: 15,
+        fontSize: 13.5,
         fontWeight: '500',
     },
     link: {
-        fontSize: 15,
+        fontSize: 13.5,
         fontWeight: '800',
     },
 });
-

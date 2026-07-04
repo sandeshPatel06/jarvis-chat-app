@@ -1,9 +1,8 @@
 import React from 'react';
 import { View, Text, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
-import { FontAwesome } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Chat } from '@/types';
-// import { getMediaUrl } from '@/utils/media';
 import { Avatar } from '@/components/ui/Avatar';
 
 interface ChatItemProps {
@@ -49,7 +48,7 @@ const ChatItem = ({
     };
 
     return (
-        <View style={{ paddingHorizontal: 15 }}>
+        <View style={styles.wrapper}>
             <Pressable
                 onPress={() => onPress(item.id)}
                 onLongPress={() => onLongPress(item.id)}
@@ -57,43 +56,61 @@ const ChatItem = ({
                 style={({ pressed }) => [
                     styles.itemContainer,
                     {
-                        backgroundColor: isSelected ? colors.primary + '30' : colors.card,
-                        borderColor: isSelected ? colors.primary : colors.cardBorder,
-                        opacity: pressed ? 0.9 : 1,
-                        transform: [{ scale: pressed ? 0.98 : 1 }],
+                        backgroundColor: isSelected 
+                            ? (colors.primary + '18') 
+                            : (pressed ? (colors.primary + '08') : 'transparent'),
+                        transform: [{ scale: pressed ? 0.99 : 1 }],
                     }
                 ]}
             >
                 {isSelectionMode && (
-                    <View style={{ marginRight: 10 }}>
-                        <FontAwesome
-                            name={isSelected ? "check-circle" : "circle-thin"}
+                    <View style={styles.selectionWrapper}>
+                        <MaterialCommunityIcons
+                            name={isSelected ? "checkbox-marked-circle" : "checkbox-blank-circle-outline"}
                             size={24}
-                            color={isSelected ? colors.primary : colors.text}
+                            color={isSelected ? colors.primary : colors.textSecondary + '60'}
                         />
                     </View>
                 )}
+                
                 <TouchableOpacity
                     style={styles.avatarContainer}
                     onPress={() => onProfilePress(item.user_id)}
                     disabled={!item.user_id}
+                    activeOpacity={0.8}
                 >
                     <Avatar
                         source={item.avatar}
-                        size={54}
+                        size={56}
                         online={item.is_online}
-                        style={styles.avatar} // Pass style if needed, though size prop handles dimensions
+                        style={styles.avatar}
                     />
                 </TouchableOpacity>
+
                 <View style={styles.contentContainer}>
                     <View style={styles.headerRow}>
-                        <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
-                        <Text style={[styles.time, { color: colors.textSecondary }]}>{formatTime(item.lastMessageTime)}</Text>
+                        <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
+                            {item.name}
+                        </Text>
+                        <Text style={[styles.time, { color: colors.textSecondary + '90' }]}>
+                            {formatTime(item.lastMessageTime)}
+                        </Text>
                     </View>
+                    
                     <View style={styles.messageRow}>
-                        <Text numberOfLines={1} style={[styles.message, { color: colors.textSecondary }]}>
+                        <Text 
+                            numberOfLines={1} 
+                            style={[
+                                styles.message, 
+                                { 
+                                    color: item.unreadCount > 0 ? colors.text : colors.textSecondary,
+                                    fontWeight: item.unreadCount > 0 ? '700' : '500' 
+                                }
+                            ]}
+                        >
                             {formatAttachmentPreview(item.lastMessage)}
                         </Text>
+                        
                         {item.unreadCount > 0 && (
                             <View style={styles.badgeWrapper}>
                                 <LinearGradient
@@ -114,21 +131,28 @@ const ChatItem = ({
 };
 
 const styles = StyleSheet.create({
+    wrapper: {
+        paddingHorizontal: 12,
+    },
     itemContainer: {
         flexDirection: 'row',
-        padding: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
         alignItems: 'center',
-        borderWidth: 1,
-        borderRadius: 24,
-        marginVertical: 4,
+        borderRadius: 20,
+    },
+    selectionWrapper: {
+        marginRight: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     avatarContainer: {
-        marginRight: 16,
+        marginRight: 14,
     },
     avatar: {
-        width: 58,
-        height: 58,
-        borderRadius: 20,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
     },
     contentContainer: {
         flex: 1,
@@ -138,16 +162,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 6,
+        marginBottom: 5,
     },
     name: {
-        fontSize: 18,
-        fontWeight: '800',
+        fontSize: 16,
+        fontWeight: '700',
         letterSpacing: -0.2,
     },
     time: {
         fontSize: 12,
-        fontWeight: '600',
+        fontWeight: '500',
     },
     messageRow: {
         flexDirection: 'row',
@@ -156,28 +180,27 @@ const styles = StyleSheet.create({
     },
     message: {
         fontSize: 14,
-        fontWeight: '500',
         flex: 1,
         marginRight: 10,
     },
     badgeWrapper: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 2,
     },
     unreadBadge: {
-        minWidth: 24,
-        height: 24,
-        borderRadius: 12,
+        minWidth: 20,
+        height: 20,
+        borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 6,
+        paddingHorizontal: 5,
     },
     unreadText: {
         fontSize: 10,
-        fontWeight: '900',
+        fontWeight: '800',
         color: 'white',
     },
 });

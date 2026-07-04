@@ -1,5 +1,4 @@
 import { ScreenWrapper } from '@/components/ScreenWrapper';
-import { Text, View } from '@/components/Themed';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { api } from '@/services/api';
 import { useStore } from '@/store';
@@ -8,10 +7,11 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import * as Contacts from 'expo-contacts';
 import * as SMS from 'expo-sms';
 import { useRouter, Stack } from 'expo-router';
-import React, { useEffect, useState, useCallback } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, TextInput, TouchableOpacity, View, Text, Linking, AppState } from 'react-native';
 import { formatLastSeen } from '@/utils/date';
 import { Avatar } from '@/components/ui/Avatar';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface Contact {
     id: string;
@@ -26,18 +26,32 @@ interface Contact {
 
 export default function SelectContactScreen() {
     const router = useRouter();
-    const token = useStore(useCallback((state: any) => state.token, []));
-    const showAlert = useStore(useCallback((state: any) => state.showAlert, []));
-    const { colors } = useAppTheme();
-    const [permissionGranted, setPermissionGranted] = useState(false);
+    const token = useStore((state: any) => state.token);
+    const showAlert = useStore((state: any) => state.showAlert);
+    const { colors, isDark } = useAppTheme();
+    const [permissionStatus, setPermissionStatus] = useState<'undetermined' | 'granted' | 'denied'>('undetermined');
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
 
-
+    const normalizePhone = useCallback((phone: string): string => {
+        let cleaned = phone.replace(/\D/g, '');
+        if (cleaned.length > 10) {
+            cleaned = cleaned.slice(-10);
+        }
+        return cleaned;
+    }, []);
 
     const loadContacts = useCallback(async () => {
         try {
+            const { status } = await Contacts.requestPermissionsAsync();
+            setPermissionStatus(status as any);
+
+            if (status !== 'granted') {
+                setLoading(false);
+                return;
+            }
+
             const { data } = await Contacts.getContactsAsync({
                 fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name],
             });
@@ -47,29 +61,18 @@ export default function SelectContactScreen() {
                 return;
             }
 
-            // Helper function to normalize phone numbers (remove country codes, spaces, dashes, etc.)
-            const normalizePhone = (phone: string): string => {
-                // Remove all non-numeric characters
-                let cleaned = phone.replace(/\D/g, '');
-                // Remove common country codes (91 for India, 1 for US, etc.)
-                // Keep last 10 digits for matching
-                if (cleaned.length > 10) {
-                    cleaned = cleaned.slice(-10);
-                }
-                return cleaned;
-            };
+            // Extract and normalize all unique phone numbers
+            const allPhones = data
+                .flatMap(contact => (contact.phoneNumbers || []).map(p => normalizePhone(p.number || '')))
+                .filter(Boolean);
 
-            // Extract and normalize phone numbers
-            const phoneNumbers = data
-                .filter(contact => contact.phoneNumbers && contact.phoneNumbers.length > 0)
-                .map(contact => normalizePhone(contact.phoneNumbers![0].number || ''));
+            const uniquePhoneNumbers = Array.from(new Set(allPhones));
 
             // Check which contacts have Jarvis accounts
             let jarvisUsers: any[] = [];
-            if (token && phoneNumbers.length > 0) {
+            if (token && uniquePhoneNumbers.length > 0) {
                 try {
-                    jarvisUsers = await api.chat.checkContacts(token, phoneNumbers);
-                    console.log('[SelectContact] Jarvis users found:', jarvisUsers.length);
+                    jarvisUsers = await api.chat.checkContacts(token, uniquePhoneNumbers);
                 } catch (error) {
                     console.error('Failed to check Jarvis users:', error);
                 }
@@ -81,64 +84,77 @@ export default function SelectContactScreen() {
             data.forEach(contact => {
                 if (!contact.phoneNumbers || contact.phoneNumbers.length === 0) return;
 
-                const phone = contact.phoneNumbers[0].number || '';
-                const normalizedPhone = normalizePhone(phone);
-
-                // Find matching Jarvis user by normalized phone number
-                const jarvisUser = jarvisUsers.find((u: any) => {
+                // Search for a match in all numbers of this contact
+                const matchedJarvisUser = jarvisUsers.find((u: any) => {
                     const userPhone = normalizePhone(u.phone_number || '');
-                    return userPhone === normalizedPhone;
+                    return (contact.phoneNumbers || []).some(p => normalizePhone(p.number || '') === userPhone);
                 });
 
-                if (jarvisUser) {
-                    const jid = jarvisUser.id.toString();
-                    // If we already have this Jarvis user (possible if multiple local contacts share a number), skip
-                    if (!contactMap.has(jid)) {
-                        contactMap.set(jid, {
+                const primaryPhone = contact.phoneNumbers[0].number || '';
+
+                if (matchedJarvisUser) {
+                    const jid = matchedJarvisUser.id.toString();
+                    if (!contactMap.has(`jarvis_${jid}`)) {
+                        contactMap.set(`jarvis_${jid}`, {
                             id: jid,
-                            username: jarvisUser.username,
-                            phone: phone,
+                            username: matchedJarvisUser.username,
+                            phone: primaryPhone,
                             has_account: true,
-                            profile_picture: jarvisUser.profile_picture,
-                            bio: jarvisUser.bio,
-                            is_online: jarvisUser.is_online || false,
-                            last_seen: jarvisUser.last_seen,
+                            profile_picture: matchedJarvisUser.profile_picture,
+                            bio: matchedJarvisUser.bio,
+                            is_online: matchedJarvisUser.is_online || false,
+                            last_seen: matchedJarvisUser.last_seen,
                         });
                     }
                 } else {
-                    // Non-Jarvis contact - use device contact ID which is guaranteed unique by the system
-                    // But wait, if two contacts in phonebook have same number but different names,
-                    // they will have different contact.id. This is fine.
-                    if (!contactMap.has(contact.id)) {
-                        contactMap.set(contact.id, {
+                    if (!contactMap.has(`contact_${contact.id}`)) {
+                        contactMap.set(`contact_${contact.id}`, {
                             id: contact.id,
                             username: contact.name || 'Unknown',
-                            phone: phone,
+                            phone: primaryPhone,
                             has_account: false,
                         });
                     }
                 }
             });
 
-            setContacts(Array.from(contactMap.values()));
+            const dedupedList = Array.from(contactMap.values());
+            
+            // Sort: Jarvis users first, then alphabetically by name
+            dedupedList.sort((a, b) => {
+                if (a.has_account && !b.has_account) return -1;
+                if (!a.has_account && b.has_account) return 1;
+                return a.username.localeCompare(b.username);
+            });
+
+            setContacts(dedupedList);
         } catch (error) {
             console.error('Error loading contacts:', error);
         } finally {
             setLoading(false);
         }
-    }, [token]);
+    }, [token, normalizePhone]);
 
     useEffect(() => {
-        (async () => {
-            const { status } = await Contacts.requestPermissionsAsync();
-            if (status === 'granted') {
-                setPermissionGranted(true);
-                loadContacts();
-            } else {
-                setLoading(false);
-            }
-        })();
+        loadContacts();
     }, [loadContacts]);
+
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', nextAppState => {
+            if (nextAppState === 'active' && permissionStatus === 'denied') {
+                loadContacts();
+            }
+        });
+        return () => subscription.remove();
+    }, [loadContacts, permissionStatus]);
+
+    const handleOpenSettings = async () => {
+        try {
+            await Linking.openSettings();
+        } catch (err) {
+            showAlert('Error', 'Could not open settings. Please enable manually.');
+        }
+    };
 
     const handleSelectContact = useCallback(async (contact: Contact) => {
         if (!token || !contact.has_account) return;
@@ -146,7 +162,7 @@ export default function SelectContactScreen() {
         // Try to find an existing 1-1 chat with this user
         const existingChat = useStore.getState().chats.find(chat => 
             (chat.user_id && String(chat.user_id) === String(contact.id)) || 
-            chat.name === contact.username
+            (chat.phoneNumber && contact.phone && normalizePhone(chat.phoneNumber) === normalizePhone(contact.phone))
         );
 
         if (existingChat) {
@@ -161,8 +177,6 @@ export default function SelectContactScreen() {
             // Fetch chats to ensure it's in the store
             await useStore.getState().fetchChats();
             
-            // Add a small delay to allow store update to propagate if needed, 
-            // though fetchChats is awaited, sometimes navigation happens too fast for some observers
             router.replace(`/chat/${conversation.id}`);
         } catch (error) {
             console.error(error);
@@ -170,7 +184,7 @@ export default function SelectContactScreen() {
         } finally {
             setLoading(false);
         }
-    }, [token, router, showAlert]);
+    }, [token, router, showAlert, normalizePhone]);
 
     const handleInvite = async (contact: Contact) => {
         try {
@@ -183,7 +197,6 @@ export default function SelectContactScreen() {
             const appLink = process.env.EXPO_PUBLIC_APP_DOWNLOAD_LINK || 'https://jarvis-chat.app/download';
             const message = `Hey! Join me on Jarvis Chat - an amazing messaging app! Download it here: ${appLink}`;
 
-            // Auto-fill phone number if available
             const phoneNumbers = contact.phone ? [contact.phone] : [];
             await SMS.sendSMSAsync(phoneNumbers, message);
         } catch (error) {
@@ -192,32 +205,29 @@ export default function SelectContactScreen() {
         }
     };
 
-    if (loading) {
-        return (
-            <ScreenWrapper style={styles.container}>
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                </View>
-            </ScreenWrapper>
-        );
-    }
+    const filteredContacts = useMemo(() => {
+        const query = searchQuery.toLowerCase();
+        if (!query) return contacts;
+        return contacts.filter(c => {
+            const nameMatch = c.username.toLowerCase().includes(query);
+            const phoneMatch = c.phone ? c.phone.toLowerCase().includes(query) : false;
+            return nameMatch || phoneMatch;
+        });
+    }, [contacts, searchQuery]);
 
-    if (!permissionGranted) {
+    if (loading) {
         return (
             <ScreenWrapper style={styles.container}>
                 <Stack.Screen options={{ headerShown: false }} />
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                        <FontAwesome name="arrow-left" size={20} color={colors.text} />
+                        <FontAwesome name="arrow-left" size={18} color={colors.text} />
                     </TouchableOpacity>
                     <Text style={[styles.headerTitle, { color: colors.text }]}>New Chat</Text>
                     <View style={{ width: 40 }} />
                 </View>
-                <View style={styles.emptyContainer}>
-                    <FontAwesome name="address-book" size={60} color={colors.textSecondary} style={{ opacity: 0.3 }} />
-                    <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                        Contacts permission is required to find people to chat with
-                    </Text>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={colors.primary} />
                 </View>
             </ScreenWrapper>
         );
@@ -228,104 +238,130 @@ export default function SelectContactScreen() {
             <Stack.Screen options={{ headerShown: false }} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <FontAwesome name="arrow-left" size={20} color={colors.text} />
+                    <FontAwesome name="arrow-left" size={18} color={colors.text} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: colors.text }]}>New Chat</Text>
                 <View style={{ width: 40 }} />
             </View>
 
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-                <View style={[styles.searchInputContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <FontAwesome name="search" size={16} color={colors.textSecondary} style={styles.searchIcon} />
-                    <TextInput
-                        style={[styles.searchInput, { color: colors.text }]}
-                        placeholder="Search contacts..."
-                        placeholderTextColor={colors.textSecondary}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery('')}>
-                            <FontAwesome name="times-circle" size={16} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    )}
+            {permissionStatus === 'denied' ? (
+                <View style={styles.emptyContainer}>
+                    <View style={[styles.permissionIconContainer, { backgroundColor: colors.card }]}>
+                        <MaterialCommunityIcons name="contacts" size={48} color={colors.primary} />
+                    </View>
+                    <Text style={[styles.emptyTitle, { color: colors.text }]}>Contacts Permission Required</Text>
+                    <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                        Enable contacts permission in your device settings to find friends who are already on Jarvis Chat.
+                    </Text>
+                    <TouchableOpacity activeOpacity={0.85} onPress={handleOpenSettings}>
+                        <LinearGradient
+                            colors={[colors.primary, colors.secondary]}
+                            style={styles.permissionButton}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                            <Text style={styles.permissionButtonText}>Open Settings</Text>
+                        </LinearGradient>
+                    </TouchableOpacity>
                 </View>
-            </View>
+            ) : (
+                <>
+                    {/* Search Bar */}
+                    <View style={styles.searchContainer}>
+                        <View style={[styles.searchInputContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                            <MaterialCommunityIcons name="magnify" size={20} color={colors.textSecondary} style={styles.searchIcon} />
+                            <TextInput
+                                style={[styles.searchInput, { color: colors.text }]}
+                                placeholder="Search contacts..."
+                                placeholderTextColor={colors.textSecondary}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.8}>
+                                    <MaterialCommunityIcons name="close-circle" size={18} color={colors.textSecondary} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
 
-            {(() => {
-                const filtered = contacts.filter(c => {
-                    const query = searchQuery.toLowerCase();
-                    const nameMatch = c.username.toLowerCase().includes(query);
-                    const phoneMatch = c.phone ? c.phone.toLowerCase().includes(query) : false;
-                    return nameMatch || phoneMatch;
-                });
-
-                if (filtered.length === 0) {
-                    return (
+                    {filteredContacts.length === 0 ? (
                         <View style={styles.emptyContainer}>
-                            <FontAwesome name="users" size={60} color={colors.textSecondary} style={{ opacity: 0.3 }} />
+                            <FontAwesome name="users" size={54} color={colors.textSecondary} style={{ opacity: 0.25, marginBottom: 16 }} />
                             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                                 {searchQuery ? 'No contacts found' : 'No contacts yet'}
                             </Text>
                         </View>
-                    );
-                }
+                    ) : (
+                        <FlatList
+                            data={filteredContacts}
+                            keyExtractor={(item) => (item.has_account ? `jarvis_${item.id}` : `contact_${item.id}`)}
+                            contentContainerStyle={styles.listContent}
+                            showsVerticalScrollIndicator={false}
+                            ItemSeparatorComponent={() => (
+                                <View style={[
+                                    styles.separator,
+                                    { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)' }
+                                ]} />
+                            )}
+                            renderItem={({ item }) => {
+                                const hasJarvisAccount = item.has_account === true;
 
-                return (
-                    <FlatList
-                        data={filtered}
-                    keyExtractor={(item) => item.id}
-                    renderItem={({ item }) => {
-                        const hasJarvisAccount = item.has_account === true;
+                                return (
+                                    <View style={styles.contactItem}>
+                                        <View style={styles.avatarWrapper}>
+                                            <Avatar
+                                                source={item.profile_picture}
+                                                size={52}
+                                                online={item.is_online && hasJarvisAccount}
+                                                style={styles.avatar}
+                                            />
+                                        </View>
+                                        
+                                        <View style={styles.contactInfo}>
+                                            <Text style={[styles.contactName, { color: colors.text }]} numberOfLines={1}>
+                                                {item.username}
+                                            </Text>
+                                            <Text style={[styles.contactBio, { color: colors.textSecondary }]} numberOfLines={1}>
+                                                {hasJarvisAccount
+                                                    ? (item.is_online ? 'Online' : formatLastSeen(item.last_seen))
+                                                    : (item.phone || 'No phone number')}
+                                            </Text>
+                                        </View>
 
-                        return (
-                            <View style={[styles.contactItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                <Avatar
-                                    source={item.profile_picture}
-                                    size={50}
-                                    online={item.is_online && hasJarvisAccount}
-                                    style={styles.avatar}
-                                />
-                                <View style={styles.contactInfo}>
-                                    <Text style={[styles.contactName, { color: colors.text }]}>{item.username}</Text>
-                                    <Text style={[styles.contactBio, { color: colors.textSecondary }]} numberOfLines={1}>
-                                        {hasJarvisAccount
-                                            ? (item.is_online
-                                                ? 'Online'
-                                                : formatLastSeen(item.last_seen))
-                                            : (item.phone || 'No phone number')}
-                                    </Text>
-                                </View>
-                                {item.is_online && hasJarvisAccount && (
-                                    <View style={[styles.onlineIndicator, { backgroundColor: colors.success }]} />
-                                )}
-
-                                {hasJarvisAccount ? (
-                                    // Show Chat button for Jarvis users
-                                    <TouchableOpacity
-                                        style={[styles.actionButton, { backgroundColor: colors.primary }]}
-                                        onPress={() => handleSelectContact(item)}
-                                    >
-                                        <MaterialCommunityIcons name="message" size={20} color="#fff" />
-                                    </TouchableOpacity>
-                                ) : (
-                                    // Show Invite button for non-Jarvis users
-                                    <TouchableOpacity
-                                        style={[styles.inviteButton, { backgroundColor: colors.primary + '15' }]}
-                                        onPress={() => handleInvite(item)}
-                                    >
-                                        <MaterialCommunityIcons name="message-text-outline" size={20} color={colors.primary} />
-                                        <Text style={[styles.inviteText, { color: colors.primary }]}>Invite</Text>
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                        );
-                    }}
-                    contentContainerStyle={styles.listContent}
-                />
-            );
-        })()}
+                                        <View style={styles.actionContainer}>
+                                            {hasJarvisAccount ? (
+                                                <TouchableOpacity
+                                                    onPress={() => handleSelectContact(item)}
+                                                    activeOpacity={0.8}
+                                                >
+                                                    <LinearGradient
+                                                        colors={[colors.primary, colors.secondary]}
+                                                        style={styles.chatAction}
+                                                        start={{ x: 0, y: 0 }}
+                                                        end={{ x: 1, y: 1 }}
+                                                    >
+                                                        <MaterialCommunityIcons name="message-text" size={18} color="#fff" />
+                                                    </LinearGradient>
+                                                </TouchableOpacity>
+                                            ) : (
+                                                <TouchableOpacity
+                                                    onPress={() => handleInvite(item)}
+                                                    activeOpacity={0.8}
+                                                >
+                                                    <View style={[styles.chatAction, { backgroundColor: colors.primary + '15' }]}>
+                                                        <MaterialCommunityIcons name="account-plus-outline" size={18} color={colors.primary} />
+                                                    </View>
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    </View>
+                                );
+                            }}
+                        />
+                    )}
+                </>
+            )}
         </ScreenWrapper>
     );
 }
@@ -338,48 +374,49 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingTop: 20,
-        paddingBottom: 15,
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 10,
+        height: 60,
     },
     backButton: {
         width: 40,
         height: 40,
         borderRadius: 20,
-        alignItems: 'center',
         justifyContent: 'center',
+        alignItems: 'center',
     },
     headerTitle: {
         fontSize: 20,
-        fontWeight: '700',
+        fontWeight: '800',
+        letterSpacing: -0.4,
     },
     searchContainer: {
-        paddingHorizontal: 20,
-        paddingBottom: 10,
+        paddingHorizontal: 24,
+        paddingTop: 8,
+        paddingBottom: 12,
     },
     searchInputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 12,
-        paddingHorizontal: 15,
-        paddingVertical: 10,
+        paddingHorizontal: 14,
+        height: 44,
+        borderRadius: 16,
         borderWidth: 1,
     },
     searchIcon: {
-        marginRight: 10,
+        marginRight: 8,
     },
     searchInput: {
         flex: 1,
-        fontSize: 16,
+        fontSize: 15,
+        fontWeight: '600',
+        paddingVertical: 0,
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    loadingText: {
-        marginTop: 10,
-        fontSize: 14,
     },
     emptyContainer: {
         flex: 1,
@@ -388,63 +425,107 @@ const styles = StyleSheet.create({
         paddingHorizontal: 40,
     },
     emptyText: {
-        fontSize: 16,
-        marginTop: 20,
+        fontSize: 14,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 1.2,
         textAlign: 'center',
+        opacity: 0.6,
     },
     listContent: {
-        paddingHorizontal: 20,
-        paddingTop: 10,
-        paddingBottom: 20,
+        paddingHorizontal: 12,
+        paddingTop: 4,
+        paddingBottom: 40,
     },
     contactItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 15,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
         borderRadius: 16,
-        marginBottom: 10,
-        borderWidth: 1,
+    },
+    separator: {
+        height: 1,
+        marginHorizontal: 24,
+        marginVertical: 2,
+    },
+    avatarWrapper: {
+        marginRight: 14,
     },
     avatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 52,
+        height: 52,
+        borderRadius: 26,
     },
     contactInfo: {
         flex: 1,
-        marginLeft: 15,
+        justifyContent: 'center',
     },
     contactName: {
-        fontSize: 17,
-        fontWeight: '600',
+        fontSize: 16,
+        fontWeight: '700',
+        letterSpacing: -0.2,
     },
     contactBio: {
-        fontSize: 14,
-        marginTop: 2,
+        fontSize: 13,
+        fontWeight: '500',
+        marginTop: 3,
+        opacity: 0.7,
     },
-    onlineIndicator: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        marginRight: 10,
+    actionContainer: {
+        marginLeft: 10,
     },
-    actionButton: {
-        width: 50,
-        height: 40,
-        borderRadius: 20,
+    chatAction: {
+        width: 38,
+        height: 38,
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
-    inviteButton: {
-        flexDirection: 'row',
+    // Permission styling
+    permissionIconContainer: {
+        width: 96,
+        height: 96,
+        borderRadius: 32,
+        justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-        borderRadius: 20,
-        gap: 5,
+        marginBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        elevation: 3,
     },
-    inviteText: {
+    emptyTitle: {
+        fontSize: 20,
+        fontWeight: '800',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    emptySubtitle: {
         fontSize: 14,
-        fontWeight: '600',
+        textAlign: 'center',
+        lineHeight: 22,
+        marginBottom: 28,
+        paddingHorizontal: 10,
+    },
+    permissionButton: {
+        paddingHorizontal: 28,
+        paddingVertical: 12,
+        borderRadius: 16,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    permissionButtonText: {
+        color: 'white',
+        fontSize: 15,
+        fontWeight: '700',
     },
 });

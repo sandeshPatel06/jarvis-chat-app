@@ -210,3 +210,12 @@ export const updateMessagePin = async (messageId: string, isPinned: boolean) => 
     }
 };
 
+export const updateMessageReadStatus = async (messageId: string, isRead: boolean) => {
+    const db = await getDb();
+    try {
+        await db.runAsync('UPDATE messages SET is_read = ? WHERE id = ?', [isRead ? 1 : 0, messageId]);
+    } catch (error) {
+        console.error('Error updating message read status:', error);
+    }
+};
+

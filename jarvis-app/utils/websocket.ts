@@ -108,7 +108,10 @@ export const handleWebSocketMessage = async (event: WebSocketMessageEvent, actio
             msg.isDelivered = msg.is_delivered || false;
 
             const currentUser = actions.getCurrentUser();
-            const senderUsername = typeof msg.sender === 'object' ? msg.sender.username : msg.sender;
+            const senderInfo = typeof msg.sender === 'object' ? msg.sender : null;
+            const senderUsername = senderInfo ? senderInfo.username : msg.sender;
+            
+            msg.senderInfo = senderInfo;
             msg.sender = senderUsername === currentUser?.username ? 'me' : 'them';
 
             actions.addMessage(msg);

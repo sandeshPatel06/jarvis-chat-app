@@ -7,6 +7,38 @@ import { getMediaUrl, getLocalMediaUri } from '@/utils/media';
 import { downloadManager } from '@/services/downloadManager';
 import { AppState } from '@/store';
 import { handleWebSocketMessage } from '@/utils/websocket';
+import * as Contacts from 'expo-contacts';
+
+// Helper function to normalize phone numbers for matching
+const normalizePhone = (phone: string): string => {
+    let cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length > 10) {
+        cleaned = cleaned.slice(-10);
+    }
+    return cleaned;
+};
+
+const resolveContactNameForPhone = async (phoneNumber: string): Promise<string | null> => {
+    try {
+        const { status } = await Contacts.getPermissionsAsync();
+        if (status !== 'granted') return null;
+
+        const { data } = await Contacts.getContactsAsync({
+            fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name],
+        });
+
+        const target = normalizePhone(phoneNumber);
+        const match = data.find(c => {
+            if (!c.phoneNumbers) return false;
+            return c.phoneNumbers.some(p => normalizePhone(p.number || '') === target);
+        });
+
+        return match ? (match.name || null) : null;
+    } catch (e) {
+        console.error('[Contacts] Error resolving contact name:', e);
+        return null;
+    }
+};
 
 export interface ChatSlice {
     chats: Chat[];
@@ -92,7 +124,27 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
     appIsActive: true,
     typingUsers: {},
     mutedChats: [],
-    setActiveChat: (chatId) => set({ activeChatId: chatId }),
+    setActiveChat: (chatId) => {
+        set((state: any) => {
+            if (!chatId) return { activeChatId: null };
+
+            const chats = state.chats.map((c: any) => {
+                if (c.id.toString() === chatId.toString() && c.unreadCount > 0) {
+                    const updatedChat = { ...c, unreadCount: 0 };
+                    database.saveConversation(updatedChat).catch(err =>
+                        console.error('[setActiveChat] DB Save error:', err)
+                    );
+                    return updatedChat;
+                }
+                return c;
+            });
+
+            return {
+                activeChatId: chatId,
+                chats
+            };
+        });
+    },
     setAppIsActive: (isActive) => {
         const state = get() as any;
 
@@ -266,15 +318,43 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
             // 2. Create placeholder if chat doesn't exist
             if (chatIndex === -1) {
                 console.log(`[ChatSlice] 🆕 Creating new chat entry for ID: ${chatId}`);
+                
+                const senderInfo = payload.senderInfo;
+                const senderName = senderInfo?.username || payload.sender_name || 'New Chat';
+                const senderPhone = senderInfo?.phone_number || null;
+                const senderAvatar = senderInfo?.profile_picture || null;
+                const senderUserId = senderInfo?.id || null;
+
                 const newChat: Chat = {
                     id: chatId,
-                    name: payload.sender_name || 'New Chat',
-                    avatar: null,
+                    name: senderName,
+                    avatar: senderAvatar,
                     lastMessage: message.text || (message.file ? 'Attachment' : ''),
                     lastMessageTime: message.timestamp,
                     unreadCount: state.activeChatId === chatId ? 0 : 1,
                     messages: [message],
+                    user_id: senderUserId,
+                    phoneNumber: senderPhone
                 };
+
+                // Asynchronously resolve contact name from phone number if available
+                if (senderPhone) {
+                    resolveContactNameForPhone(senderPhone).then(contactName => {
+                        if (contactName) {
+                            console.log(`[ChatSlice] 📞 Resolved contact name "${contactName}" for phone: ${senderPhone}`);
+                            set((s: any) => {
+                                const updatedChats = s.chats.map((c: any) => 
+                                    c.id.toString() === chatId.toString() ? { ...c, name: contactName } : c
+                                );
+                                return { chats: updatedChats };
+                            });
+                            // Save updated conversation to database
+                            const dbChat = { ...newChat, name: contactName };
+                            database.saveConversation(dbChat);
+                        }
+                    }).catch(err => console.error('[ChatSlice] Error matching contact:', err));
+                }
+
                 chats.push(newChat);
                 // Sort chats after adding new one
                 chats.sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
@@ -331,9 +411,16 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
             
             if (state.activeChatId !== chatId && !msgId.startsWith('temp_')) {
                 chat.unreadCount = (chat.unreadCount || 0) + 1;
+            } else if (state.activeChatId === chatId) {
+                chat.unreadCount = 0;
             }
 
             chats[chatIndex] = chat;
+
+            // Save conversation state (lastMessage, lastMessageTime, unreadCount) to SQLite asynchronously
+            database.saveConversation(chat).catch(err =>
+                console.error('[addMessage] Error saving conversation to DB:', err)
+            );
             
             // 5. Final Sort of chats list
             chats.sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
@@ -453,19 +540,30 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
         if (!token) return;
         try {
             const remote = await api.chat.getConversations(token);
-            const mapped = remote.map((c: any) => {
+            const mapped = await Promise.all(remote.map(async (c: any) => {
                 const p = c.participants.find((u: any) => u.username !== user?.username);
+                const phone = p?.phone_number || null;
+                let displayName = p?.username || 'Unknown';
+                
+                if (phone) {
+                    const contactName = await resolveContactNameForPhone(phone);
+                    if (contactName) {
+                        displayName = contactName;
+                    }
+                }
+
                 return {
                     id: c.id.toString(),
-                    name: p?.username || 'Unknown',
+                    name: displayName,
                     avatar: p?.profile_picture || null,
                     lastMessage: c.last_message?.text || '',
                     lastMessageTime: c.last_message ? new Date(c.last_message.timestamp) : new Date(),
                     unreadCount: c.unread_count || 0,
                     messages: [],
-                    user_id: p?.id
+                    user_id: p?.id,
+                    phoneNumber: phone
                 };
-            });
+            }));
             set({ chats: mapped } as any);
             for (const chat of mapped) await database.saveConversation(chat);
         } catch (e) {
@@ -592,6 +690,29 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
     markRead: (chatId, messageId) => {
         const { socket, user } = get() as any;
         if (user?.privacy_read_receipts === false) return;
+
+        // Update local message in state
+        set((state: any) => {
+            const chats = state.chats.map((c: any) => {
+                if (c.id.toString() === chatId.toString()) {
+                    const messages = c.messages.map((m: any) => {
+                        if (m.id.toString() === messageId.toString()) {
+                            return { ...m, isRead: true };
+                        }
+                        return m;
+                    });
+                    return { ...c, messages };
+                }
+                return c;
+            });
+            return { chats };
+        });
+
+        // Save to SQLite asynchronously
+        database.updateMessageReadStatus(messageId, true).catch(err =>
+            console.error('[markRead] Error updating message read status in DB:', err)
+        );
+
         if (socket && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ type: 'mark_read', message_id: messageId, conversation_id: chatId }));
         }

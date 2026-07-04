@@ -1,17 +1,19 @@
-import { Text, View } from '@/components/Themed';
 import { api } from '@/services/api';
 import { useStore } from '@/store';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { 
-    ActivityIndicator, 
-    StyleSheet, 
-    TextInput, 
-    TouchableOpacity, 
-    useWindowDimensions,
+import React, { useRef, useState } from 'react';
+import {
+    ActivityIndicator,
+    Animated,
+    Image,
     Platform,
-    Image 
+    StyleSheet,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View,
+    Text,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
@@ -21,7 +23,8 @@ import { Ionicons } from '@expo/vector-icons';
 export default function LoginScreen() {
     const { width } = useWindowDimensions();
     const isSmallDevice = width < 375;
-    
+    const isTablet = width >= 768;
+
     const [loginMode, setLoginMode] = useState<'password' | 'otp'>('password');
     const [step, setStep] = useState(1);
     const [identifier, setIdentifier] = useState('');
@@ -30,19 +33,52 @@ export default function LoginScreen() {
     const [sessionId, setSessionId] = useState('');
     const [loading, setLoading] = useState(false);
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-    
+    const [identifierFocused, setIdentifierFocused] = useState(false);
+    const [passwordFocused, setPasswordFocused] = useState(false);
+
+    const buttonScale = useRef(new Animated.Value(1)).current;
+
     const router = useRouter();
     const { setUser, showAlert } = useStore();
     const { colors, isDark } = useAppTheme();
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^\+?[1-9]\d{1,14}$/;
+
+    // Client-side validations
+    const isIdentifierValid = emailRegex.test(identifier.trim()) || phoneRegex.test(identifier.trim());
+    const isPasswordValid = password.length >= 6;
+
+    const animateButton = () => {
+        Animated.sequence([
+            Animated.timing(buttonScale, { toValue: 0.97, duration: 80, useNativeDriver: true }),
+            Animated.timing(buttonScale, { toValue: 1, duration: 80, useNativeDriver: true }),
+        ]).start();
+    };
+
     const handlePasswordLogin = async () => {
-        if (!identifier || !password) {
-            showAlert('Error', 'Please fill in all fields');
+        const cleanIdentifier = identifier.trim();
+        if (!cleanIdentifier) {
+            showAlert('Validation Error', 'Please enter your email address or phone number.');
             return;
         }
+        if (!isIdentifierValid) {
+            showAlert('Validation Error', 'Please enter a valid email address or phone number.');
+            return;
+        }
+        if (!password) {
+            showAlert('Validation Error', 'Please enter your password.');
+            return;
+        }
+        if (!isPasswordValid) {
+            showAlert('Validation Error', 'Password must be at least 6 characters.');
+            return;
+        }
+
+        animateButton();
         setLoading(true);
         try {
-            const data = await api.auth.login({ identifier, password });
+            const data = await api.auth.login({ identifier: cleanIdentifier, password });
             setUser(data.user, data.token);
             router.replace('/(tabs)');
         } catch (error: any) {
@@ -53,13 +89,20 @@ export default function LoginScreen() {
     };
 
     const handleRequestOTP = async () => {
-        if (!identifier) {
-            showAlert('Error', 'Please enter your email');
+        const cleanEmail = identifier.trim();
+        if (!cleanEmail) {
+            showAlert('Validation Error', 'Please enter your email address.');
             return;
         }
+        if (!emailRegex.test(cleanEmail)) {
+            showAlert('Validation Error', 'Please enter a valid email address.');
+            return;
+        }
+
+        animateButton();
         setLoading(true);
         try {
-            const response = await api.auth.requestOTP(identifier);
+            const response = await api.auth.requestOTP(cleanEmail);
             setSessionId(response.session_id);
             setStep(2);
         } catch (error: any) {
@@ -70,7 +113,11 @@ export default function LoginScreen() {
     };
 
     const handleVerifyOTP = async () => {
-        if (otpCode.length !== 6) return;
+        if (otpCode.length !== 6) {
+            showAlert('Validation Error', 'Verification code must be exactly 6 digits.');
+            return;
+        }
+        animateButton();
         setLoading(true);
         try {
             const response = await api.auth.verifyOTP({ session_id: sessionId, otp_code: otpCode });
@@ -88,176 +135,331 @@ export default function LoginScreen() {
         }
     };
 
+    // Responsive sizing formulas based on screen dimensions
+    const logoSize = Math.min(width * 0.22, 90);
+    const contentWidth = isTablet ? '65%' : '100%';
+    const contentMaxWidth = 440;
+    const screenPadding = width * 0.06;
+
     return (
         <ScreenWrapper style={{ backgroundColor: colors.background }}>
             <KeyboardAwareScrollView
-                bottomOffset={Platform.OS === 'ios' ? 100 : 0}
+                bottomOffset={Platform.OS === 'ios' ? 40 : 0}
                 contentContainerStyle={[
                     styles.scrollContent,
-                    { paddingHorizontal: isSmallDevice ? 20 : 40 }
+                    { paddingHorizontal: screenPadding },
                 ]}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
-                <View style={styles.header}>
-                    <View style={styles.logoContainer}>
-                        <Image 
-                            source={require('@/assets/images/logo.png')} 
-                            style={styles.logo} 
-                            resizeMode="contain"
-                        />
-                    </View>
-                    <Text style={[styles.title, { color: colors.text }]}>Jarvis Chat</Text>
-                    <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                        {loginMode === 'password' ? 'Sign in to your account' : 'Verify your identity'}
-                    </Text>
-                </View>
+                <View style={styles.innerContainer}>
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <View style={[
+                            styles.logoContainer,
+                            {
+                                backgroundColor: isDark ? 'rgba(142,134,255,0.1)' : 'rgba(108,99,255,0.06)',
+                                width: logoSize,
+                                height: logoSize,
+                                borderRadius: logoSize * 0.3,
+                            }
+                        ]}>
+                            <Image
+                                source={require('@/assets/images/logo.png')}
+                                style={styles.logo}
+                                resizeMode="contain"
+                            />
+                        </View>
 
-                <View style={styles.content}>
-                    {/* Mode Toggle */}
-                    <View style={[styles.toggleContainer, { backgroundColor: isDark ? '#1C1C1E' : '#F2F2F7' }]}>
-                        <TouchableOpacity
-                            style={[
-                                styles.toggleButton, 
-                                loginMode === 'password' && { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 }
-                            ]}
-                            onPress={() => { setLoginMode('password'); setStep(1); }}
-                        >
-                            <Text style={[styles.toggleText, { color: loginMode === 'password' ? colors.primary : colors.textSecondary }]}>Password</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[
-                                styles.toggleButton, 
-                                loginMode === 'otp' && { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 }
-                            ]}
-                            onPress={() => setLoginMode('otp')}
-                        >
-                            <Text style={[styles.toggleText, { color: loginMode === 'otp' ? colors.primary : colors.textSecondary }]}>OTP</Text>
-                        </TouchableOpacity>
+                        <Text style={[styles.title, { color: colors.text }]}>
+                            Welcome back
+                        </Text>
+                        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                            {loginMode === 'password'
+                                ? 'Sign in to continue to Jarvis'
+                                : step === 1 ? 'Enter your email to receive a code' : `Code sent to ${identifier}`}
+                        </Text>
                     </View>
 
-                    {loginMode === 'password' ? (
-                        <>
-                            <View style={styles.inputWrapper}>
-                                <Text style={[styles.label, { color: colors.textSecondary }]}>Email or Phone</Text>
-                                <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}>
-                                    <Ionicons name="person-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
-                                    <TextInput
-                                        style={[styles.input, { color: colors.text }]}
-                                        value={identifier}
-                                        onChangeText={setIdentifier}
-                                        placeholder="Enter your email or phone"
-                                        placeholderTextColor={colors.textSecondary + '80'}
-                                        autoCapitalize="none"
-                                    />
-                                </View>
-                            </View>
-
-                            <View style={styles.inputWrapper}>
-                                <View style={styles.labelRow}>
-                                    <Text style={[styles.label, { color: colors.textSecondary }]}>Password</Text>
-                                    <TouchableOpacity>
-                                        <Text style={[styles.forgotText, { color: colors.primary }]}>Forgot?</Text>
-                                    </TouchableOpacity>
-                                </View>
-                                <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}>
-                                    <Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
-                                    <TextInput
-                                        style={[styles.input, { color: colors.text }]}
-                                        value={password}
-                                        onChangeText={setPassword}
-                                        placeholder="Enter your password"
-                                        placeholderTextColor={colors.textSecondary + '80'}
-                                        secureTextEntry={!isPasswordVisible}
-                                    />
-                                    <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
-                                        <Ionicons name={isPasswordVisible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textSecondary} />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-
-                            <TouchableOpacity 
-                                onPress={handlePasswordLogin} 
-                                disabled={loading} 
-                                style={[styles.submitButton, { shadowColor: colors.primary }]}
-                            >
-                                <LinearGradient
-                                    colors={[colors.primary, colors.secondary]}
-                                    style={styles.gradient}
-                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                    {/* Content Card */}
+                    <View style={[
+                        styles.card,
+                        {
+                            backgroundColor: isDark ? colors.surface : '#FFFFFF',
+                            borderColor: isDark ? colors.cardBorder : 'rgba(0,0,0,0.06)',
+                            width: contentWidth,
+                            maxWidth: contentMaxWidth,
+                            shadowColor: isDark ? '#000' : colors.primary,
+                        }
+                    ]}>
+                        {/* Mode Toggle */}
+                        <View style={[styles.toggleContainer, { backgroundColor: isDark ? colors.surfaceVariant : '#F0F0F5' }]}>
+                            {(['password', 'otp'] as const).map((mode) => (
+                                <TouchableOpacity
+                                    key={mode}
+                                    style={[
+                                        styles.toggleButton,
+                                        loginMode === mode && {
+                                            backgroundColor: isDark ? colors.surfaceSecondary : '#FFFFFF',
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 1 },
+                                            shadowOpacity: isDark ? 0.3 : 0.08,
+                                            shadowRadius: 4,
+                                            elevation: 2,
+                                        }
+                                    ]}
+                                    onPress={() => { setLoginMode(mode); setStep(1); setOtpCode(''); }}
+                                    activeOpacity={0.7}
                                 >
-                                    {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Sign In</Text>}
-                                </LinearGradient>
-                            </TouchableOpacity>
-                        </>
-                    ) : (
-                        step === 1 ? (
+                                    <Ionicons
+                                        name={mode === 'password' ? 'lock-closed-outline' : 'mail-outline'}
+                                        size={14}
+                                        color={loginMode === mode ? colors.primary : colors.textSecondary}
+                                        style={{ marginRight: 6 }}
+                                    />
+                                    <Text style={[
+                                        styles.toggleText,
+                                        { color: loginMode === mode ? colors.primary : colors.textSecondary }
+                                    ]}>
+                                        {mode === 'password' ? 'Password' : 'One-Time Code'}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        {/* Password Mode */}
+                        {loginMode === 'password' && (
                             <>
                                 <View style={styles.inputWrapper}>
-                                    <Text style={[styles.label, { color: colors.textSecondary }]}>Email Address</Text>
-                                    <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}>
-                                        <Ionicons name="mail-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+                                    <Text style={[styles.label, { color: colors.textSecondary }]}>Email or Phone</Text>
+                                    <View style={[
+                                        styles.inputContainer,
+                                        {
+                                            backgroundColor: isDark ? colors.surfaceSecondary : '#F8F8FC',
+                                            borderColor: identifierFocused ? colors.primary : (isDark ? colors.border : '#E0E0E8'),
+                                        }
+                                    ]}>
+                                        <Ionicons name="person-outline" size={18} color={identifierFocused ? colors.primary : colors.textSecondary} style={styles.inputIcon} />
                                         <TextInput
                                             style={[styles.input, { color: colors.text }]}
                                             value={identifier}
                                             onChangeText={setIdentifier}
-                                            placeholder="Enter your email"
-                                            placeholderTextColor={colors.textSecondary + '80'}
-                                            keyboardType="email-address"
+                                            placeholder="you@example.com"
+                                            placeholderTextColor={colors.textSecondary + '60'}
                                             autoCapitalize="none"
+                                            autoCorrect={false}
+                                            keyboardType="email-address"
+                                            returnKeyType="next"
+                                            onFocus={() => setIdentifierFocused(true)}
+                                            onBlur={() => setIdentifierFocused(false)}
                                         />
                                     </View>
                                 </View>
-                                <TouchableOpacity onPress={handleRequestOTP} disabled={loading} style={styles.submitButton}>
-                                    <LinearGradient
-                                        colors={[colors.primary, colors.secondary]}
-                                        style={styles.gradient}
-                                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+
+                                <View style={styles.inputWrapper}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                        <Text style={[styles.label, { color: colors.textSecondary, marginBottom: 0 }]}>Password</Text>
+                                        <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                            <Text style={[styles.forgotText, { color: colors.primary }]}>Forgot password?</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View style={[
+                                        styles.inputContainer,
+                                        {
+                                            backgroundColor: isDark ? colors.surfaceSecondary : '#F8F8FC',
+                                            borderColor: passwordFocused ? colors.primary : (isDark ? colors.border : '#E0E0E8'),
+                                        }
+                                    ]}>
+                                        <Ionicons name="lock-closed-outline" size={18} color={passwordFocused ? colors.primary : colors.textSecondary} style={styles.inputIcon} />
+                                        <TextInput
+                                            style={[styles.input, { color: colors.text }]}
+                                            value={password}
+                                            onChangeText={setPassword}
+                                            placeholder="••••••••"
+                                            placeholderTextColor={colors.textSecondary + '60'}
+                                            secureTextEntry={!isPasswordVisible}
+                                            returnKeyType="done"
+                                            onSubmitEditing={handlePasswordLogin}
+                                            onFocus={() => setPasswordFocused(true)}
+                                            onBlur={() => setPasswordFocused(false)}
+                                        />
+                                        <TouchableOpacity
+                                            onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                            style={styles.eyeButton}
+                                        >
+                                            <Ionicons
+                                                name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'}
+                                                size={20}
+                                                color={colors.textSecondary}
+                                            />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+                                    <TouchableOpacity
+                                        onPress={handlePasswordLogin}
+                                        disabled={loading}
+                                        style={[styles.submitButton, { shadowColor: colors.primary }]}
+                                        activeOpacity={0.88}
                                     >
-                                        {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Send OTP</Text>}
-                                    </LinearGradient>
-                                </TouchableOpacity>
+                                        <LinearGradient
+                                            colors={[colors.primary, colors.secondary]}
+                                            style={styles.gradient}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 0 }}
+                                        >
+                                            {loading
+                                                ? <ActivityIndicator color="white" size="small" />
+                                                : (
+                                                    <View style={styles.buttonContent}>
+                                                        <Text style={styles.buttonText}>Sign In</Text>
+                                                        <Ionicons name="arrow-forward" size={16} color="white" style={{ marginLeft: 8 }} />
+                                                    </View>
+                                                )}
+                                        </LinearGradient>
+                                    </TouchableOpacity>
+                                </Animated.View>
                             </>
-                        ) : (
+                        )}
+
+                        {/* OTP Mode Step 1 */}
+                        {loginMode === 'otp' && step === 1 && (
                             <>
                                 <View style={styles.inputWrapper}>
-                                    <Text style={[styles.label, { color: colors.textSecondary }]}>Verification Code</Text>
-                                    <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF', borderColor: colors.border }]}>
+                                    <Text style={[styles.label, { color: colors.textSecondary }]}>Email Address</Text>
+                                    <View style={[
+                                        styles.inputContainer,
+                                        {
+                                            backgroundColor: isDark ? colors.surfaceSecondary : '#F8F8FC',
+                                            borderColor: identifierFocused ? colors.primary : (isDark ? colors.border : '#E0E0E8'),
+                                        }
+                                    ]}>
+                                        <Ionicons name="mail-outline" size={18} color={identifierFocused ? colors.primary : colors.textSecondary} style={styles.inputIcon} />
+                                        <TextInput
+                                            style={[styles.input, { color: colors.text }]}
+                                            value={identifier}
+                                            onChangeText={setIdentifier}
+                                            placeholder="you@example.com"
+                                            placeholderTextColor={colors.textSecondary + '60'}
+                                            keyboardType="email-address"
+                                            autoCapitalize="none"
+                                            returnKeyType="send"
+                                            onSubmitEditing={handleRequestOTP}
+                                            onFocus={() => setIdentifierFocused(true)}
+                                            onBlur={() => setIdentifierFocused(false)}
+                                        />
+                                    </View>
+                                </View>
+                                <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+                                    <TouchableOpacity
+                                        onPress={handleRequestOTP}
+                                        disabled={loading}
+                                        style={[styles.submitButton, { shadowColor: colors.primary }]}
+                                        activeOpacity={0.88}
+                                    >
+                                        <LinearGradient
+                                            colors={[colors.primary, colors.secondary]}
+                                            style={styles.gradient}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 0 }}
+                                        >
+                                            {loading
+                                                ? <ActivityIndicator color="white" size="small" />
+                                                : (
+                                                    <View style={styles.buttonContent}>
+                                                        <Text style={styles.buttonText}>Send Code</Text>
+                                                        <Ionicons name="send-outline" size={14} color="white" style={{ marginLeft: 8 }} />
+                                                    </View>
+                                                )}
+                                        </LinearGradient>
+                                    </TouchableOpacity>
+                                </Animated.View>
+                            </>
+                        )}
+
+                        {/* OTP Mode Step 2 */}
+                        {loginMode === 'otp' && step === 2 && (
+                            <>
+                                <View style={[styles.otpBanner, { backgroundColor: isDark ? 'rgba(142,134,255,0.08)' : 'rgba(108,99,255,0.04)', borderColor: colors.primary + '20' }]}>
+                                    <Ionicons name="mail-open-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
+                                    <Text style={[styles.otpBannerText, { color: colors.textSecondary }]}>
+                                        Verification code sent to{' '}
+                                        <Text style={{ color: colors.text, fontWeight: '700' }}>{identifier}</Text>
+                                    </Text>
+                                </View>
+
+                                <View style={[styles.inputWrapper, { marginBottom: 8 }]}>
+                                    <Text style={[styles.label, { color: colors.textSecondary, textAlign: 'center', marginBottom: 12 }]}>
+                                        Enter Code
+                                    </Text>
+                                    <View style={[
+                                        styles.inputContainer,
+                                        styles.otpContainer,
+                                        {
+                                            backgroundColor: isDark ? colors.surfaceSecondary : '#F8F8FC',
+                                            borderColor: colors.primary + '50',
+                                        }
+                                    ]}>
                                         <TextInput
                                             style={[styles.input, styles.otpInput, { color: colors.text }]}
                                             value={otpCode}
                                             onChangeText={setOtpCode}
-                                            placeholder="000000"
-                                            placeholderTextColor={colors.textSecondary + '80'}
+                                            placeholder="•••••"
+                                            placeholderTextColor={colors.textSecondary + '40'}
                                             keyboardType="number-pad"
                                             maxLength={6}
+                                            autoFocus
+                                            returnKeyType="done"
+                                            onSubmitEditing={handleVerifyOTP}
                                         />
                                     </View>
-                                    <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                                        We&apos;ve sent a 6-digit code to {identifier}
-                                    </Text>
-                                </View>
-                                <TouchableOpacity onPress={handleVerifyOTP} disabled={loading || otpCode.length !== 6} style={styles.submitButton}>
-                                    <LinearGradient
-                                        colors={[colors.primary, colors.secondary]}
-                                        style={styles.gradient}
-                                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                    <TouchableOpacity
+                                        onPress={() => setStep(1)}
+                                        style={styles.changeEmailRow}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                     >
-                                        {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Verify & Sign In</Text>}
-                                    </LinearGradient>
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => setStep(1)} style={styles.backButton}>
-                                    <Text style={{ color: colors.primary, fontWeight: '600' }}>Change Email</Text>
-                                </TouchableOpacity>
-                            </>
-                        )
-                    )}
+                                        <Text style={[styles.changeEmailText, { color: colors.primary }]}>Change Email Address</Text>
+                                    </TouchableOpacity>
+                                </View>
 
+                                <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+                                    <TouchableOpacity
+                                        onPress={handleVerifyOTP}
+                                        disabled={loading || otpCode.length !== 6}
+                                        style={[styles.submitButton, { shadowColor: colors.primary, opacity: otpCode.length !== 6 && !loading ? 0.6 : 1 }]}
+                                        activeOpacity={0.88}
+                                    >
+                                        <LinearGradient
+                                            colors={[colors.primary, colors.secondary]}
+                                            style={styles.gradient}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 0 }}
+                                        >
+                                            {loading
+                                                ? <ActivityIndicator color="white" size="small" />
+                                                : (
+                                                    <View style={styles.buttonContent}>
+                                                        <Text style={styles.buttonText}>Verify & Sign In</Text>
+                                                        <Ionicons name="checkmark-circle-outline" size={16} color="white" style={{ marginLeft: 8 }} />
+                                                    </View>
+                                                )}
+                                        </LinearGradient>
+                                    </TouchableOpacity>
+                                </Animated.View>
+                            </>
+                        )}
+                    </View>
+
+                    {/* Footer */}
                     <View style={styles.footer}>
-                        <Text style={[styles.footerText, { color: colors.textSecondary }]}>New to Jarvis? </Text>
+                        <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+                            New to Jarvis?{' '}
+                        </Text>
                         <Link href="/auth/signup" asChild>
-                            <TouchableOpacity>
-                                <Text style={[styles.link, { color: colors.primary }]}>Create an account</Text>
+                            <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                                <Text style={[styles.link, { color: colors.primary }]}>Create account</Text>
                             </TouchableOpacity>
                         </Link>
                     </View>
@@ -270,147 +472,172 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
     scrollContent: {
         flexGrow: 1,
+    },
+    innerContainer: {
+        flexGrow: 1,
         justifyContent: 'center',
-        paddingVertical: 40,
+        alignItems: 'center',
+        paddingVertical: '8%',
     },
     header: {
         alignItems: 'center',
-        marginBottom: 40,
+        marginBottom: '6%',
         backgroundColor: 'transparent',
     },
     logoContainer: {
-        width: 100,
-        height: 100,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 16,
     },
     logo: {
-        width: '100%',
-        height: '100%',
+        width: '60%',
+        height: '60%',
     },
     title: {
-        fontSize: 28,
         fontWeight: '800',
+        fontSize: 26,
         marginBottom: 8,
-    },
-    subtitle: {
-        fontSize: 16,
+        letterSpacing: -0.5,
         textAlign: 'center',
     },
-    content: {
-        backgroundColor: 'transparent',
-        width: '100%',
-        maxWidth: 420,
+    subtitle: {
+        fontSize: 14,
+        textAlign: 'center',
+        lineHeight: 20,
+        paddingHorizontal: 16,
+    },
+    card: {
         alignSelf: 'center',
+        borderRadius: 20,
+        padding: '6%',
+        borderWidth: 1,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
+        elevation: 3,
     },
     toggleContainer: {
         flexDirection: 'row',
-        borderRadius: 16,
-        marginBottom: 35,
+        borderRadius: 12,
+        marginBottom: 24,
         padding: 4,
-        height: 50,
     },
     toggleButton: {
         flex: 1,
+        flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        borderRadius: 12,
+        borderRadius: 9,
+        paddingVertical: 10,
     },
     toggleText: {
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '600',
     },
     inputWrapper: {
-        marginBottom: 24,
-        backgroundColor: 'transparent',
-    },
-    labelRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
+        marginBottom: 16,
         backgroundColor: 'transparent',
     },
     label: {
-        fontSize: 14,
-        fontWeight: '700',
-        marginLeft: 4,
+        fontSize: 12.5,
+        fontWeight: '600',
+        marginBottom: 6,
     },
     forgotText: {
-        fontSize: 14,
+        fontSize: 12.5,
         fontWeight: '600',
-        marginRight: 4,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 16,
-        paddingHorizontal: 16,
+        borderRadius: 12,
+        paddingHorizontal: 12,
         borderWidth: 1.5,
-        height: 60,
+    },
+    otpContainer: {
+        justifyContent: 'center',
     },
     inputIcon: {
-        marginRight: 14,
+        marginRight: 10,
+    },
+    eyeButton: {
+        padding: 4,
     },
     input: {
         flex: 1,
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '500',
-        paddingVertical: Platform.OS === 'android' ? 0 : 4,
-        textAlignVertical: 'center',
+        paddingVertical: Platform.OS === 'ios' ? 14 : 10,
     },
     otpInput: {
-        fontSize: 26,
+        fontSize: 24,
         textAlign: 'center',
-        paddingLeft: 14, // Offset for letterSpacing on some platforms
-        letterSpacing: 14,
+        letterSpacing: Platform.OS === 'ios' ? 14 : 10,
         fontWeight: '800',
-        paddingVertical: 0,
+        paddingVertical: Platform.OS === 'ios' ? 14 : 10,
+        paddingLeft: Platform.OS === 'ios' ? 14 : 10,
     },
-    infoText: {
-        fontSize: 13,
-        marginTop: 8,
-        textAlign: 'center',
+    otpBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 10,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+    },
+    otpBannerText: {
+        fontSize: 12,
+        flex: 1,
+        lineHeight: 16,
+    },
+    changeEmailRow: {
+        alignItems: 'center',
+        marginTop: 10,
+    },
+    changeEmailText: {
+        fontSize: 12,
+        fontWeight: '600',
     },
     submitButton: {
-        borderRadius: 18,
+        borderRadius: 14,
         overflow: 'hidden',
-        marginTop: 12,
-        height: 56,
-        elevation: 6,
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.3,
-        shadowRadius: 10,
+        shadowRadius: 8,
+        elevation: 4,
+        marginTop: 4,
     },
     gradient: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
+        paddingVertical: 14,
+    },
+    buttonContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     buttonText: {
         color: 'white',
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '700',
-        letterSpacing: 0.5,
-    },
-    backButton: {
-        alignItems: 'center',
-        marginTop: 20,
+        letterSpacing: 0.2,
     },
     footer: {
         flexDirection: 'row',
         justifyContent: 'center',
-        marginTop: 40,
+        alignItems: 'center',
+        marginTop: 24,
         backgroundColor: 'transparent',
     },
     footerText: {
-        fontSize: 15,
+        fontSize: 13.5,
         fontWeight: '500',
     },
     link: {
-        fontSize: 15,
+        fontSize: 13.5,
         fontWeight: '800',
     },
 });
-

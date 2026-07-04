@@ -717,7 +717,11 @@ export default function ChatDetailScreen() {
                                                     showAlert('SMS Not Available', 'SMS is not available on this device');
                                                     return;
                                                 }
-                                                await SMS.sendSMSAsync([userProfile.phone_number], `Hi ${chat.name}! Let's chat on Jarvis.`);
+                                                const appLink = process.env.EXPO_PUBLIC_APP_DOWNLOAD_LINK || 'https://jarvis-chat.app/download';
+                                                await SMS.sendSMSAsync(
+                                                    [userProfile.phone_number],
+                                                    `Hey ${chat.name}! I'm messaging you via Jarvis Chat. Download the app to chat securely: ${appLink}`
+                                                );
                                             } catch (error) {
                                                 console.error('SMS error:', error);
                                                 showAlert('Error', 'Failed to send SMS');
