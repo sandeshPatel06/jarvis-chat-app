@@ -22,7 +22,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function VerifyOTPScreen() {
     const { width } = useWindowDimensions();
-    const isSmallDevice = width < 375;
     const isTablet = width >= 768;
 
     const { email, session_id } = useLocalSearchParams<{ email: string, session_id: string }>();
@@ -176,7 +175,7 @@ export default function VerifyOTPScreen() {
 
                             <TouchableOpacity style={styles.resendButton} activeOpacity={0.7}>
                                 <Text style={[styles.resendText, { color: colors.textSecondary }]}>
-                                    Didn't receive the code?{' '}
+                                    Didn&apos;t receive the code?{' '}
                                     <Text style={{ color: colors.primary, fontWeight: '700' }}>Resend</Text>
                                 </Text>
                             </TouchableOpacity>

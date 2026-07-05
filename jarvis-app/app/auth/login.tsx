@@ -22,7 +22,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function LoginScreen() {
     const { width } = useWindowDimensions();
-    const isSmallDevice = width < 375;
     const isTablet = width >= 768;
 
     const [loginMode, setLoginMode] = useState<'password' | 'otp'>('password');

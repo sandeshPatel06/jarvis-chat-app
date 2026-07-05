@@ -38,6 +38,7 @@ export default function CallScreen() {
     const isCalling = useStore((state: any) => state.callState.isCalling);
     const isVideo = useStore((state: any) => state.callState.isVideo) ?? true;
     const connectionState = useStore((state: any) => state.callState.connectionState);
+    const isInitiator = useStore((state: any) => state.callState.isInitiator);
     const endCall = useStore((state: any) => state.endCall);
     const setIsMinimized = useStore((state: any) => state.setIsMinimized);
     const appIsActive = useStore((state: any) => state.appIsActive);
@@ -45,9 +46,12 @@ export default function CallScreen() {
     const startTime = useStore((state: any) => state.callState.startTime);
     const callHasStarted = useRef(isCalling);
 
-    const [isMuted, setIsMuted] = useState(false);
+    const isMuted = useStore((state: any) => !!state.callState.isMuted);
+    const isSpeakerOn = useStore((state: any) => !!state.callState.isSpeakerOn);
+    const storeToggleMute = useStore((state: any) => state.toggleMute);
+    const storeToggleSpeaker = useStore((state: any) => state.toggleSpeaker);
+
     const [isVideoEnabled, setIsVideoEnabled] = useState(true);
-    const [isSpeakerOn, setIsSpeakerOn] = useState(true);
     const [isEnding, setIsEnding] = useState(false);
     const [duration, setDuration] = useState('00:00');
 
@@ -162,12 +166,8 @@ export default function CallScreen() {
     }, []);
 
     const toggleMute = useCallback(() => {
-        setIsMuted(prev => {
-            const next = !prev;
-            webrtcService.toggleAudio(!next);
-            return next;
-        });
-    }, []);
+        storeToggleMute();
+    }, [storeToggleMute]);
 
     const toggleVideo = useCallback(() => {
         setIsVideoEnabled(prev => {
@@ -182,12 +182,8 @@ export default function CallScreen() {
     }, []);
 
     const toggleSpeaker = useCallback(() => {
-        setIsSpeakerOn(prev => {
-            const next = !prev;
-            webrtcService.toggleSpeaker(next);
-            return next;
-        });
-    }, []);
+        storeToggleSpeaker();
+    }, [storeToggleSpeaker]);
 
     const renderCallStatus = () => {
         if (connectionState === 'connected' || remoteStream) return duration;
@@ -209,7 +205,7 @@ export default function CallScreen() {
                 />
             ) : (
                 <LinearGradient
-                    colors={['#0f2027', '#203a43', '#2c5364']}
+                    colors={['#0F0C1B', '#15102A', '#0A0714']}
                     style={styles.gradientBackground}
                 />
             )}
@@ -239,15 +235,20 @@ export default function CallScreen() {
                                     })
                                 }
                             ]} />
-                            <Avatar
-                                source={chat?.avatar}
-                                size={avatarSize}
-                                style={styles.premiumAvatar}
-                            />
+                            <View style={[styles.premiumAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}>
+                                <Avatar
+                                    source={chat?.avatar}
+                                    size={avatarSize - 6}
+                                />
+                            </View>
                         </View>
                         
-                        <View style={isLandscape ? { alignItems: 'flex-start' } : { alignItems: 'center' }}>
-                            <Text style={[styles.callerName, { fontSize: callerNameSize, marginBottom: callerNameMarginBottom }]}>{chat?.name || 'Unknown'}</Text>
+                        <View style={[styles.callerCard, isLandscape ? { alignItems: 'flex-start' } : { alignItems: 'center' }]}>
+                            <Text style={[styles.callerName, { fontSize: callerNameSize, marginBottom: callerNameMarginBottom }]}>
+                                {isInitiator
+                                    ? `${isVideo ? 'Video Calling' : 'Voice Calling'} to ${chat?.name || 'Someone'}`
+                                    : `${isVideo ? 'Video Call' : 'Voice Call'} from ${chat?.name || 'Someone'}`}
+                            </Text>
                             <Text style={[styles.callStatus, { fontSize: callStatusSize }]}>{renderCallStatus()}</Text>
                         </View>
                     </View>
@@ -440,15 +441,34 @@ const styles = StyleSheet.create({
     },
     pulseRing: {
         position: 'absolute',
-        width: 160,
-        height: 160,
-        borderRadius: 80,
-        backgroundColor: 'rgba(255, 255, 255, 0.4)',
+        backgroundColor: 'rgba(142, 134, 255, 0.25)',
     },
     premiumAvatar: {
         borderWidth: 3,
-        borderColor: 'rgba(255, 255, 255, 0.8)',
-        borderRadius: 70,
+        borderColor: '#8E86FF',
+        backgroundColor: '#1C1C1E',
+        elevation: 15,
+        shadowColor: '#8E86FF',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.5,
+        shadowRadius: 15,
+        overflow: 'hidden',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    callerCard: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.06)',
+        paddingVertical: 20,
+        paddingHorizontal: 30,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
     },
     callerName: {
         color: '#ffffff',

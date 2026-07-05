@@ -46,9 +46,7 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
 
-  const token = useStore(state => state.token);
   const initApp = useStore(state => state.initApp);
-  const setAppIsActive = useStore(state => state.setAppIsActive);
 
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
@@ -58,75 +56,6 @@ export default function RootLayout() {
   useEffect(() => {
     initApp();
   }, [initApp]); // Run only once on mount
-
-  useEffect(() => {
-    const unsubscribeNotificationOpened = setupNotificationOpenedHandler();
-    void restorePendingCallIntent();
-
-    return () => {
-      unsubscribeNotificationOpened();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (token) {
-      requestFirebasePermission().then(async (granted) => {
-        if (granted) {
-          await syncTokenWithBackend();
-        }
-      });
-    }
-
-    // Setup Firebase listeners
-    const unsubscribeForeground = setupForegroundHandler();
-    const unsubscribeRefresh = setupTokenRefreshListener();
-
-    return () => {
-      unsubscribeForeground();
-      unsubscribeRefresh();
-    };
-  }, [token]);
-
-  useEffect(() => {
-    // Handle AppState changes (minimize call when app goes to background)
-    setAppIsActive(AppState.currentState === 'active');
-
-    const subscription = AppState.addEventListener('change', nextAppState => {
-      const { callState, setIsMinimized } = useStore.getState();
-      setAppIsActive(nextAppState === 'active');
-      if (nextAppState === 'active') {
-        void restorePendingCallIntent();
-      }
-      if (nextAppState === 'background' && callState.isCalling && !callState.isMinimized && !callState.isRequestingPermissions) {
-        console.log('[AppState] App going to background, minimizing active call');
-        setIsMinimized(true);
-      }
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, [setAppIsActive]);
-
-  useEffect(() => {
-    // Prevent accidental app-exit on hardware 'Back' if a call is active
-    const backAction = () => {
-      const { callState } = useStore.getState();
-      if (callState.isCalling) {
-        if (Platform.OS === 'android') {
-          import('react-native').then(({ ToastAndroid }) => {
-            ToastAndroid.show('An active call is ongoing.', ToastAndroid.SHORT);
-          });
-        }
-        return true; // Prevents default behavior (app exiting)
-      }
-      return false; // Allows default (exits app if at root navigation or pops nav)
-    };
-
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-
-    return () => backHandler.remove();
-  }, []);
 
   useEffect(() => {
     if (loaded) {
@@ -161,6 +90,7 @@ function RootLayoutNav() {
   const token = useStore(state => state.token);
   const hasHydrated = useStore(state => state.hasHydrated);
   const userTheme = useStore(state => state.theme);
+  const setAppIsActive = useStore(state => state.setAppIsActive);
 
   const systemScheme = useColorScheme();
   const segments = useSegments();
@@ -198,6 +128,80 @@ function RootLayoutNav() {
       router.replace('/(tabs)');
     }
   }, [token, segments, hasHydrated, router]);
+
+  useEffect(() => {
+    const unsubscribeNotificationOpened = setupNotificationOpenedHandler(router);
+    void restorePendingCallIntent(router);
+
+    return () => {
+      unsubscribeNotificationOpened();
+    };
+  }, [router]);
+
+  useEffect(() => {
+    if (token) {
+      requestFirebasePermission().then(async (granted) => {
+        if (granted) {
+          await syncTokenWithBackend();
+        }
+      });
+    }
+
+    // Setup Firebase listeners
+    const unsubscribeForeground = setupForegroundHandler();
+    const unsubscribeRefresh = setupTokenRefreshListener();
+
+    return () => {
+      unsubscribeForeground();
+      unsubscribeRefresh();
+    };
+  }, [token]);
+
+  useEffect(() => {
+    // Handle AppState changes (minimize call when app goes to background)
+    setAppIsActive(AppState.currentState === 'active');
+
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      const { callState, setIsMinimized, triggerIncomingRingtone, stopIncomingRingtone } = useStore.getState();
+      setAppIsActive(nextAppState === 'active');
+      if (nextAppState === 'active') {
+        void restorePendingCallIntent(router);
+        if (callState.incomingCall) {
+          triggerIncomingRingtone();
+        }
+      } else {
+        stopIncomingRingtone();
+      }
+      if (nextAppState === 'background' && callState.isCalling && !callState.isMinimized && !callState.isRequestingPermissions) {
+        console.log('[AppState] App going to background, minimizing active call');
+        setIsMinimized(true);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [setAppIsActive, router]);
+
+  useEffect(() => {
+    // Prevent accidental app-exit on hardware 'Back' if a call is active
+    const backAction = () => {
+      const { callState } = useStore.getState();
+      if (callState.isCalling) {
+        if (Platform.OS === 'android') {
+          import('react-native').then(({ ToastAndroid }) => {
+            ToastAndroid.show('An active call is ongoing.', ToastAndroid.SHORT);
+          });
+        }
+        return true; // Prevents default behavior (app exiting)
+      }
+      return false; // Allows default (exits app if at root navigation or pops nav)
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+
+    return () => backHandler.remove();
+  }, []);
 
   if (appLockEnabled && isLocked) {
     return <LockScreen onUnlock={() => setIsLocked(false)} />;

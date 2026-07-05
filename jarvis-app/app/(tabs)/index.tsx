@@ -1,5 +1,6 @@
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { useStore } from '@/store';
+import { requestFirebasePermission } from '@/services/firebaseMessaging';
 import { Chat } from '@/types';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -58,6 +59,10 @@ export default function ChatsScreen() {
             setIsSearching(true);
         }
     }, [params.triggerSearch]);
+
+    useEffect(() => {
+        void requestFirebasePermission();
+    }, []);
 
     useEffect(() => {
         if (animationsEnabled) {
@@ -162,7 +167,7 @@ export default function ChatsScreen() {
                     </View>
                     <Text style={[styles.emptyTitle, { color: colors.text }]}>No Matches Found</Text>
                     <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                        We couldn't find any chats matching "{searchQuery}".
+                        We couldn&apos;t find any chats matching &quot;{searchQuery}&quot;.
                     </Text>
                 </View>
             );

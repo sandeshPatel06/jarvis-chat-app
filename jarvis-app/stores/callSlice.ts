@@ -4,6 +4,8 @@ import * as Audio from 'expo-audio';
 import * as KeepAwake from 'expo-keep-awake';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import { Vibration, AppState as RNAppState, Platform } from 'react-native';
+import notifee from '@notifee/react-native';
 import { webrtcService } from '@/services/webrtc';
 import { clearPendingCallIntent } from '@/services/pendingCallIntent';
 import { AppState } from '@/store';
@@ -36,6 +38,8 @@ interface CallState {
     connectionState: string;
     startTime: number | null;
     isInitiator?: boolean;
+    isMuted?: boolean;
+    isSpeakerOn?: boolean;
 }
 
 export interface CallSlice {
@@ -48,11 +52,18 @@ export interface CallSlice {
     handleSignalingMessage: (message: any) => Promise<void>;
     setIsMinimized: (isMinimized: boolean) => void;
     setupWebRTCListeners: (chatId: string, callUUID?: string | null) => void;
+    triggerIncomingRingtone: () => void;
+    stopIncomingRingtone: () => void;
+    toggleMute: () => void;
+    toggleSpeaker: () => void;
+    updateActiveCallNotification: () => Promise<void>;
+    stopActiveCallNotification: () => Promise<void>;
 }
 
 // These would normally be inside the component or a dedicated service, but kept for parity
 let callSound: any = null;
 let ringtoneActive = false;
+let vibrationInterval: any = null;
 const SIGNALING_SOCKET_WAIT_MS = 4000;
 const SIGNALING_SOCKET_POLL_MS = 100;
 
@@ -61,23 +72,58 @@ const createCallUUID = () => `call_${Date.now().toString(36)}_${Math.random().to
 const playRingtone = async (isIncoming: boolean) => {
     try {
         if (ringtoneActive) return;
+
+        // ONLY play ringtone if app is active/foreground!
+        // If app is in background/killed, the system notification handles alerting.
+        if (RNAppState.currentState !== 'active') {
+            console.log('[CallSlice] App is not active, skipping local ringtone playback');
+            return;
+        }
+
         ringtoneActive = true;
         await Audio.setAudioModeAsync({
-            playsInSilentMode: true,
+            playsInSilentMode: false,
             interruptionMode: 'doNotMix',
-            allowsRecording: true,
+            allowsRecording: false,
             shouldRouteThroughEarpiece: false,
-            shouldPlayInBackground: true,
+            shouldPlayInBackground: false,
         });
         if (callSound) {
-            callSound.pause();
+            try {
+                if (typeof callSound.pause === 'function') callSound.pause();
+                if (typeof callSound.remove === 'function') callSound.remove();
+            } catch (err) {}
             callSound = null;
+        }
+        if (isIncoming) {
+            if (Platform.OS === 'android') {
+                Vibration.vibrate([0, 1000, 1000], true);
+            } else {
+                // iOS doesn't support custom patterns or repeat flag.
+                // We manually loop Vibration.vibrate() every 2 seconds.
+                Vibration.vibrate();
+                if (vibrationInterval) {
+                    clearInterval(vibrationInterval);
+                }
+                vibrationInterval = setInterval(() => {
+                    Vibration.vibrate();
+                }, 2000);
+            }
         }
         const source = isIncoming
             ? require('@/assets/sounds/incoming_call.mp3')
             : require('@/assets/sounds/outgoing_call.wav');
         const player = Audio.createAudioPlayer(source);
         player.loop = true;
+        
+        // Manual looping fallback for cases where native loop flag fails
+        player.addListener('playbackStatusUpdate', (status) => {
+            if (status.didJustFinish && ringtoneActive) {
+                player.seekTo(0).catch(() => {});
+                player.play();
+            }
+        });
+        
         player.play();
         callSound = player;
     } catch (e) {
@@ -89,9 +135,15 @@ const playRingtone = async (isIncoming: boolean) => {
 const stopRingtone = async () => {
     try {
         ringtoneActive = false;
+        if (vibrationInterval) {
+            clearInterval(vibrationInterval);
+            vibrationInterval = null;
+        }
+        Vibration.cancel();
         if (callSound) {
             // expo-audio uses .pause() or .stop() - safely handling cleanup
             if (typeof callSound.pause === 'function') callSound.pause();
+            if (typeof callSound.remove === 'function') callSound.remove();
             callSound = null;
         }
     } catch (e) {
@@ -198,6 +250,8 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
         connectionState: 'new',
         startTime: null,
         isInitiator: false,
+        isMuted: false,
+        isSpeakerOn: true,
     },
     setIsMinimized: (isMinimized) => set((state) => ({
         callState: { ...state.callState, isMinimized }
@@ -219,6 +273,13 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
         playRingtone(true);
     },
     clearIncomingCall: () => {
+        const { callState } = get();
+        if (callState.incomingCall?.callUUID) {
+            notifee.cancelNotification(callState.incomingCall.callUUID).catch(() => {});
+        }
+        if (callState.incomingCall?.chatId) {
+            notifee.cancelNotification(callState.incomingCall.chatId).catch(() => {});
+        }
         void clearPendingCallIntent();
         stopRingtone();
         set((state) => ({
@@ -227,6 +288,12 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 incomingCall: null,
             }
         }));
+    },
+    triggerIncomingRingtone: () => {
+        playRingtone(true);
+    },
+    stopIncomingRingtone: () => {
+        stopRingtone();
     },
     setupWebRTCListeners: (chatId: string, callUUID?: string | null) => {
         webrtcService.onRemoteStream = (stream) => {
@@ -259,7 +326,16 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
             
             if (normalizedState === 'connected') {
                 stopRingtone();
+                // Ensure active call audio session is configured to playsInSilentMode true
+                Audio.setAudioModeAsync({
+                    playsInSilentMode: true,
+                    allowsRecording: true,
+                    interruptionMode: 'doNotMix',
+                    shouldRouteThroughEarpiece: !get().callState.isSpeakerOn,
+                    shouldPlayInBackground: true,
+                }).catch(err => console.log('Error setting active call audio mode:', err));
             }
+            void get().updateActiveCallNotification();
         };
     },
     startCall: async (chatId, isVideo = true) => {
@@ -274,7 +350,8 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 bufferedCandidates: [],
                 isVideo,
                 isRequestingPermissions: true,
-                isInitiator: true
+                isInitiator: true,
+                isSpeakerOn: isVideo,
             }
         }));
         try {
@@ -324,6 +401,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 return;
             }
             console.log(`[CallSlice] 📡 Sent webrtc_offer for chat: ${chatId}, Video: ${isVideo}`);
+            void get().updateActiveCallNotification();
         } catch (e) {
             console.error('[CallSlice] ❌ Start call failed:', e);
             get().endCall();
@@ -351,6 +429,9 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
 
         console.log('[AcceptCall] Accepting from:', chatId, 'isVideo:', isVideo, 'offerPrefix:', offer?.sdp?.substring(0, 50));
         stopRingtone();
+        if (callUUID) {
+            notifee.cancelNotification(callUUID).catch(() => {});
+        }
         void clearPendingCallIntent();
         
         // Instantly transition state to lock out additional taps and dismiss modals
@@ -363,7 +444,8 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 isVideo, 
                 isRequestingPermissions: true,
                 incomingCall: null, // Clear incoming call immediately to force UI remount
-                isInitiator: false
+                isInitiator: false,
+                isSpeakerOn: isVideo,
             }
         }));
         try {
@@ -382,7 +464,8 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 playsInSilentMode: true,
                 allowsRecording: true,
                 interruptionMode: 'doNotMix',
-                shouldRouteThroughEarpiece: !isVideo,
+                shouldRouteThroughEarpiece: !get().callState.isSpeakerOn,
+                shouldPlayInBackground: true,
             });
             const stream = await webrtcService.getLocalStream(isVideo);
             set((state) => ({
@@ -412,6 +495,7 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                 return;
             }
             console.log(`[CallSlice] ✅ Sent webrtc_answer for chat: ${chatId}`);
+            void get().updateActiveCallNotification();
             if (callState.bufferedCandidates.length > 0) {
                 console.log('[AcceptCall] 🚰 Draining', callState.bufferedCandidates.length, 'buffered candidates');
                 for (const candidate of callState.bufferedCandidates) {
@@ -429,10 +513,18 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
     endCall: () => {
         const { callState } = get() as any;
         console.log('[EndCall] Cleaning up call state');
+        void get().stopActiveCallNotification();
         void clearPendingCallIntent();
         stopRingtone();
         webrtcService.closeConnection();
         KeepAwake.deactivateKeepAwake();
+        Audio.setAudioModeAsync({
+            playsInSilentMode: false,
+            allowsRecording: false,
+            interruptionMode: 'mixWithOthers',
+            shouldRouteThroughEarpiece: false,
+            shouldPlayInBackground: false,
+        }).catch(err => console.log('[EndCall] Error resetting audio mode:', err));
         const chatIdToSend = callState.activeChatId || callState.incomingCall?.chatId;
         const callUUIDToSend = callState.activeCallUUID || callState.incomingCall?.callUUID;
 
@@ -556,7 +648,109 @@ export const createCallSlice: StateCreator<AppState, [], [], CallSlice> = (set, 
                     return;
                 }
                 get().endCall();
-                break;
+        }
+    },
+    toggleMute: () => {
+        const { callState } = get();
+        const next = !callState.isMuted;
+        webrtcService.toggleAudio(!next);
+        set((s) => ({
+            callState: {
+                ...s.callState,
+                isMuted: next,
+            }
+        }));
+        void get().updateActiveCallNotification();
+    },
+    toggleSpeaker: () => {
+        const { callState } = get();
+        const next = !callState.isSpeakerOn;
+        webrtcService.toggleSpeaker(next);
+        set((s) => ({
+            callState: {
+                ...s.callState,
+                isSpeakerOn: next,
+            }
+        }));
+        void get().updateActiveCallNotification();
+    },
+    updateActiveCallNotification: async () => {
+        const { callState, chats } = get() as any;
+        if (!callState.isCalling || !callState.activeChatId) return;
+
+        const chat = chats?.find((c: any) => c.id.toString() === callState.activeChatId.toString());
+        const username = chat?.name || 'Someone';
+        const isVideo = !!callState.isVideo;
+        const isMuted = !!callState.isMuted;
+        const isSpeakerOn = !!callState.isSpeakerOn;
+
+        // Create channel for active calls (low priority, silent, ongoing)
+        const channelId = await notifee.createChannel({
+            id: 'jarvis_active_calls',
+            name: 'Active Calls',
+            importance: 2, // Low importance (no beep)
+            vibration: false,
+        });
+
+        // Determine title and body
+        const callType = isVideo ? 'Video Call' : 'Voice Call';
+        const title = `${callType} with ${username}`;
+        
+        let body = 'Connecting...';
+        if (callState.connectionState === 'connected') {
+            body = 'Call in progress';
+        } else if (callState.connectionState === 'connecting') {
+            body = 'Connecting...';
+        } else if (callState.connectionState === 'failed') {
+            body = 'Connection failed';
+        }
+
+        const actions = [
+            {
+                title: isMuted ? 'Unmute' : 'Mute',
+                pressAction: { id: 'mute_call_action' },
+                icon: 'ic_menu_mic',
+            },
+            {
+                title: isSpeakerOn ? 'Speaker Off' : 'Speaker On',
+                pressAction: { id: 'speaker_call_action' },
+                icon: 'ic_menu_volume',
+            },
+            {
+                title: 'End Call',
+                pressAction: { id: 'end_call_action' },
+                icon: 'ic_menu_close_clear_cancel',
+            },
+        ];
+
+        await notifee.displayNotification({
+            id: 'active_call',
+            title,
+            body,
+            android: {
+                channelId,
+                asForegroundService: true,
+                ongoing: true,
+                showChronometer: callState.connectionState === 'connected',
+                timestamp: callState.startTime || Date.now(),
+                pressAction: {
+                    id: 'default',
+                    launchActivity: 'default',
+                },
+                actions,
+                color: '#6C63FF', // Primary brand color
+                smallIcon: 'ic_launcher',
+            },
+        });
+    },
+    stopActiveCallNotification: async () => {
+        try {
+            await notifee.stopForegroundService();
+        } catch (e) {
+            console.log('Error stopping foreground service:', e);
+        }
+        if ((global as any).stopActiveCallService) {
+            (global as any).stopActiveCallService();
         }
     },
 });

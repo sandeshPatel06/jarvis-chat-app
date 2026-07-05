@@ -1,15 +1,16 @@
 import { ScreenWrapper } from '@/components/ScreenWrapper';
-import { Text, View } from '@/components/Themed';
+import { Text } from '@/components/Themed';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useStore } from '@/store';
+import { api } from '@/services/api';
 import { useRouter, Stack } from 'expo-router';
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, View } from 'react-native';
 import CallLogItem from '@/components/calls/CallLogItem';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function CallsScreen() {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const router = useRouter();
 
   // Store
@@ -20,15 +21,14 @@ export default function CallsScreen() {
   const bulkDeleteCalls = useStore((state) => state.bulkDeleteCalls);
   const clearCallHistory = useStore((state) => state.clearCallHistory);
   const startCall = useStore((state) => state.startCall);
+  const showAlert = useStore((state) => state.showAlert);
 
   // Local State
-  const [filter, setFilter] = useState<'all' | 'incoming' | 'outgoing'>('all');
+  const [filter, setFilter] = useState<'all' | 'incoming' | 'outgoing' | 'missed'>('all');
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedCalls, setSelectedCalls] = useState<Set<number>>(new Set());
-
-  const showAlert = useStore((state) => state.showAlert);
 
   useEffect(() => {
     fetchCalls();
@@ -118,16 +118,40 @@ export default function CallsScreen() {
     if (filter === 'all') return calls;
     if (filter === 'incoming') return calls.filter(c => c.caller.username !== user?.username);
     if (filter === 'outgoing') return calls.filter(c => c.caller.username === user?.username);
+    if (filter === 'missed') {
+      return calls.filter(c => {
+        const isOutgoing = c.caller.username === user?.username;
+        const isMissedStatus = c.status === 'missed' || c.status === 'no_answer' || c.status === 'rejected' || c.status === 'cancelled';
+        return !isOutgoing && isMissedStatus;
+      });
+    }
     return calls;
   }, [calls, filter, user]);
 
-  const handleCall = useCallback((username: string, isVideo: boolean = false) => {
-    const chat = useStore.getState().chats.find(c => c.name === username);
+  const handleCall = useCallback(async (username: string, isVideo: boolean = false) => {
+    const token = useStore.getState().token;
+    if (!token) return;
+
+    let chat = useStore.getState().chats.find(c => c.name === username);
+    if (!chat) {
+      try {
+        const conversation = await api.chat.createConversation(token, username);
+        await useStore.getState().fetchChats();
+        chat = useStore.getState().chats.find(c => c.id === conversation.id);
+      } catch (error) {
+        console.error('Failed to start call conversation:', error);
+        showAlert('Error', 'Failed to start callback conversation');
+        return;
+      }
+    }
+
     if (chat) {
       startCall(chat.id, isVideo);
       router.push(`/call/${chat.id}`);
+    } else {
+      showAlert('Error', 'Failed to start call');
     }
-  }, [startCall, router]);
+  }, [startCall, router, showAlert]);
 
   const renderItem = useCallback(({ item }: { item: any }) => {
     return (
@@ -143,7 +167,7 @@ export default function CallsScreen() {
     );
   }, [user, colors, handleCall, onLongPress, isSelectionMode, selectedCalls]);
 
-  const FilterTab = ({ label, value }: { label: string, value: typeof filter }) => (
+  const FilterTab = ({ label, value, icon }: { label: string, value: typeof filter, icon: any }) => (
     <TouchableOpacity
       activeOpacity={0.8}
       style={[
@@ -153,42 +177,72 @@ export default function CallsScreen() {
       ]}
       onPress={() => setFilter(value)}
     >
-      <Text style={[
-        styles.filterText,
-        filter === value ? { color: 'white' } : { color: colors.textSecondary }
-      ]}>{label}</Text>
+      <View style={styles.filterTabContent}>
+        <MaterialCommunityIcons 
+          name={icon} 
+          size={16} 
+          color={filter === value ? 'white' : colors.textSecondary} 
+          style={{ marginRight: 6 }}
+        />
+        <Text style={[
+          styles.filterText,
+          filter === value ? { color: 'white' } : { color: colors.textSecondary }
+        ]}>{label}</Text>
+      </View>
     </TouchableOpacity>
   );
 
   return (
-    <ScreenWrapper style={styles.container} edges={['left', 'right']} withExtraTopPadding={false}>
+    <ScreenWrapper style={styles.container} withExtraTopPadding={false}>
       <Stack.Screen 
         options={{
-            headerTitle: isSelectionMode ? `${selectedCalls.size} Selected` : 'Calls',
-            headerLeft: isSelectionMode ? () => (
-                <TouchableOpacity onPress={exitSelectionMode} style={{marginLeft: 16}}>
-                    <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-                </TouchableOpacity>
-            ) : undefined,
-            headerRight: () => (
-                <TouchableOpacity 
-                    onPress={isSelectionMode ? handleBulkDelete : handleClearHistory} 
-                    style={{marginRight: 16}}
-                >
-                    <MaterialCommunityIcons 
-                        name={isSelectionMode ? "trash-can" : "trash-can-outline"} 
-                        size={24} 
-                        color={isSelectionMode ? colors.primary : colors.textSecondary} 
-                    />
-                </TouchableOpacity>
-            )
+            headerShown: false,
         }}
       />
-      {/* Filter Header */}
-      <View style={styles.filterContainer}>
-        <FilterTab label="All" value="all" />
-        <FilterTab label="Incoming" value="incoming" />
-        <FilterTab label="Outgoing" value="outgoing" />
+      
+      {/* Custom Unified Header */}
+      <View style={[
+          styles.customHeader,
+          {
+              borderBottomColor: isDark ? colors.cardBorder : 'rgba(0,0,0,0.05)',
+          }
+      ]}>
+          {isSelectionMode ? (
+              <View style={styles.headerTitleContainer}>
+                  <TouchableOpacity onPress={exitSelectionMode} style={styles.headerIconButton}>
+                      <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+                  </TouchableOpacity>
+                  <Text style={[styles.headerTitle, { color: colors.text, flex: 1, marginLeft: 16 }]}>
+                      {selectedCalls.size} Selected
+                  </Text>
+                  {selectedCalls.size > 0 && (
+                      <TouchableOpacity onPress={handleBulkDelete} style={styles.headerIconButton}>
+                          <MaterialCommunityIcons name="trash-can-outline" size={24} color={colors.error || 'red'} />
+                      </TouchableOpacity>
+                  )}
+              </View>
+          ) : (
+              <View style={styles.headerTitleContainer}>
+                  <Text style={[styles.headerTitle, { color: colors.text }]}>Calls</Text>
+                  <TouchableOpacity onPress={handleClearHistory} style={styles.headerIconButton}>
+                      <MaterialCommunityIcons name="trash-can-outline" size={24} color={colors.textSecondary} />
+                  </TouchableOpacity>
+              </View>
+          )}
+      </View>
+
+      {/* Scrollable Filter Header */}
+      <View style={styles.filterScrollWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
+        >
+          <FilterTab label="All" value="all" icon="phone-outline" />
+          <FilterTab label="Incoming" value="incoming" icon="call-received" />
+          <FilterTab label="Outgoing" value="outgoing" icon="call-made" />
+          <FilterTab label="Missed" value="missed" icon="call-missed" />
+        </ScrollView>
       </View>
 
       {filteredCalls.length === 0 ? (
@@ -217,6 +271,12 @@ export default function CallsScreen() {
           onEndReachedThreshold={0.5}
           refreshing={refreshing}
           onRefresh={handleRefresh}
+          ItemSeparatorComponent={() => (
+            <View style={[
+              styles.separator,
+              { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)' }
+            ]} />
+          )}
           ListFooterComponent={
             isLoadingMore ? <ActivityIndicator size="small" color={colors.primary} style={{ padding: 20 }} /> : null
           }
@@ -230,26 +290,62 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  filterContainer: {
+  customHeader: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    justifyContent: 'center',
+  },
+  headerTitleContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 44,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.6,
+  },
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterScrollWrapper: {
+    backgroundColor: 'transparent',
+  },
+  filterScrollContent: {
     paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 16,
-    gap: 12,
+    gap: 10,
   },
   filterTab: {
-    paddingVertical: 10,
-    paddingHorizontal: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: 16,
     borderWidth: 1,
   },
+  filterTabContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
   filterText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
+    backgroundColor: 'transparent',
   },
   listContent: {
     paddingTop: 4,
     paddingBottom: 120,
+  },
+  separator: {
+    height: 1,
+    marginHorizontal: 24,
   },
   emptyContent: {
     flex: 1,

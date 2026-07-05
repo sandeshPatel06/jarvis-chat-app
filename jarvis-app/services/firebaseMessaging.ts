@@ -18,6 +18,38 @@ import { clearPendingCallIntent, consumePendingCallIntent, persistPendingCallInt
 import { getMediaUrl } from '@/utils/media';
 import { api } from './api';
 import { useStore } from '@/store';
+notifee.setNotificationCategories([
+    {
+        id: 'incoming_call_category',
+        actions: [
+            {
+                id: 'answer_call',
+                title: 'Accept',
+                foreground: true,
+            },
+            {
+                id: 'decline_call',
+                title: 'Decline',
+                destructive: true,
+            },
+        ],
+    },
+]).catch((err) => console.error('[Firebase] Failed to register notification categories:', err));
+
+let resolveActiveCallService: (() => void) | null = null;
+
+notifee.registerForegroundService((notification) => {
+    return new Promise<void>((resolve) => {
+        resolveActiveCallService = resolve;
+    });
+});
+
+export const stopForegroundServicePromise = () => {
+    if (resolveActiveCallService) {
+        resolveActiveCallService();
+        resolveActiveCallService = null;
+    }
+};
 
 interface NormalizedIncomingCallPayload {
     chatId: string;
@@ -64,6 +96,10 @@ const parseIncomingCallOffer = (data: any): { type?: string; sdp?: string } | nu
 
 const isIncomingCallPayload = (data: any) => {
     if (!data) return false;
+
+    if (data.type === 'call_ended' || data.type === 'cancel_call' || data.type === 'call_cancelled') {
+        return false;
+    }
 
     if (data.type === 'incoming_call') {
         return true;
@@ -163,6 +199,31 @@ async function handleRemoteMessage(remoteMessage: any, context: 'foreground' | '
     try {
         const { data, notification: firebaseNotification } = remoteMessage;
 
+        // Handle Call Ended/Cancelled FCM push message
+        if (data?.type === 'call_ended' || data?.type === 'cancel_call' || data?.type === 'call_cancelled') {
+            console.log(`[Firebase ${context}] 🔴 Call ended/cancelled by remote`);
+            const chatId = data.chatId || data.chat_id || data.conversation_id;
+            const callUUID = data.callUUID || data.call_uuid || data.uuid;
+
+            // Clear incoming call state in the store
+            const state = useStore.getState();
+            if (
+                state.callState.incomingCall &&
+                (state.callState.incomingCall.callUUID === callUUID ||
+                 state.callState.incomingCall.chatId === String(chatId))
+            ) {
+                state.clearIncomingCall();
+            }
+
+            // Also make sure to cancel the Notifee notification directly by ID/UUID
+            const notificationId = callUUID || data.notificationId || 'incoming_call';
+            await notifee.cancelNotification(notificationId).catch(() => {});
+            if (chatId) {
+                await notifee.cancelNotification(String(chatId)).catch(() => {});
+            }
+            return;
+        }
+
         // 1. Handle Incoming Call
         // Prefer explicit call payloads before message handling so killed/background calls can ring.
         if (isIncomingCallPayload(data)) {
@@ -174,9 +235,8 @@ async function handleRemoteMessage(remoteMessage: any, context: 'foreground' | '
                 return;
             }
 
-            if (context === 'foreground') {
-                seedIncomingCallState(fcmData, 'fcm');
-            } else {
+            seedIncomingCallState(fcmData, 'fcm');
+            if (context === 'background') {
                 await handleIncomingCallFCM(fcmData);
             }
             console.log(`[Firebase ${context}] ✅ Call handled successfully`);
@@ -326,6 +386,22 @@ notifee.onBackgroundEvent(async ({ type, detail }) => {
     }
 
     if (type === EventType.ACTION_PRESS) {
+        if (actionId === 'end_call_action') {
+            console.log('[Notifee] User ended active call in background');
+            useStore.getState().endCall();
+            return;
+        }
+        if (actionId === 'mute_call_action') {
+            console.log('[Notifee] User toggled mute in background');
+            useStore.getState().toggleMute();
+            return;
+        }
+        if (actionId === 'speaker_call_action') {
+            console.log('[Notifee] User toggled speaker in background');
+            useStore.getState().toggleSpeaker();
+            return;
+        }
+
         if (callPayload && (actionId === 'answer_call' || actionId === 'default' || actionId === 'full_screen')) {
             console.log('[Notifee] User opened call notification in background');
             await persistPendingCallIntent(buildPendingCallIntent(callPayload, 'notification', actionId));
@@ -338,6 +414,7 @@ notifee.onBackgroundEvent(async ({ type, detail }) => {
         if (callPayload && actionId === 'decline_call') {
             console.log('[Notifee] User declined call from notification');
             await clearPendingCallIntent();
+            useStore.getState().clearIncomingCall();
             if (notification?.id) {
                 await notifee.cancelNotification(notification.id);
             }
@@ -399,14 +476,20 @@ notifee.onBackgroundEvent(async ({ type, detail }) => {
 export async function requestFirebasePermission(): Promise<boolean> {
     try {
         const authStatus = await requestPermission(messaging);
-        const enabled =
+        const firebaseEnabled =
             authStatus === AuthorizationStatus.AUTHORIZED ||
             authStatus === AuthorizationStatus.PROVISIONAL;
 
+        // Ask for Notifee runtime notification permissions (required for Android 13+ & iOS)
+        const settings = await notifee.requestPermission();
+        const notifeeEnabled = settings.authorizationStatus >= 1; // 1 = AUTHORIZED, 2 = PROVISIONAL
+
+        const enabled = firebaseEnabled && notifeeEnabled;
+
         if (enabled) {
-            console.log('[Firebase] ✅ Notification permission granted:', authStatus);
+            console.log('[Firebase/Notifee] ✅ Notification permission granted');
         } else {
-            console.log('[Firebase] ❌ Notification permission denied');
+            console.log('[Firebase/Notifee] ❌ Notification permission denied');
         }
 
         return enabled;
@@ -462,7 +545,7 @@ export const setupTokenRefreshListener = () => {
     });
 };
 
-export const setupNotificationOpenedHandler = () => {
+export const setupNotificationOpenedHandler = (router?: any) => {
     const unsubscribeNotificationOpened = onNotificationOpenedApp(messaging, async (remoteMessage) => {
         console.log('[Firebase] 📱 Notification opened app from background:', remoteMessage);
         const payload = normalizeIncomingCallPayload(remoteMessage);
@@ -485,8 +568,24 @@ export const setupNotificationOpenedHandler = () => {
             return;
         }
 
-        if (callPayload && type === EventType.ACTION_PRESS) {
-            if (actionId === 'decline_call') {
+        if (type === EventType.ACTION_PRESS) {
+            if (actionId === 'end_call_action') {
+                console.log('[Notifee] User ended active call in foreground');
+                useStore.getState().endCall();
+                return;
+            }
+            if (actionId === 'mute_call_action') {
+                console.log('[Notifee] User toggled mute in foreground');
+                useStore.getState().toggleMute();
+                return;
+            }
+            if (actionId === 'speaker_call_action') {
+                console.log('[Notifee] User toggled speaker in foreground');
+                useStore.getState().toggleSpeaker();
+                return;
+            }
+
+            if (callPayload && actionId === 'decline_call') {
                 await clearPendingCallIntent();
                 useStore.getState().clearIncomingCall();
                 if (notification?.id) {
@@ -495,7 +594,20 @@ export const setupNotificationOpenedHandler = () => {
                 return;
             }
 
-            if (actionId === 'answer_call' || actionId === 'default' || actionId === 'full_screen') {
+            if (callPayload && actionId === 'answer_call') {
+                if (notification?.id) {
+                    await notifee.cancelNotification(notification.id);
+                }
+                await clearPendingCallIntent();
+                await handleCallNotificationOpen(callPayload, 'notification', actionId);
+                
+                console.log('[Notifee] Automatically answering call from foreground action');
+                const state = useStore.getState();
+                if (router) {
+                    router.push(`/call/${callPayload.chatId}`);
+                }
+                void state.acceptCall();
+            } else if (callPayload && (actionId === 'default' || actionId === 'full_screen')) {
                 if (notification?.id) {
                     await notifee.cancelNotification(notification.id);
                 }
@@ -511,7 +623,7 @@ export const setupNotificationOpenedHandler = () => {
     };
 };
 
-export const restorePendingCallIntent = async () => {
+export const restorePendingCallIntent = async (router?: any) => {
     try {
         const initialNotification = await notifee.getInitialNotification();
         const initialNotificationPayload = normalizeIncomingCallPayload(
@@ -520,11 +632,21 @@ export const restorePendingCallIntent = async () => {
         );
 
         if (initialNotificationPayload) {
+            const actionId = initialNotification?.pressAction?.id;
             if (initialNotification?.notification?.id) {
                 await notifee.cancelNotification(initialNotification.notification.id);
             }
             await clearPendingCallIntent();
             seedIncomingCallState(initialNotificationPayload, 'notification');
+
+            if (actionId === 'answer_call') {
+                console.log('[Firebase] Automatically answering call from initial notification action');
+                const state = useStore.getState();
+                if (router) {
+                    router.push(`/call/${initialNotificationPayload.chatId}`);
+                }
+                void state.acceptCall();
+            }
             return;
         }
 
@@ -548,6 +670,15 @@ export const restorePendingCallIntent = async () => {
                 },
                 pendingCallIntent.source || 'notification'
             );
+
+            if (pendingCallIntent.action === 'answer_call') {
+                console.log('[Firebase] Automatically answering call from background intent');
+                const state = useStore.getState();
+                if (router) {
+                    router.push(`/call/${pendingCallIntent.chatId}`);
+                }
+                void state.acceptCall();
+            }
         }
     } catch (error) {
         console.error('[Firebase] ❌ Failed to restore pending call intent:', error);

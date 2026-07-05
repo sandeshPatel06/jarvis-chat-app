@@ -769,13 +769,30 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
     callsOffset: 0,
     hasMoreCalls: true,
     fetchCalls: async (loadMore = false) => {
-        const { token, callsOffset, hasMoreCalls } = get() as any;
+        const { token, callsOffset, hasMoreCalls, user } = get() as any;
         if (!token || (loadMore && !hasMoreCalls)) return;
         const currentOffset = loadMore ? callsOffset : 0;
         try {
             const newCalls = await api.chat.getCalls(token, 20, currentOffset);
+            
+            // Resolve contact names for callers/receivers
+            const mappedCalls = await Promise.all(newCalls.map(async (call: any) => {
+                const isOutgoing = call.caller?.username === user?.username;
+                const otherParty = isOutgoing ? call.receiver : call.caller;
+                if (otherParty) {
+                    const phone = otherParty.phone_number || null;
+                    if (phone) {
+                        const contactName = await resolveContactNameForPhone(phone);
+                        if (contactName) {
+                            otherParty.display_name = contactName;
+                        }
+                    }
+                }
+                return call;
+            }));
+
             set((state: any) => ({
-                calls: loadMore ? [...state.calls, ...newCalls] : newCalls,
+                calls: loadMore ? [...state.calls, ...mappedCalls] : mappedCalls,
                 callsOffset: currentOffset + newCalls.length,
                 hasMoreCalls: newCalls.length >= 20
             }));

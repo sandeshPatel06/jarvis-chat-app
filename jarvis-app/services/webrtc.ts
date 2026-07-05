@@ -333,13 +333,14 @@ class WebRTCService {
 
     async toggleSpeaker(enabled: boolean) {
         try {
-            // Note: Modern expo-audio manages this differently; 
-            // In case expo-av is not present, we log that we are attempting a route change.
             console.log(`[WebRTC] Toggling speaker: ${enabled}`);
-            
-            // If the user wants to keep global audio mode, they might need expo-av
-            // or use specific platform native modules for routing.
-            // For now, we remove the crashing setAudioModeAsync call.
+            await Audio.setAudioModeAsync({
+                playsInSilentMode: true,
+                allowsRecording: true,
+                interruptionMode: 'doNotMix',
+                shouldRouteThroughEarpiece: !enabled,
+                shouldPlayInBackground: true,
+            });
         } catch (e) {
             console.error("Error toggling speaker", e);
         }

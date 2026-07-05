@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/Avatar';
+import { useStore } from '@/store';
 
 interface CallLogItemProps {
     item: any;
@@ -16,7 +17,36 @@ interface CallLogItemProps {
 const CallLogItem = ({ item, user, colors, onPress, onLongPress, isSelectionMode, isSelected }: CallLogItemProps) => {
     const isOutgoing = item.caller.username === user?.username;
     const otherParty = isOutgoing ? item.receiver : item.caller;
-    const isMissed = item.status === 'missed';
+
+    // Determine status flags
+    const isMissed = item.status === 'missed' || item.status === 'no_answer' || item.status === 'rejected' || item.status === 'cancelled';
+    const isAnswered = !isMissed && (item.duration > 0 || item.status === 'answered' || item.status === 'completed' || item.status === 'connected');
+
+    let statusIcon: "call-made" | "call-received" | "call-missed" = "call-received";
+    let statusColor = colors.primary;
+
+    if (isOutgoing) {
+        statusIcon = "call-made";
+        if (isMissed || item.duration === 0) {
+            statusColor = colors.error || '#FF3B30'; // Red for failed/unanswered outgoing
+        } else {
+            statusColor = colors.success || '#4CD964'; // Green for successful outgoing
+        }
+    } else {
+        if (isMissed) {
+            statusIcon = "call-missed";
+            statusColor = colors.error || '#FF3B30'; // Red for missed incoming
+        } else {
+            statusIcon = "call-received";
+            statusColor = colors.primary; // Primary tint for answered incoming
+        }
+    }
+
+    const chat = useStore((state) => state.chats.find(c => 
+        (c.user_id && String(c.user_id) === String(otherParty.id)) ||
+        c.name === otherParty.username
+    ));
+    const displayName = otherParty.display_name || chat?.name || otherParty.username;
 
     return (
         <TouchableOpacity
@@ -26,15 +56,14 @@ const CallLogItem = ({ item, user, colors, onPress, onLongPress, isSelectionMode
             style={[
                 styles.callCard,
                 { 
-                    backgroundColor: isSelected ? colors.primary + '15' : colors.card,
-                    borderColor: isSelected ? colors.primary : colors.cardBorder
+                    backgroundColor: isSelected ? colors.primary + '15' : 'transparent',
                 }
             ]}
         >
             {isSelectionMode && (
                 <View style={styles.selectionIndicator}>
                     <MaterialCommunityIcons 
-                        name={isSelected ? "checkbox-marked" : "checkbox-blank-outline"} 
+                        name={isSelected ? "checkbox-marked-circle" : "checkbox-blank-circle-outline"} 
                         size={24} 
                         color={isSelected ? colors.primary : colors.textSecondary} 
                     />
@@ -52,17 +81,17 @@ const CallLogItem = ({ item, user, colors, onPress, onLongPress, isSelectionMode
 
             <View style={styles.info}>
                 <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-                    {otherParty.username}
+                    {displayName}
                 </Text>
                 <View style={styles.detailsRow}>
                     <MaterialCommunityIcons
-                        name={isOutgoing ? "call-made" : (isMissed ? "call-missed" : "call-received")}
+                        name={statusIcon}
                         size={14}
-                        color={isMissed ? '#FF3B30' : (isOutgoing ? '#4CD964' : colors.primary)}
+                        color={statusColor}
                     />
-                    <Text style={[styles.time, { color: colors.textSecondary }]}>
-                        {new Date(item.started_at).toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}
-                        {item.duration > 0 && ` • ${Math.floor(item.duration / 60)}:${(item.duration % 60).toString().padStart(2, '0')}`}
+                    <Text style={[styles.detailsText, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {item.is_video ? 'Video' : 'Voice'} • {new Date(item.started_at).toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}
+                        {isAnswered && item.duration > 0 && ` • ${Math.floor(item.duration / 60)}:${(item.duration % 60).toString().padStart(2, '0')}`}
                     </Text>
                 </View>
             </View>
@@ -70,12 +99,13 @@ const CallLogItem = ({ item, user, colors, onPress, onLongPress, isSelectionMode
             {!isSelectionMode && (
                 <View style={styles.actions}>
                     <TouchableOpacity 
-                        style={[styles.actionButton, { backgroundColor: colors.primary + '10' }]}
+                        style={[styles.actionButton, { backgroundColor: colors.primary + '12' }]}
                         onPress={() => onPress(otherParty.username, item.is_video)}
+                        activeOpacity={0.8}
                     >
                         <MaterialCommunityIcons 
                             name={item.is_video ? "video" : "phone"} 
-                            size={22} 
+                            size={18} 
                             color={colors.primary} 
                         />
                     </TouchableOpacity>
@@ -89,14 +119,11 @@ const styles = StyleSheet.create({
     callCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 14,
-        marginHorizontal: 16,
-        marginBottom: 8,
-        borderRadius: 20,
-        borderWidth: 1,
+        paddingVertical: 12,
+        paddingHorizontal: 24,
     },
     selectionIndicator: {
-        marginRight: 12,
+        marginRight: 14,
     },
     avatarContainer: {
         marginRight: 14,
@@ -104,15 +131,15 @@ const styles = StyleSheet.create({
     avatar: {
         width: 52,
         height: 52,
-        borderRadius: 18,
+        borderRadius: 26,
     },
     info: {
         flex: 1,
         justifyContent: 'center',
     },
     name: {
-        fontSize: 17,
-        fontWeight: '800',
+        fontSize: 16,
+        fontWeight: '700',
         letterSpacing: -0.2,
     },
     detailsRow: {
@@ -121,7 +148,7 @@ const styles = StyleSheet.create({
         marginTop: 4,
         gap: 6,
     },
-    time: {
+    detailsText: {
         fontSize: 13,
         fontWeight: '600',
     },
@@ -129,9 +156,9 @@ const styles = StyleSheet.create({
         marginLeft: 10,
     },
     actionButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
+        width: 38,
+        height: 38,
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
     },

@@ -166,7 +166,7 @@ export default function PeopleScreen() {
     const handleOpenSettings = async () => {
         try {
             await Linking.openSettings();
-        } catch (err) {
+        } catch {
             showAlert('Error', 'Could not open settings. Please enable manually.');
         }
     };

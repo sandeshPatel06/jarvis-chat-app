@@ -36,6 +36,23 @@ module.exports = function withNotificationFixed(config) {
       },
     });
 
+    // Android 14+ Foreground Service type declaration
+    if (!application.service) {
+      application.service = [];
+    }
+
+    application.service = application.service.filter(
+      (item) => !(item.$ && item.$['android:name'] === 'app.notifee.core.ForegroundService')
+    );
+
+    application.service.push({
+      $: {
+        'android:name': 'app.notifee.core.ForegroundService',
+        'android:foregroundServiceType': 'microphone|camera|phoneCall',
+        'tools:replace': 'android:foregroundServiceType',
+      },
+    });
+
     return config;
   });
 };

@@ -22,7 +22,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function SignupScreen() {
     const { width } = useWindowDimensions();
-    const isSmallDevice = width < 375;
     const isTablet = width >= 768;
 
     const [step, setStep] = useState(1); // 1: Email, 2: OTP, 3: Details

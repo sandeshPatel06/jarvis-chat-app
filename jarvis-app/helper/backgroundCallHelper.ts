@@ -4,7 +4,12 @@ import { getMediaUrl } from '@/utils/media';
 /**
  * Handles incoming call data from FCM and displays a notification.
  */
-const CALL_CHANNEL_ID = 'jarvis_voice_calls_v2';
+const CALL_CHANNEL_ID = 'jarvis_voice_calls_v5';
+
+const CALL_VIBRATION_PATTERN: number[] = [];
+for (let i = 0; i < 30; i++) {
+    CALL_VIBRATION_PATTERN.push(500, 1000);
+}
 
 export async function handleIncomingCallFCM(data: any) {
     console.log('[BackgroundCallHelper] 📞 Handling incoming call FCM data:', data);
@@ -32,9 +37,12 @@ export async function handleIncomingCallFCM(data: any) {
         importance: AndroidImportance.HIGH,
         visibility: AndroidVisibility.PUBLIC,
         vibration: true,
+        vibrationPattern: CALL_VIBRATION_PATTERN,
         bypassDnd: true, // Allow calls to bypass Do Not Disturb mode
         sound: 'default',
     });
+
+    const largeIcon = avatarUrl || require('@/assets/images/logo.png');
 
     // Display a robust, un-swipeable incoming call notification
     const androidConfig: any = {
@@ -42,20 +50,26 @@ export async function handleIncomingCallFCM(data: any) {
         importance: AndroidImportance.HIGH,
         visibility: AndroidVisibility.PUBLIC,
         sound: 'default',
+        color: '#6C63FF', // App brand color
+        vibrationPattern: CALL_VIBRATION_PATTERN,
         ongoing: true, // Prevents the user or OS from swiping away the notification while it's ringing
         autoCancel: false,
         lightUpScreen: true, // Forces the screen to wake up (crucial for lock screen)
+        smallIcon: 'ic_launcher',
+        largeIcon: largeIcon,
         pressAction: {
             id: 'default',
             launchActivity: 'default',
         },
         actions: [
             {
-                title: 'Answer',
+                title: 'Accept',
+                icon: 'ic_menu_call',
                 pressAction: { id: 'answer_call', launchActivity: 'default' },
             },
             {
                 title: 'Decline',
+                icon: 'ic_menu_close_clear_cancel',
                 pressAction: { id: 'decline_call' },
             },
         ],
@@ -66,18 +80,14 @@ export async function handleIncomingCallFCM(data: any) {
         category: AndroidCategory.CALL,
     };
 
-    if (avatarUrl) {
-        androidConfig.largeIcon = avatarUrl;
-    }
-
     await notifee.displayNotification({
         id: callUUID || 'incoming_call',
-        title: 'Incoming Call',
-        body: `${callerName || 'Someone'} is calling you...`,
+        title: `${isVideo ? 'Video Call' : 'Voice Call'} from ${callerName || 'Someone'}`,
         android: androidConfig,
         ios: {
             sound: 'default',
             interruptionLevel: 'timeSensitive',
+            categoryId: 'incoming_call_category',
         },
         data: {
             callUUID,
