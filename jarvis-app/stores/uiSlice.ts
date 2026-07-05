@@ -25,11 +25,19 @@ interface AlertState {
 export interface UISlice {
     theme: 'system' | 'light' | 'dark';
     animationsEnabled: boolean;
+    chatEnterIsSend: boolean;
+    chatMediaVisibility: boolean;
+    chatMessageFontSize: number;
+    appLanguage: string;
     toast: Toast | null;
     alert: AlertState | null;
     blockedUsers: number[];
     setTheme: (theme: 'system' | 'light' | 'dark') => void;
     setAnimationsEnabled: (enabled: boolean) => void;
+    setChatEnterIsSend: (enabled: boolean) => void;
+    setChatMediaVisibility: (enabled: boolean) => void;
+    setChatMessageFontSize: (size: number) => void;
+    setAppLanguage: (language: string) => void;
     showToast: (type: 'success' | 'error' | 'info', text1: string, text2?: string) => void;
     hideToast: () => void;
     showAlert: (title: string, message: string, buttons?: AlertButton[]) => void;
@@ -42,6 +50,10 @@ export interface UISlice {
 export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
     theme: 'system',
     animationsEnabled: true,
+    chatEnterIsSend: false,
+    chatMediaVisibility: true,
+    chatMessageFontSize: 16,
+    appLanguage: 'system',
     toast: null,
     alert: null,
     blockedUsers: [],
@@ -52,6 +64,22 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     setAnimationsEnabled: (enabled) => {
         set({ animationsEnabled: enabled });
         AsyncStorage.setItem('animationsEnabled', JSON.stringify(enabled)).catch(console.error);
+    },
+    setChatEnterIsSend: (enabled) => {
+        set({ chatEnterIsSend: enabled });
+        AsyncStorage.setItem('chat_enter_is_send', JSON.stringify(enabled)).catch(console.error);
+    },
+    setChatMediaVisibility: (enabled) => {
+        set({ chatMediaVisibility: enabled });
+        AsyncStorage.setItem('chat_media_visibility', JSON.stringify(enabled)).catch(console.error);
+    },
+    setChatMessageFontSize: (size) => {
+        set({ chatMessageFontSize: size });
+        AsyncStorage.setItem('chat_message_font_size', JSON.stringify(size)).catch(console.error);
+    },
+    setAppLanguage: (language) => {
+        set({ appLanguage: language });
+        AsyncStorage.setItem('app_language', language).catch(console.error);
     },
     showToast: (type, text1, text2) => set({ toast: { type, text1, text2, id: Date.now() } }),
     hideToast: () => set({ toast: null }),

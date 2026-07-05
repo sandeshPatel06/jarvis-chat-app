@@ -43,6 +43,7 @@ export const ChatInput = ({
     const { colors } = useAppTheme();
     const sendFileMessage = useStore(state => state.sendFileMessage);
     const showAlert = useStore(state => state.showAlert);
+    const chatEnterIsSend = useStore(state => state.chatEnterIsSend);
     const [uploading, setUploading] = React.useState(false);
     const [showAttachMenu, setShowAttachMenu] = React.useState(false);
     const [selectedFile, setSelectedFile] = React.useState<any>(null);
@@ -385,6 +386,15 @@ export const ChatInput = ({
         setSelectedFile(null);
     };
 
+    const handleComposerSubmit = () => {
+        if (selectedFile) {
+            handleSendFile();
+            return;
+        }
+
+        handleSend();
+    };
+
     const handleImageEditorSave = (editedUri: string) => {
         // Update the selected file with the edited URI
         setSelectedFile({
@@ -560,6 +570,9 @@ export const ChatInput = ({
                     placeholder="Type a message..."
                     placeholderTextColor={colors.tabIconDefault}
                     multiline
+                    submitBehavior={chatEnterIsSend ? 'submit' : 'newline'}
+                    enterKeyHint={chatEnterIsSend ? 'send' : 'done'}
+                    onSubmitEditing={chatEnterIsSend ? handleComposerSubmit : undefined}
                     maxLength={1000}
                 />
 
@@ -567,11 +580,7 @@ export const ChatInput = ({
                     <TouchableOpacity
                         onPress={() => {
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                            if (selectedFile) {
-                                handleSendFile();
-                            } else {
-                                handleSend();
-                            }
+                            handleComposerSubmit();
                         }}
                         style={styles.sendButtonContainer}
                     >

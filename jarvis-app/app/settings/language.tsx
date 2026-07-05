@@ -14,6 +14,8 @@ export default function LanguageSettingsScreen() {
     const { colors } = useAppTheme();
     const user = useStore((state) => state.user);
     const updateSettings = useStore((state) => state.updateSettings);
+    const appLanguage = useStore((state) => state.appLanguage);
+    const setAppLanguage = useStore((state) => state.setAppLanguage);
 
     const languages = [
         { code: 'en', name: 'English', native: 'English' },
@@ -28,9 +30,10 @@ export default function LanguageSettingsScreen() {
 
     const handleSelect = useCallback(async (code: string) => {
         try {
+            setAppLanguage(code);
             await updateSettings({ app_language: code });
         } catch { }
-    }, [updateSettings]);
+    }, [setAppLanguage, updateSettings]);
 
     return (
         <ScreenWrapper style={styles.container} edges={['left', 'right']} withExtraTopPadding={false}>
@@ -51,8 +54,8 @@ export default function LanguageSettingsScreen() {
                         <SettingRow
                             title="System Default"
                             subtitle={systemLanguageName || undefined}
-                            isSelected={user?.app_language === systemLocale.languageCode}
-                            onPress={() => handleSelect(systemLocale.languageCode || 'en')}
+                            isSelected={appLanguage === 'system' || user?.app_language === 'system'}
+                            onPress={() => handleSelect('system')}
                             isLast
                         />
                     </SettingCard>
@@ -66,7 +69,7 @@ export default function LanguageSettingsScreen() {
                                 key={lang.code}
                                 title={lang.name}
                                 subtitle={lang.native}
-                                isSelected={user?.app_language === lang.code}
+                                isSelected={appLanguage === lang.code || user?.app_language === lang.code}
                                 onPress={() => handleSelect(lang.code)}
                                 isLast={index === languages.length - 1}
                             />

@@ -7,6 +7,7 @@ import { Message } from '@/types';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { getMediaUrl } from '@/utils/media';
 import { VoicePlayer } from './VoicePlayer';
+import { useStore } from '@/store';
 
 interface MessageItemProps {
     item: Message;
@@ -21,6 +22,7 @@ interface MessageItemProps {
 
 const MessageItemComponent = ({ item, onLongPress, onMediaPress, onSwipeReply, onSwipeForward, selectionMode = false, isSelected = false, onPress }: MessageItemProps) => {
     const { colors } = useAppTheme();
+    const chatMessageFontSize = useStore((state) => state.chatMessageFontSize);
     const isMe = item.sender === 'me';
     const reactions = item.reactions || [];
     const swipeableRef = React.useRef<Swipeable>(null);
@@ -249,7 +251,16 @@ const MessageItemComponent = ({ item, onLongPress, onMediaPress, onSwipeReply, o
                                 )}
 
                                 {item.text ? (
-                                    <Text style={[styles.messageText, { color: colors.text }]}>
+                                    <Text
+                                        style={[
+                                            styles.messageText,
+                                            {
+                                                color: colors.text,
+                                                fontSize: chatMessageFontSize,
+                                                lineHeight: Math.round(chatMessageFontSize * 1.35),
+                                            },
+                                        ]}
+                                    >
                                         {item.text}
                                     </Text>
                                 ) : null}
@@ -372,6 +383,10 @@ const MessageItemComponent = ({ item, onLongPress, onMediaPress, onSwipeReply, o
                                         style={[
                                             styles.messageText,
                                             { color: 'white' },
+                                            {
+                                                fontSize: chatMessageFontSize,
+                                                lineHeight: Math.round(chatMessageFontSize * 1.35),
+                                            },
                                         ]}
                                     >
                                         {item.text}
@@ -663,5 +678,4 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
 });
-
 

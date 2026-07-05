@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as database from '@/services/database';
 import { api } from '@/services/api';
 import { Chat, Message } from '@/types';
-import { getMediaUrl, getLocalMediaUri } from '@/utils/media';
+import { autoSaveIncomingImageToGallery, getMediaUrl, getLocalMediaUri } from '@/utils/media';
 import { downloadManager } from '@/services/downloadManager';
 import { AppState } from '@/store';
 import { handleWebSocketMessage } from '@/utils/websocket';
@@ -108,6 +108,18 @@ const dedupeMessagesById = (messages: any[]) => {
     }
 
     return deduped;
+};
+
+const maybeAutoSaveIncomingImage = async (state: any, message: any) => {
+    if (!state?.chatMediaVisibility) return;
+    if (message?.sender !== 'them') return;
+    if (!message?.file || !message?.file_type?.startsWith('image/')) return;
+
+    const messageId = message.id?.toString?.() || message.id;
+    const fileUri = typeof message.file === 'string' ? message.file : message.file?.uri;
+    if (!messageId || !fileUri) return;
+
+    await autoSaveIncomingImageToGallery(fileUri, messageId, message.file_type);
 };
 
 const clearReconnectTimeout = () => {
@@ -297,13 +309,22 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
     addMessage: (payload) => {
         const chatId = (payload.conversation_id || payload.conversation)?.toString();
         if (!chatId) return;
+        const currentState = get() as any;
+        const msgId = payload.id ? payload.id.toString() : `temp_${Date.now()}`;
+        const senderIsMe = payload.sender === 'me'
+            || payload.sender_id === currentState.user?.id
+            || (typeof payload.sender === 'object' && payload.sender?.username === currentState.user?.username);
+        const galleryMessage = {
+            ...payload,
+            id: msgId,
+            sender: senderIsMe ? 'me' : 'them',
+        };
 
         set((state: any) => {
             const chats = [...state.chats];
             let chatIndex = chats.findIndex(c => c.id.toString() === chatId);
             
             // 1. Standardize message data
-            const msgId = payload.id ? payload.id.toString() : `temp_${Date.now()}`;
             const message = { 
                 ...payload,
                 id: msgId,
@@ -427,6 +448,8 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
 
             return { chats: [...chats] };
         });
+
+        void maybeAutoSaveIncomingImage(get() as any, galleryMessage);
     },
 
     sendMessage: async (chatId, text, replyToId) => {
@@ -642,6 +665,7 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
                         // File exists! Use local URI immediately 
                         console.log(`[ChatSlice] 📦 Using cached file for ${msgId}: ${localUri}`);
                         msg.file = localUri;
+                        void maybeAutoSaveIncomingImage(get() as any, msg);
                     } else if (!msg.file.startsWith('file://')) {
                         // File doesn't exist locally, enqueue download
                         const url = getMediaUrl(msg.file);
@@ -655,6 +679,10 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
                                         } : c
                                     )
                                 }));
+                                void maybeAutoSaveIncomingImage(get() as any, {
+                                    ...msg,
+                                    file: downloadedUri,
+                                });
                             }, () => {});
                         }
                     }

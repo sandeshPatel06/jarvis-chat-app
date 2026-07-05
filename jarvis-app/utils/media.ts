@@ -1,5 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as MediaLibrary from 'expo-media-library';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -8,6 +10,7 @@ if (!BACKEND_URL) {
 }
 
 const MEDIA_URL = BACKEND_URL ? `${BACKEND_URL}/media` : null;
+const GALLERY_SAVE_PREFIX = 'gallery_saved:';
 
 /**
  * Constructs a full media URL from a relative path
@@ -83,6 +86,47 @@ export const downloadMedia = async (remoteUrl: string, messageId: string): Promi
     } catch (error) {
         console.error('[Media] Download error:', error);
         return null;
+    }
+};
+
+export const autoSaveIncomingImageToGallery = async (
+    sourceUri: string,
+    messageId: string,
+    fileType?: string | null,
+): Promise<boolean> => {
+    if (!sourceUri || !messageId || !fileType?.startsWith('image/')) {
+        return false;
+    }
+
+    const storageKey = `${GALLERY_SAVE_PREFIX}${messageId}`;
+    const alreadySaved = await AsyncStorage.getItem(storageKey);
+    if (alreadySaved === '1') {
+        return true;
+    }
+
+    try {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status !== 'granted') {
+            return false;
+        }
+
+        let uriToSave = sourceUri;
+
+        if (/^https?:\/\//i.test(sourceUri)) {
+            const urlWithoutQuery = sourceUri.split('?')[0];
+            const extensionMatch = urlWithoutQuery.match(/\.([0-9a-z]+)(?:[\?#]|$)/i);
+            const extension = extensionMatch ? extensionMatch[1] : 'jpg';
+            const tempUri = `${FileSystem.cacheDirectory}gallery_${messageId}.${extension}`;
+            const downloadResult = await FileSystem.downloadAsync(sourceUri, tempUri);
+            uriToSave = downloadResult.uri;
+        }
+
+        await MediaLibrary.saveToLibraryAsync(uriToSave);
+        await AsyncStorage.setItem(storageKey, '1');
+        return true;
+    } catch (error) {
+        console.error('[Media] Auto-save to gallery failed:', error);
+        return false;
     }
 };
 

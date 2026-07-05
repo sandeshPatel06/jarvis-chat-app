@@ -63,6 +63,17 @@ interface NormalizedIncomingCallPayload {
 
 const isTrue = (value: any) => value === true || value === 'true' || value === 1 || value === '1';
 
+const getNotificationPrefs = () => {
+    const user = useStore.getState().user;
+    return {
+        enabled: user?.notifications_enabled ?? true,
+        sound: user?.notifications_sound ?? true,
+        vibration: user?.notifications_vibration ?? true,
+        preview: user?.notifications_preview ?? true,
+        groupsEnabled: user?.notifications_groups_enabled ?? true,
+    };
+};
+
 const parseIncomingCallOffer = (data: any): { type?: string; sdp?: string } | null => {
     if (!data) {
         return null;
@@ -245,6 +256,21 @@ async function handleRemoteMessage(remoteMessage: any, context: 'foreground' | '
         else if (data?.type === 'message' || data?.conversation_id || firebaseNotification) {
             console.log(`[Firebase ${context}] 💬 New message detected`);
 
+            const notificationPrefs = getNotificationPrefs();
+            if (!notificationPrefs.enabled) {
+                console.log(`[Firebase ${context}] Notification delivery disabled by user preference`);
+                return;
+            }
+
+            const conversationId = data?.conversation_id ? String(data.conversation_id) : null;
+            if (conversationId && !notificationPrefs.groupsEnabled) {
+                const conversation = useStore.getState().chats.find((chat: any) => String(chat.id) === conversationId);
+                if (conversation?.is_group) {
+                    console.log(`[Firebase ${context}] Group notification suppressed by user preference`);
+                    return;
+                }
+            }
+
             // Let the OS render notification payloads in background/killed state.
             // This avoids a duplicate banner when the backend already sent a system notification.
             if (context === 'background' && firebaseNotification) {
@@ -261,15 +287,19 @@ async function handleRemoteMessage(remoteMessage: any, context: 'foreground' | '
             }
 
             const channelId = await notifee.createChannel({
-                id: 'messages',
-                name: 'Messages',
-                importance: AndroidImportance.HIGH,
+                id: notificationPrefs.sound || notificationPrefs.vibration ? 'messages_alerts' : 'messages_silent',
+                name: notificationPrefs.sound || notificationPrefs.vibration ? 'Messages' : 'Messages (Silent)',
+                importance: notificationPrefs.sound || notificationPrefs.vibration ? AndroidImportance.HIGH : AndroidImportance.DEFAULT,
                 visibility: AndroidVisibility.PUBLIC,
+                vibration: notificationPrefs.vibration,
+                vibrationPattern: notificationPrefs.vibration ? [0, 250, 150, 250] : undefined,
             });
 
             // Standardize field extraction with multiple fallbacks
             const senderName = data?.sender_name || 'Someone';
-            const messageText = data?.text || data?.body || firebaseNotification?.body || 'You have a new message';
+            const messageText = notificationPrefs.preview
+                ? (data?.text || data?.body || firebaseNotification?.body || 'You have a new message')
+                : 'You have a new message';
 
             let avatarUrl = data?.sender_avatar ? getMediaUrl(data.sender_avatar) : null;
 

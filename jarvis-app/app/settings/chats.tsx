@@ -1,39 +1,198 @@
-import React, { useCallback } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal, Pressable } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, PanResponder, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter, Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { useStore } from '@/store';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import SettingRow from '@/components/settings/SettingRow';
 import SettingCard from '@/components/settings/SettingCard';
+import {
+    CHAT_FONT_SIZE_MAX,
+    CHAT_FONT_SIZE_MIN,
+    CHAT_FONT_SIZE_STEP,
+    getChatFontSizeLabel,
+} from '@/utils/chatPreferences';
+import { autoSaveIncomingImageToGallery } from '@/utils/media';
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const ChatFontSizeSlider = ({
+    value,
+    onChange,
+    animationsEnabled,
+    colors,
+}: {
+    value: number;
+    onChange: (value: number) => void;
+    animationsEnabled: boolean;
+    colors: any;
+}) => {
+    const [trackWidth, setTrackWidth] = useState(0);
+    const [internalValue, setInternalValue] = useState(value);
+    const thumbX = useRef(new Animated.Value(0)).current;
+    const dragStartValue = useRef(value);
+    const pendingValue = useRef(value);
+
+    useEffect(() => {
+        setInternalValue(value);
+        pendingValue.current = value;
+    }, [value]);
+
+    useEffect(() => {
+        if (!trackWidth) return;
+        const ratio = (internalValue - CHAT_FONT_SIZE_MIN) / (CHAT_FONT_SIZE_MAX - CHAT_FONT_SIZE_MIN);
+        const nextX = clamp(ratio, 0, 1) * trackWidth - 12;
+
+        if (animationsEnabled) {
+            Animated.spring(thumbX, {
+                toValue: nextX,
+                useNativeDriver: false,
+                tension: 180,
+                friction: 20,
+            }).start();
+        } else {
+            thumbX.setValue(nextX);
+        }
+    }, [internalValue, trackWidth, animationsEnabled, thumbX]);
+
+    const updateFromLocation = useCallback((locationX: number) => {
+        if (!trackWidth) return;
+        const ratio = clamp(locationX / trackWidth, 0, 1);
+        const nextValue = clamp(
+            CHAT_FONT_SIZE_MIN + Math.round(ratio * (CHAT_FONT_SIZE_MAX - CHAT_FONT_SIZE_MIN) / CHAT_FONT_SIZE_STEP) * CHAT_FONT_SIZE_STEP,
+            CHAT_FONT_SIZE_MIN,
+            CHAT_FONT_SIZE_MAX,
+        );
+        setInternalValue(nextValue);
+        pendingValue.current = nextValue;
+        onChange(nextValue);
+    }, [onChange, trackWidth]);
+
+    const panResponder = useMemo(() => PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (evt) => {
+            dragStartValue.current = internalValue;
+            updateFromLocation(evt.nativeEvent.locationX);
+        },
+        onPanResponderMove: (_, gestureState) => {
+            if (!trackWidth) return;
+            const range = CHAT_FONT_SIZE_MAX - CHAT_FONT_SIZE_MIN;
+            const rawValue = dragStartValue.current + (gestureState.dx / trackWidth) * range;
+            const nextValue = clamp(
+                Math.round(rawValue / CHAT_FONT_SIZE_STEP) * CHAT_FONT_SIZE_STEP,
+                CHAT_FONT_SIZE_MIN,
+                CHAT_FONT_SIZE_MAX,
+            );
+            setInternalValue(nextValue);
+            pendingValue.current = nextValue;
+            onChange(nextValue);
+        },
+        onPanResponderRelease: () => {
+            onChange(pendingValue.current);
+        },
+        onPanResponderTerminationRequest: () => true,
+        onPanResponderTerminate: () => {
+            onChange(pendingValue.current);
+        },
+    }), [internalValue, onChange, trackWidth, updateFromLocation]);
+
+    const fillWidth = useMemo(() => {
+        if (!trackWidth) return 0;
+        const ratio = (internalValue - CHAT_FONT_SIZE_MIN) / (CHAT_FONT_SIZE_MAX - CHAT_FONT_SIZE_MIN);
+        return clamp(ratio, 0, 1) * trackWidth;
+    }, [internalValue, trackWidth]);
+
+    return (
+        <View style={styles.sliderWrap}>
+            <View
+                style={styles.sliderTrackOuter}
+                onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}
+                {...panResponder.panHandlers}
+            >
+                <View style={[styles.sliderTrack, { backgroundColor: colors.inputBackground }]}>
+                    <Animated.View
+                        style={[
+                            styles.sliderFill,
+                            {
+                                width: fillWidth,
+                                backgroundColor: colors.primary,
+                            },
+                        ]}
+                    />
+                    <Animated.View
+                        style={[
+                            styles.sliderThumb,
+                            {
+                                transform: [{ translateX: thumbX }],
+                                backgroundColor: colors.primary,
+                                shadowColor: colors.primary,
+                            },
+                        ]}
+                    />
+                </View>
+            </View>
+
+            <View style={styles.sliderScaleRow}>
+                <Text style={[styles.sliderScaleLabel, { color: colors.textSecondary }]}>Small</Text>
+                <Text style={[styles.sliderScaleLabel, { color: colors.textSecondary }]}>Large</Text>
+            </View>
+        </View>
+    );
+};
 
 export default function ChatsSettingsScreen() {
     const { colors } = useAppTheme();
     const theme = useStore((state) => state.theme);
     const setTheme = useStore((state) => state.setTheme);
-    const user = useStore((state) => state.user);
     const animationsEnabled = useStore((state) => state.animationsEnabled);
     const setAnimationsEnabled = useStore((state) => state.setAnimationsEnabled);
-    const updateSettings = useStore((state) => state.updateSettings);
+    const chatEnterIsSend = useStore((state) => state.chatEnterIsSend);
+    const setChatEnterIsSend = useStore((state) => state.setChatEnterIsSend);
+    const chatMediaVisibility = useStore((state) => state.chatMediaVisibility);
+    const setChatMediaVisibility = useStore((state) => state.setChatMediaVisibility);
+    const chatMessageFontSize = useStore((state) => state.chatMessageFontSize);
+    const setChatMessageFontSize = useStore((state) => state.setChatMessageFontSize);
+    const chats = useStore((state) => state.chats);
+    const user = useStore((state) => state.user);
     const router = useRouter();
-    const [showFontSizeModal, setShowFontSizeModal] = React.useState(false);
-
-    const fontSizes = ['Small', 'Medium', 'Large'];
+    const [localEnterIsSend, setLocalEnterIsSend] = useState<boolean | null>(null);
 
     const handleWallpaperSelection = useCallback(() => {
         router.push('/settings/wallpaper');
     }, [router]);
 
-    const handleToggle = useCallback(async (key: string, value: boolean | string) => {
-        try {
-            await updateSettings({ [key]: value });
-        } catch { }
-    }, [updateSettings]);
+    useEffect(() => {
+        let mounted = true;
+        void (async () => {
+            try {
+                const stored = await AsyncStorage.getItem('chat_enter_is_send');
+                if (!mounted) return;
 
-    // Human-readable wallpaper label
+                if (stored == null) {
+                    setLocalEnterIsSend(null);
+                    return;
+                }
+
+                try {
+                    setLocalEnterIsSend(JSON.parse(stored));
+                } catch {
+                    setLocalEnterIsSend(false);
+                }
+            } catch {
+                if (mounted) setLocalEnterIsSend(null);
+            }
+        })();
+
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
     const currentWallpaper = user?.chat_wallpaper || 'default';
     const wallpaperLabel = currentWallpaper === 'default'
         ? 'Default'
@@ -43,17 +202,46 @@ export default function ChatsSettingsScreen() {
                 ? 'Preset'
                 : 'Custom';
 
+    const sliderPreviewStyle = useMemo(() => ({
+        fontSize: chatMessageFontSize,
+        lineHeight: Math.round(chatMessageFontSize * 1.35),
+    }), [chatMessageFontSize]);
+
+    const fontSizeLabel = getChatFontSizeLabel(chatMessageFontSize);
+
+    useEffect(() => {
+        if (!chatMediaVisibility) {
+            return;
+        }
+
+        void (async () => {
+            for (const chat of chats) {
+                for (const message of chat.messages || []) {
+                    if (message?.sender !== 'them' || !message?.file_type?.startsWith('image/') || !message?.file) {
+                        continue;
+                    }
+
+                    await autoSaveIncomingImageToGallery(
+                        typeof message.file === 'string' ? message.file : (message.file as any)?.uri,
+                        message.id.toString(),
+                        message.file_type,
+                    );
+                }
+            }
+        })();
+    }, [chatMediaVisibility, chats]);
+
     const ThemeButton = ({ mode, icon, label }: { mode: 'light' | 'dark' | 'system', icon: any, label: string }) => {
         const isActive = theme === mode;
         return (
-            <TouchableOpacity 
+            <TouchableOpacity
                 onPress={() => setTheme(mode)}
                 style={[
-                    styles.themeCard, 
-                    { 
+                    styles.themeCard,
+                    {
                         backgroundColor: isActive ? colors.primary + '15' : colors.card,
-                        borderColor: isActive ? colors.primary : colors.border
-                    }
+                        borderColor: isActive ? colors.primary : colors.border,
+                    },
                 ]}
             >
                 <View style={[styles.themeIconCircle, { backgroundColor: isActive ? colors.primary : colors.inputBackground }]}>
@@ -73,7 +261,7 @@ export default function ChatsSettingsScreen() {
 
     return (
         <ScreenWrapper style={styles.container} edges={['left', 'right']} withExtraTopPadding={false}>
-            <Stack.Screen 
+            <Stack.Screen
                 options={{
                     headerTitle: 'Chat Settings',
                 }}
@@ -112,32 +300,52 @@ export default function ChatsSettingsScreen() {
                     <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Chat Preferences</Text>
                     <SettingCard>
                         <SettingRow
-                            title="Enter is Send"
-                            subtitle="The enter key will send your message"
+                            title="Enter to Send"
+                            subtitle="Saved on this device"
                             icon="keyboard-return"
                             isSwitch
-                            switchValue={user?.chat_enter_is_send ?? false}
-                            onSwitchChange={(v) => handleToggle('chat_enter_is_send', v)}
+                            switchValue={localEnterIsSend ?? chatEnterIsSend}
+                            onSwitchChange={(value) => {
+                                setLocalEnterIsSend(value);
+                                setChatEnterIsSend(value);
+                            }}
                             color="#4FACFE"
                         />
                         <SettingRow
                             title="Media Visibility"
-                            subtitle="Show newly downloaded media in gallery"
-                            icon="eye-outline"
+                            subtitle="Auto-save received images to your gallery"
+                            icon="image-multiple-outline"
                             isSwitch
-                            switchValue={user?.chat_media_visibility ?? true}
-                            onSwitchChange={(v) => handleToggle('chat_media_visibility', v)}
+                            switchValue={chatMediaVisibility}
+                            onSwitchChange={setChatMediaVisibility}
                             color="#F093FB"
                         />
-                        <SettingRow
-                            title="Font Size"
-                            subtitle="Adjust chat message text size"
-                            icon="format-size"
-                            value={user?.chat_font_size || 'Medium'}
-                            onPress={() => setShowFontSizeModal(true)}
-                            color="#FF9A9E"
-                            isLast
-                        />
+                        <View style={styles.fontSliderSection}>
+                            <View style={styles.fontSliderHeader}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.fontSliderTitle, { color: colors.text }]}>Message Font Size</Text>
+                                    <Text style={[styles.fontSliderSubtitle, { color: colors.textSecondary }]}>
+                                        {fontSizeLabel} · {chatMessageFontSize}px
+                                    </Text>
+                                </View>
+                                <View style={[styles.fontPreviewBadge, { backgroundColor: colors.primary + '18' }]}>
+                                    <Text style={[styles.fontPreviewBadgeText, { color: colors.primary }]}>{fontSizeLabel}</Text>
+                                </View>
+                            </View>
+
+                            <View style={[styles.fontPreviewCard, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                                <Text style={[styles.fontPreviewText, { color: colors.text }, sliderPreviewStyle]}>
+                                    The quick brown fox jumps over the lazy dog.
+                                </Text>
+                            </View>
+
+                            <ChatFontSizeSlider
+                                value={chatMessageFontSize}
+                                onChange={setChatMessageFontSize}
+                                animationsEnabled={animationsEnabled}
+                                colors={colors}
+                            />
+                        </View>
                     </SettingCard>
                 </View>
 
@@ -159,38 +367,6 @@ export default function ChatsSettingsScreen() {
 
                 <View style={{ height: 100 }} />
             </KeyboardAwareScrollView>
-
-            {/* Font Size Modal */}
-            <Modal
-                visible={showFontSizeModal}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setShowFontSizeModal(false)}
-            >
-                <Pressable style={styles.modalOverlay} onPress={() => setShowFontSizeModal(false)}>
-                    <View style={[styles.modalContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Text style={[styles.modalTitle, { color: colors.text }]}>Chat Font Size</Text>
-                        {fontSizes.map((size) => (
-                            <TouchableOpacity
-                                key={size}
-                                style={styles.modalOption}
-                                onPress={async () => {
-                                    await handleToggle('chat_font_size', size);
-                                    setShowFontSizeModal(false);
-                                }}
-                            >
-                                <Text style={[styles.optionText, { 
-                                    color: user?.chat_font_size === size ? colors.primary : colors.text,
-                                    fontWeight: user?.chat_font_size === size ? 'bold' : 'normal'
-                                }]}>{size}</Text>
-                                {user?.chat_font_size === size && (
-                                    <MaterialCommunityIcons name="check" size={20} color={colors.primary} />
-                                )}
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </Pressable>
-            </Modal>
         </ScreenWrapper>
     );
 }
@@ -246,34 +422,87 @@ const styles = StyleSheet.create({
         top: 8,
         right: 8,
     },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
+    fontSliderSection: {
+        paddingHorizontal: 20,
+        paddingTop: 14,
+        paddingBottom: 18,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: 'rgba(127,127,127,0.18)',
     },
-    modalContent: {
-        width: '90%',
-        maxWidth: 340,
-        borderRadius: 24,
-        padding: 24,
-        borderWidth: 1,
-    },
-    modalTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        marginBottom: 20,
-    },
-    modalOption: {
+    fontSliderHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 16,
-        paddingHorizontal: 8,
+        marginBottom: 12,
+        gap: 12,
     },
-    optionText: {
+    fontSliderTitle: {
         fontSize: 16,
+        fontWeight: '800',
+    },
+    fontSliderSubtitle: {
+        marginTop: 4,
+        fontSize: 13,
         fontWeight: '600',
-    }
+    },
+    fontPreviewBadge: {
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 999,
+    },
+    fontPreviewBadgeText: {
+        fontSize: 12,
+        fontWeight: '800',
+        letterSpacing: 0.4,
+    },
+    fontPreviewCard: {
+        borderRadius: 18,
+        borderWidth: 1,
+        paddingHorizontal: 14,
+        paddingVertical: 16,
+        marginBottom: 14,
+    },
+    fontPreviewText: {
+        fontWeight: '600',
+    },
+    sliderWrap: {
+        marginTop: 4,
+    },
+    sliderTrackOuter: {
+        height: 34,
+        justifyContent: 'center',
+    },
+    sliderTrack: {
+        height: 8,
+        borderRadius: 999,
+        overflow: 'hidden',
+        justifyContent: 'center',
+    },
+    sliderFill: {
+        height: '100%',
+        borderRadius: 999,
+    },
+    sliderThumb: {
+        position: 'absolute',
+        left: 0,
+        top: -8,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 3,
+        borderColor: '#fff',
+        shadowOpacity: 0.24,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 4,
+    },
+    sliderScaleRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 8,
+    },
+    sliderScaleLabel: {
+        fontSize: 12,
+        fontWeight: '700',
+        opacity: 0.75,
+    },
 });
