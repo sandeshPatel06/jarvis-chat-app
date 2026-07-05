@@ -155,6 +155,14 @@ export default function CallScreen() {
         }, 3000);
     }, [endCall, router]);
 
+    const handleClose = useCallback(() => {
+        if (endRedirectTimeoutRef.current) {
+            clearTimeout(endRedirectTimeoutRef.current);
+            endRedirectTimeoutRef.current = null;
+        }
+        router.replace('/(tabs)');
+    }, [router]);
+
     useEffect(() => {
         return () => {
             pulseLoopRef.current?.stop();
@@ -216,6 +224,9 @@ export default function CallScreen() {
                     <View style={styles.statusContainer}>
                         <FontAwesome name="phone-square" size={60} color="#ff4b4b" style={styles.statusIcon} />
                         <Text style={[styles.connectingText, { color: '#ff4b4b' }]}>Call Ended</Text>
+                        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+                            <Text style={styles.closeButtonText}>Close</Text>
+                        </TouchableOpacity>
                     </View>
                 ) : isVideo && remoteStream ? null : (
                     // Voice Call / Connection UI
@@ -557,5 +568,19 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.3)',
         borderRadius: 25,
         zIndex: 10,
+    },
+    closeButton: {
+        marginTop: 24,
+        paddingVertical: 10,
+        paddingHorizontal: 24,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.25)',
+    },
+    closeButtonText: {
+        color: '#ffffff',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });

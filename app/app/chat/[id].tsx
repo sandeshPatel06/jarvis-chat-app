@@ -94,6 +94,7 @@ export default function ChatDetailScreen() {
     const unmuteChat = useStore(useCallback((state: any) => state.unmuteChat, []));
     const isChatMuted = useStore(useCallback((state: any) => state.isChatMuted, []));
     const clearChatMessages = useStore(useCallback((state: any) => state.clearChat, []));
+    const startCall = useStore(useCallback((state: any) => state.startCall, []));
 
     const [text, setText] = useState('');
     const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -523,13 +524,19 @@ export default function ChatDetailScreen() {
 
     const handleStartAudioCall = useCallback(() => {
         setCallMenuVisible(false);
-        showToast('info', 'Call', 'Audio call is not wired to a live call provider yet.');
-    }, [showToast]);
+        if (id) {
+            startCall(id, false);
+            router.push(`/call/${id}`);
+        }
+    }, [id, startCall, router]);
 
     const handleStartVideoCall = useCallback(() => {
         setCallMenuVisible(false);
-        showToast('info', 'Call', 'Video call is not wired to a live call provider yet.');
-    }, [showToast]);
+        if (id) {
+            startCall(id, true);
+            router.push(`/call/${id}`);
+        }
+    }, [id, startCall, router]);
 
     const renderMessage = useCallback(({ item }: { item: Message }) => {
         return (

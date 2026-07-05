@@ -173,11 +173,12 @@ try:
 except ModuleNotFoundError:
     dj_database_url = None
 
-# Use PostgreSQL from DATABASE_URL environment variable, fallback to SQLite for local development
-if dj_database_url:
+# Use database URL from environment if passed, fallback to SQLite for local development
+db_url = os.environ.get('DATABASE_URL')
+if db_url and dj_database_url:
     DATABASES = {
-        'default': dj_database_url.config(
-            default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        'default': dj_database_url.parse(
+            db_url,
             conn_max_age=600,
             conn_health_checks=True,
         )
