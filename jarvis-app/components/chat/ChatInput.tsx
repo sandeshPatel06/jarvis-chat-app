@@ -44,7 +44,6 @@ export const ChatInput = ({
     const sendFileMessage = useStore(state => state.sendFileMessage);
     const showAlert = useStore(state => state.showAlert);
     const chatEnterIsSend = useStore(state => state.chatEnterIsSend);
-    const [uploading, setUploading] = React.useState(false);
     const [showAttachMenu, setShowAttachMenu] = React.useState(false);
     const [selectedFile, setSelectedFile] = React.useState<any>(null);
     const [showImageEditor, setShowImageEditor] = React.useState(false);
@@ -365,7 +364,6 @@ export const ChatInput = ({
         if (!selectedFile) return;
 
         try {
-            setUploading(true);
             await sendFileMessage(chatId, selectedFile, text, replyingToMessage?.id);
             setSelectedFile(null);
             setText('');
@@ -377,8 +375,6 @@ export const ChatInput = ({
                 error.message || 'Failed to send file. Please try again.',
                 [{ text: 'OK' }]
             );
-        } finally {
-            setUploading(false);
         }
     };
 
@@ -421,13 +417,10 @@ export const ChatInput = ({
                             size: 0, // Duration is more important for voice
                         };
                         try {
-                            setUploading(true);
                             await sendFileMessage(chatId, file, '', replyingToMessage?.id, duration);
                             setReplyingToMessage(null);
                         } catch (error) {
                             console.error('Send voice error', error);
-                        } finally {
-                            setUploading(false);
                         }
                     }}
                     onCancel={() => setIsRecording(false)}
