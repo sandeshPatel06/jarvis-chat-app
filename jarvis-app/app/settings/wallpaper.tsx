@@ -1,14 +1,16 @@
 import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Image, Dimensions } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Image, Dimensions } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter, Stack } from 'expo-router';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useStore } from '@/store';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 
-const { width } = Dimensions.get('window');
-const ITEM_WIDTH = (width - 60) / 3;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const ITEM_WIDTH = (SCREEN_WIDTH - 60) / 3;
 
 const SOLID_COLORS = [
     '#FFFFFF', // Default
@@ -59,14 +61,21 @@ export default function WallpaperSettingsScreen() {
         }
 
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: true,
             aspect: [9, 16],
-            quality: 0.8,
+            quality: 1,
         });
 
         if (!result.canceled && result.assets[0]) {
-            router.push(`/settings/wallpaper-preview?uri=${encodeURIComponent(result.assets[0].uri)}`);
+            // Resize to exact screen dimensions so the wallpaper renders
+            // identically in preview AND in the live chat screen — no zoom mismatch.
+            const normalized = await ImageManipulator.manipulateAsync(
+                result.assets[0].uri,
+                [{ resize: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } }],
+                { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+            );
+            router.push(`/settings/wallpaper-preview?uri=${encodeURIComponent(normalized.uri)}`);
         }
     };
 
@@ -87,7 +96,7 @@ export default function WallpaperSettingsScreen() {
                 }}
             />
 
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <KeyboardAwareScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
 
                 {/* Custom Photo Section */}
                 <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Custom</Text>
@@ -156,7 +165,7 @@ export default function WallpaperSettingsScreen() {
                     ))}
                 </View>
 
-            </ScrollView>
+            </KeyboardAwareScrollView>
         </ScreenWrapper>
     );
 }

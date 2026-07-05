@@ -1,8 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import { Image, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, View, Text } from 'react-native';
+import { Image, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, View, Text } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -25,15 +27,23 @@ export default function ProfileScreen() {
     const { colors } = useAppTheme();
 
     const pickImage = useCallback(async () => {
-        const result = await import('expo-image-picker').then(m => m.launchImageLibraryAsync({
+        const ImagePicker = await import('expo-image-picker');
+        const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
             aspect: [1, 1],
-            quality: 1,
-        }));
+            quality: 0.85,
+        });
 
         if (!result.canceled) {
-            setImage(result.assets[0].uri);
+            // Normalize to JPEG regardless of source format (HEIC, WEBP, PNG, etc.)
+            // This guarantees the upload works on all devices and backends
+            const manipResult = await ImageManipulator.manipulateAsync(
+                result.assets[0].uri,
+                [{ resize: { width: 512, height: 512 } }],
+                { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+            );
+            setImage(manipResult.uri);
         }
     }, []);
 
@@ -48,14 +58,13 @@ export default function ProfileScreen() {
                 formData.append('username', name);
                 formData.append('bio', about);
 
-                const filename = image.split('/').pop();
-                const match = /\.(\w+)$/.exec(filename || '');
-                const type = match ? `image/${match[1]}` : `image`;
+                // Image is always JPEG after normalization in pickImage
+                const filename = `profile_${Date.now()}.jpg`;
 
                 formData.append('profile_picture', {
                     uri: image,
-                    name: filename || 'profile.jpg',
-                    type: type,
+                    name: filename,
+                    type: 'image/jpeg',
                 } as any);
 
                 updatedUser = await api.auth.updateProfile(token, formData);
@@ -97,16 +106,12 @@ export default function ProfileScreen() {
                 }}
             />
 
-            <KeyboardAvoidingView
-                style={{ flex: 1 }}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+            <KeyboardAwareScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                bottomOffset={24}
             >
-                <ScrollView
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
-                >
                     <View style={styles.avatarContainer}>
                         <TouchableOpacity onPress={pickImage} activeOpacity={0.8} style={styles.avatarWrapper}>
                             <View style={[styles.avatarBorder, { borderColor: colors.cardBorder }]}>
@@ -177,8 +182,7 @@ export default function ProfileScreen() {
                             </View>
                         </View>
                     </SettingCard>
-                </ScrollView>
-            </KeyboardAvoidingView>
+            </KeyboardAwareScrollView>
         </ScreenWrapper>
     );
 }

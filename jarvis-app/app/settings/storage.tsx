@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { ScrollView, StyleSheet, View, Text } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Stack, useFocusEffect } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 
@@ -109,9 +110,10 @@ export default function StorageSettingsScreen() {
                 }}
             />
 
-            <ScrollView
+            <KeyboardAwareScrollView
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
             >
                 <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Media Auto-download</Text>
@@ -160,7 +162,7 @@ export default function StorageSettingsScreen() {
                 </View>
 
                 <View style={{ height: 100 }} />
-            </ScrollView>
+            </KeyboardAwareScrollView>
         </ScreenWrapper>
     );
 }

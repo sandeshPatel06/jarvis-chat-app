@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter, Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -71,9 +72,10 @@ export default function AppLockSettingsScreen() {
                 }}
             />
 
-            <ScrollView
+            <KeyboardAwareScrollView
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
             >
                 <View style={styles.iconContainer}>
                     <View style={[styles.lockCircle, { backgroundColor: colors.primary + '15' }]}>
@@ -118,7 +120,7 @@ export default function AppLockSettingsScreen() {
                 </View>
 
                 <View style={{ height: 100 }} />
-            </ScrollView>
+            </KeyboardAwareScrollView>
         </ScreenWrapper>
     );
 }

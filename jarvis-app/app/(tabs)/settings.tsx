@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { StyleSheet, TouchableOpacity } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { Text, View } from '@/components/Themed';
 import { useStore } from '@/store';
@@ -7,32 +8,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import SettingCard from '@/components/settings/SettingCard';
+import SettingRow from '@/components/settings/SettingRow';
 import { Avatar } from '@/components/ui/Avatar';
-
-const SettingItem = React.memo(({ icon, title, subtitle, onPress, badge, color, colors }: any) => {
-    return (
-        <TouchableOpacity
-            style={styles.cardItem}
-            onPress={onPress}
-            activeOpacity={0.7}
-        >
-            <View style={[styles.iconBox, { backgroundColor: (color || colors.primary) + '12' }]}>
-                <MaterialCommunityIcons name={icon} size={22} color={color || colors.primary} />
-            </View>
-            <View style={styles.cardTextContainer}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>{title}</Text>
-                {subtitle && <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>}
-            </View>
-            {badge && (
-                <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-                    <Text style={styles.badgeText}>{badge}</Text>
-                </View>
-            )}
-            <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} style={styles.chevron} />
-        </TouchableOpacity>
-    );
-});
-SettingItem.displayName = 'SettingItem';
 
 export default function SettingsScreen() {
     const router = useRouter();
@@ -61,10 +38,11 @@ export default function SettingsScreen() {
 
     return (
         <ScreenWrapper style={styles.container} edges={['left', 'right']} withExtraTopPadding={false}>
-            <ScrollView
+            <KeyboardAwareScrollView
                 style={styles.container}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
             >
                 {/* Profile Header */}
                 <TouchableOpacity
@@ -94,37 +72,34 @@ export default function SettingsScreen() {
                 <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Account & Security</Text>
                     <SettingCard>
-                        <SettingItem
+                        <SettingRow
                             icon="account-outline"
                             title="Account"
                             subtitle="Privacy, security, change number"
                             onPress={() => router.push('/settings/account')}
                             color="#4FACFE"
-                            colors={colors}
                         />
-                        <SettingItem
+                        <SettingRow
                             icon="chat-processing-outline"
                             title="Chats"
                             subtitle="Theme, wallpapers, chat history"
                             onPress={() => router.push('/settings/chats')}
                             color="#1AD1FF"
-                            colors={colors}
                         />
-                        <SettingItem
+                        <SettingRow
                             icon="bell-ring-outline"
                             title="Notifications"
                             subtitle="Messages, groups & calls"
                             onPress={() => router.push('/settings/notifications')}
                             color="#FF6B6B"
-                            colors={colors}
                         />
-                        <SettingItem
+                        <SettingRow
                             icon="database-outline"
                             title="Storage & Data"
                             subtitle="Network usage, auto-download"
                             onPress={() => router.push('/settings/storage')}
                             color="#FFD93D"
-                            colors={colors}
+                            isLast
                         />
                     </SettingCard>
                 </View>
@@ -133,15 +108,14 @@ export default function SettingsScreen() {
                 <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>General</Text>
                     <SettingCard>
-                        <SettingItem
+                        <SettingRow
                             icon="translate"
                             title="App Language"
                             subtitle={user?.app_language === 'en' ? 'English' : (user?.app_language || 'English')}
                             onPress={() => router.push('/settings/language')}
                             color="#20BF6B"
-                            colors={colors}
                         />
-                        <SettingItem
+                        <SettingRow
                             icon="fingerprint"
                             title="App Lock"
                             subtitle="Secure with biometric lock"
@@ -156,15 +130,14 @@ export default function SettingsScreen() {
                                 });
                             }}
                             color="#A55EEA"
-                            colors={colors}
                         />
-                        <SettingItem
+                        <SettingRow
                             icon="help-circle-outline"
                             title="Help & Support"
                             subtitle="FAQ, contact us, privacy policy"
                             onPress={() => router.push('/settings/help')}
                             color="#45AAF2"
-                            colors={colors}
+                            isLast
                         />
                     </SettingCard>
                 </View>
@@ -183,7 +156,7 @@ export default function SettingsScreen() {
                 </View>
 
                 <View style={{ height: 120 }} />
-            </ScrollView>
+            </KeyboardAwareScrollView>
         </ScreenWrapper>
     );
 }
@@ -243,45 +216,6 @@ const styles = StyleSheet.create({
         textTransform: 'uppercase',
         letterSpacing: 1.2,
         opacity: 0.7,
-    },
-    cardItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
-    },
-    iconBox: {
-        width: 46,
-        height: 46,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    cardTextContainer: {
-        flex: 1,
-        marginLeft: 16,
-    },
-    cardTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    cardSubtitle: {
-        fontSize: 12,
-        marginTop: 3,
-        fontWeight: '600',
-    },
-    chevron: {
-        opacity: 0.3,
-    },
-    badge: {
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 10,
-        marginRight: 10,
-    },
-    badgeText: {
-        color: 'white',
-        fontSize: 11,
-        fontWeight: '800',
     },
     logoutButton: {
         flexDirection: 'row',

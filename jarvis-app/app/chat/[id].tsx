@@ -8,7 +8,6 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import {
     FlatList,
     Keyboard,
-    Platform,
     StyleSheet,
     TouchableOpacity,
     Modal,
@@ -18,8 +17,9 @@ import {
     Image,
     ActivityIndicator,
     LayoutAnimation,
-    KeyboardAvoidingView
+    Platform
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

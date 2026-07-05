@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { ScrollView, StyleSheet, View, Text } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Stack } from 'expo-router';
 
 import { ScreenWrapper } from '@/components/ScreenWrapper';
@@ -68,9 +69,10 @@ export default function PrivacySettingsScreen() {
                 }}
             />
 
-            <ScrollView
+            <KeyboardAwareScrollView
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
             >
                 <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Visibility</Text>
@@ -126,7 +128,7 @@ export default function PrivacySettingsScreen() {
                 </View>
 
                 <View style={{ height: 100 }} />
-            </ScrollView>
+            </KeyboardAwareScrollView>
         </ScreenWrapper>
     );
 }

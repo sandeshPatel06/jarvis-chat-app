@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Text, Linking } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, Text, Linking } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter, Stack } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Device from 'expo-device';
@@ -65,9 +66,10 @@ export default function HelpSettingsScreen() {
                 }}
             />
 
-            <ScrollView
+            <KeyboardAwareScrollView
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
             >
                 <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Support</Text>
@@ -118,7 +120,7 @@ export default function HelpSettingsScreen() {
                     </TouchableOpacity>
                     <Text style={[styles.version, { color: colors.textSecondary }]}>Version 1.0.0</Text>
                 </View>
-            </ScrollView>
+            </KeyboardAwareScrollView>
             <DeveloperMenu
                 visible={devMenuVisible}
                 onClose={() => setDevMenuVisible(false)}

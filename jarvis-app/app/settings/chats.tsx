@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { ScrollView, StyleSheet, View, Text, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter, Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -26,11 +27,21 @@ export default function ChatsSettingsScreen() {
         router.push('/settings/wallpaper');
     }, [router]);
 
-    const handleToggle = useCallback(async (key: string, value: boolean) => {
+    const handleToggle = useCallback(async (key: string, value: boolean | string) => {
         try {
             await updateSettings({ [key]: value });
         } catch { }
     }, [updateSettings]);
+
+    // Human-readable wallpaper label
+    const currentWallpaper = user?.chat_wallpaper || 'default';
+    const wallpaperLabel = currentWallpaper === 'default'
+        ? 'Default'
+        : currentWallpaper.startsWith('#')
+            ? currentWallpaper.toUpperCase()
+            : currentWallpaper.startsWith('http')
+                ? 'Preset'
+                : 'Custom';
 
     const ThemeButton = ({ mode, icon, label }: { mode: 'light' | 'dark' | 'system', icon: any, label: string }) => {
         const isActive = theme === mode;
@@ -68,9 +79,10 @@ export default function ChatsSettingsScreen() {
                 }}
             />
 
-            <ScrollView
+            <KeyboardAwareScrollView
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
             >
                 <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>App Theme</Text>
@@ -88,7 +100,7 @@ export default function ChatsSettingsScreen() {
                             title="Wallpaper"
                             subtitle="Set a custom background for chats"
                             icon="image-outline"
-                            value={user?.chat_wallpaper || 'Default'}
+                            value={wallpaperLabel}
                             onPress={handleWallpaperSelection}
                             color="#6C63FF"
                             isLast
@@ -146,7 +158,7 @@ export default function ChatsSettingsScreen() {
                 </View>
 
                 <View style={{ height: 100 }} />
-            </ScrollView>
+            </KeyboardAwareScrollView>
 
             {/* Font Size Modal */}
             <Modal
@@ -163,7 +175,7 @@ export default function ChatsSettingsScreen() {
                                 key={size}
                                 style={styles.modalOption}
                                 onPress={async () => {
-                                    await handleToggle('chat_font_size', size as any);
+                                    await handleToggle('chat_font_size', size);
                                     setShowFontSizeModal(false);
                                 }}
                             >

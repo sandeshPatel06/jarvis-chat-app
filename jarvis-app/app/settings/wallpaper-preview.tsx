@@ -1,15 +1,25 @@
 import React from 'react';
-import { View, StyleSheet, Image, TouchableOpacity, Text } from 'react-native';
+import {
+    View,
+    StyleSheet,
+    Image,
+    TouchableOpacity,
+    Text,
+    Dimensions,
+    Platform,
+} from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useStore } from '@/store';
 import { ChatHeader, MessageItem } from '@/components/chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
-// Dummy Data
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Dummy preview data
 const DUMMY_CHAT = {
     id: 'preview',
     name: 'Jarvis Preview',
@@ -21,46 +31,56 @@ const DUMMY_CHAT = {
 const DUMMY_MESSAGES = [
     {
         id: '1',
-        text: 'Hey! Check out this new wallpaper setup. 🎨',
+        text: 'Hey! How does this wallpaper look? 🎨',
         sender: 'them',
-        timestamp: new Date(Date.now() - 60000),
+        timestamp: new Date(Date.now() - 90000),
         isRead: true,
     },
     {
         id: '2',
-        text: 'Wow, it looks amazing! The colors pop nicely.',
+        text: 'It looks amazing! The colors are perfect ✨',
         sender: 'me',
-        timestamp: new Date(Date.now() - 30000),
+        timestamp: new Date(Date.now() - 60000),
         isRead: true,
         isDelivered: true,
     },
     {
         id: '3',
-        text: 'Glad you like it! You can crop it or change it anytime.',
+        text: 'Set it and let\'s keep chatting 🚀',
         sender: 'them',
+        timestamp: new Date(Date.now() - 30000),
+        isRead: true,
+    },
+    {
+        id: '4',
+        text: 'Looks great on my side too! 👌',
+        sender: 'me',
         timestamp: new Date(),
         isRead: true,
+        isDelivered: true,
     },
 ];
 
 export default function WallpaperPreviewScreen() {
     const { uri } = useLocalSearchParams<{ uri: string }>();
     const router = useRouter();
-    const { colors } = useAppTheme();
+    const { colors, isDark } = useAppTheme();
     const insets = useSafeAreaInsets();
     const updateSettings = useStore((state) => state.updateSettings);
+    const showToast = useStore((state) => state.showToast);
+
+    const isImage = uri && !uri.startsWith('#');
+    const isColor = uri && uri.startsWith('#');
+    const backgroundColor = isColor ? uri : colors.background;
 
     const handleSetWallpaper = () => {
         if (uri) {
             updateSettings({ chat_wallpaper: uri });
-            // Go back 2 steps (to Chat Settings) or just back to Wallpaper? 
-            // Usually back to Wallpaper list is fine, or back to settings.
-            // Let's go back 2 steps? No, simple back is enough, user sees "Check" icon.
-            router.dismissTo('/settings/chats');
-            // Or router.back() twice? 
-            // Ideally we want to exit the flow.
-            router.back();
-            router.back();
+            showToast('success', 'Wallpaper set!', 'Your chat background has been updated');
+            // Go back to wallpaper list cleanly
+            if (router.canGoBack()) {
+                router.back();
+            }
         }
     };
 
@@ -68,134 +88,232 @@ export default function WallpaperPreviewScreen() {
         router.back();
     };
 
-    // Determine background style
-    const isImage = uri && !uri.startsWith('#');
-    const backgroundColor = (uri && uri.startsWith('#')) ? uri : colors.background;
-
     return (
-        <ScreenWrapper
-            style={[styles.container, { backgroundColor }]}
-            edges={['left', 'right']}
-            withExtraTopPadding={false}
-        >
-            <Stack.Screen 
-                options={{
-                    headerShown: false,
-                }}
-            />
+        <View style={[styles.root, { backgroundColor }]}>
+            <Stack.Screen options={{ headerShown: false }} />
 
-            {/* Background Layer */}
+            {/* Full-screen wallpaper layer */}
             {isImage && (
-                <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-                    <Image
-                        source={{ uri }}
-                        style={StyleSheet.absoluteFillObject}
-                        resizeMode="cover"
-                    />
-                </View>
+                <Image
+                    source={{ uri }}
+                    style={styles.wallpaperImage}
+                    resizeMode="cover"
+                />
             )}
 
-            {/* Visual Mock Overlay */}
-            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: isImage ? 'rgba(0,0,0,0.2)' : 'transparent' }]} pointerEvents="none" />
+            {/* Subtle dark overlay for image wallpapers so messages are readable */}
+            {isImage && (
+                <View
+                    style={[
+                        StyleSheet.absoluteFillObject,
+                        { backgroundColor: isDark ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.1)' },
+                    ]}
+                    pointerEvents="none"
+                />
+            )}
 
-            {/* Header (Visual Mock) */}
-            <View pointerEvents="none" style={{ marginTop: insets.top }}>
+            {/* ── Chat Header (mock, non-interactive) ── */}
+            <View
+                pointerEvents="none"
+                style={[styles.headerWrapper, { paddingTop: insets.top }]}
+            >
+                {/* Back button simulation */}
+                <View style={styles.backButtonPlaceholder}>
+                    <MaterialCommunityIcons name="arrow-left" size={24} color={isImage ? '#fff' : colors.text} />
+                </View>
                 <ChatHeader
                     chat={DUMMY_CHAT as any}
                     typingUser={null}
-                    onOptionsPress={() => { }}
-                    onPinnedPress={() => { }}
-                    style={{ backgroundColor: 'transparent' }}
+                    onOptionsPress={() => {}}
+                    onPinnedPress={() => {}}
+                    style={{ backgroundColor: 'transparent', flex: 1 }}
                 />
             </View>
 
-            {/* Content Body */}
-            <View style={styles.body}>
+            {/* ── Dummy Messages ── */}
+            <View style={styles.messagesArea} pointerEvents="none">
                 {DUMMY_MESSAGES.map((msg) => (
                     <MessageItem
                         key={msg.id}
                         item={msg as any}
-                        onLongPress={() => { }}
-                        onSwipeReply={() => { }}
-                        onSwipeForward={() => { }}
+                        onLongPress={() => {}}
+                        onSwipeReply={() => {}}
+                        onSwipeForward={() => {}}
                     />
                 ))}
             </View>
 
-            {/* Mock Input Bar */}
-            <View style={[styles.inputContainer, { backgroundColor: 'transparent', borderTopWidth: 0, paddingBottom: insets.bottom + 20 }]}>
-                <View style={[styles.inputField, { backgroundColor: colors.background + '90', borderColor: colors.border }]}>
-                    <Text style={{ color: colors.textSecondary }}>Type a message...</Text>
+            {/* ── Mock Input Bar ── */}
+            <View style={[styles.inputBar, { paddingBottom: 8 }]} pointerEvents="none">
+                <View style={[styles.inputPill, { backgroundColor: isImage ? 'rgba(255,255,255,0.18)' : colors.card, borderColor: isImage ? 'rgba(255,255,255,0.25)' : colors.border }]}>
+                    <MaterialCommunityIcons name="emoticon-outline" size={22} color={colors.textSecondary} />
+                    <Text style={[styles.inputPlaceholder, { color: colors.textSecondary }]}>Type a message...</Text>
+                    <MaterialCommunityIcons name="attachment" size={22} color={colors.textSecondary} />
                 </View>
-                <View style={[styles.sendButton, { backgroundColor: colors.primary }]}>
-                    <MaterialCommunityIcons name="send" size={20} color="white" />
+                <View style={[styles.sendBtn, { backgroundColor: colors.primary }]}>
+                    <MaterialCommunityIcons name="microphone" size={20} color="#fff" />
                 </View>
             </View>
 
-            {/* Action Overlay (Bottom Tool Bar) */}
-            <View style={[styles.actionOverlay]}>
-                <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.background + 'B0' }]} onPress={handleCancel}>
-                    <Text style={{ color: colors.text, fontWeight: '700' }}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.primary }]} onPress={handleSetWallpaper}>
-                    <Text style={{ color: 'white', fontWeight: '800' }}>Set Wallpaper</Text>
-                </TouchableOpacity>
-            </View>
+            {/* ── Action Bar (Glassmorphic) ── */}
+            <View style={[styles.actionBar, { paddingBottom: insets.bottom + 12 }]}>
+                {Platform.OS === 'ios' ? (
+                    <BlurView
+                        intensity={isDark ? 60 : 80}
+                        tint={isDark ? 'dark' : 'light'}
+                        style={StyleSheet.absoluteFillObject}
+                    />
+                ) : (
+                    <View style={[StyleSheet.absoluteFillObject, { backgroundColor: isDark ? 'rgba(18,18,20,0.92)' : 'rgba(255,255,255,0.92)' }]} />
+                )}
 
-        </ScreenWrapper>
+                <View style={styles.actionContent}>
+                    {/* Cancel */}
+                    <TouchableOpacity
+                        id="wallpaper-cancel-btn"
+                        style={[styles.cancelBtn, { borderColor: colors.border }]}
+                        onPress={handleCancel}
+                        activeOpacity={0.7}
+                    >
+                        <MaterialCommunityIcons name="close" size={20} color={colors.text} />
+                        <Text style={[styles.cancelText, { color: colors.text }]}>Cancel</Text>
+                    </TouchableOpacity>
+
+                    {/* Set Wallpaper */}
+                    <TouchableOpacity
+                        id="wallpaper-set-btn"
+                        style={styles.setBtn}
+                        onPress={handleSetWallpaper}
+                        activeOpacity={0.85}
+                    >
+                        <LinearGradient
+                            colors={['#4FACFE', '#00F2FE']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.setGradient}
+                        >
+                            <MaterialCommunityIcons name="check-circle-outline" size={20} color="#fff" />
+                            <Text style={styles.setText}>Set Wallpaper</Text>
+                        </LinearGradient>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </View>
     );
 }
 
+const ACTION_BAR_HEIGHT = 100;
+
 const styles = StyleSheet.create({
-    container: {
+    root: {
         flex: 1,
     },
-    body: {
-        flex: 1,
-        padding: 15,
-        justifyContent: 'center', // Center messages to show context
+    wallpaperImage: {
+        ...StyleSheet.absoluteFillObject,
+        width: SCREEN_WIDTH,
+        height: SCREEN_HEIGHT,
     },
-    inputContainer: {
+    headerWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingTop: 10,
-        borderTopWidth: 0.5,
     },
-    inputField: {
-        flex: 1,
-        height: 40,
-        borderRadius: 20,
-        borderWidth: 1,
-        paddingHorizontal: 15,
+    backButtonPlaceholder: {
+        paddingLeft: 8,
+        paddingRight: 0,
         justifyContent: 'center',
-        marginRight: 10,
-    },
-    sendButton: {
+        alignItems: 'center',
         width: 40,
-        height: 40,
-        borderRadius: 20,
+    },
+    messagesArea: {
+        flex: 1,
+        paddingHorizontal: 12,
+        paddingBottom: ACTION_BAR_HEIGHT + 12,
+        justifyContent: 'flex-end',
+    },
+    inputBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingTop: 8,
+        gap: 8,
+        marginBottom: ACTION_BAR_HEIGHT - 16,
+    },
+    inputPill: {
+        flex: 1,
+        height: 44,
+        borderRadius: 22,
+        borderWidth: 1,
+        paddingHorizontal: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    inputPlaceholder: {
+        flex: 1,
+        fontSize: 15,
+    },
+    sendBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    actionOverlay: {
+    actionBar: {
         position: 'absolute',
-        bottom: 40,
-        left: 20,
-        right: 20,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: 15,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        overflow: 'hidden',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 12,
+        elevation: 20,
     },
-    actionButton: {
+    actionContent: {
+        flexDirection: 'row',
+        gap: 12,
+        paddingHorizontal: 20,
+        paddingTop: 16,
+    },
+    cancelBtn: {
         flex: 1,
-        paddingVertical: 15,
-        borderRadius: 12,
+        flexDirection: 'row',
         alignItems: 'center',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-    }
+        justifyContent: 'center',
+        gap: 8,
+        height: 52,
+        borderRadius: 16,
+        borderWidth: 1.5,
+    },
+    cancelText: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    setBtn: {
+        flex: 2,
+        borderRadius: 16,
+        overflow: 'hidden',
+        shadowColor: '#4FACFE',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    setGradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        height: 52,
+        borderRadius: 16,
+    },
+    setText: {
+        color: '#fff',
+        fontSize: 15,
+        fontWeight: '800',
+    },
 });
