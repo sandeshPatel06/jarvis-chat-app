@@ -2,27 +2,44 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help start lint doctor type-check check prebuild clean install build-preview
+.PHONY: help start start-frontend start-backend docker-start lint doctor type-check check prebuild clean install build-preview
 
 # Paths
-APP_DIR=jarvis-app
+APP_DIR=app
+BACKEND_DIR=backend
 
 # 📚 Help
 help:
 	@echo "Available targets:"
-	@echo "  make start         Start the Expo app"
-	@echo "  make lint          Run Expo lint"
-	@echo "  make doctor        Run Expo Doctor"
-	@echo "  make type-check    Run TypeScript check"
-	@echo "  make check         Run lint, doctor, and type-check"
-	@echo "  make prebuild      Run Expo prebuild"
-	@echo "  make build-preview Trigger an EAS preview build"
-	@echo "  make clean         Remove android and ios folders"
+	@echo "  make start-frontend  Start the Expo app locally"
+	@echo "  make start-backend   Start the Django backend locally"
+	@echo "  make start           Start both backend and frontend locally"
+	@echo "  make docker-start    Start backend and frontend using Docker"
+	@echo "  make lint            Run Expo lint"
+	@echo "  make doctor          Run Expo Doctor"
+	@echo "  make type-check      Run TypeScript check"
+	@echo "  make check           Run lint, doctor, and type-check"
+	@echo "  make prebuild        Run Expo prebuild"
+	@echo "  make build-preview   Trigger an EAS preview build"
+	@echo "  make clean           Remove android and ios folders"
 
-# 🔍 Fast Checks
-start:
+# 🚀 Running services
+start-frontend:
 	@echo "🚀 Starting Jarvis Chat Expo app..."
 	cd $(APP_DIR) && npm run start
+
+start-backend:
+	@echo "🐍 Starting Jarvis Chat Django backend..."
+	cd $(BACKEND_DIR) && if [ -d ".venv" ]; then .venv/bin/python manage.py runserver; else python manage.py runserver; fi
+
+start:
+	@echo "🚀 Starting both backend and frontend..."
+	(cd $(BACKEND_DIR) && if [ -d ".venv" ]; then .venv/bin/python manage.py runserver; else python manage.py runserver; fi) & \
+	(cd $(APP_DIR) && npm run start)
+
+docker-start:
+	@echo "🐳 Starting Jarvis Chat stack in Docker..."
+	docker compose up --build
 
 lint:
 	@echo "🔍 Running Linting..."

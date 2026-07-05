@@ -38,7 +38,7 @@ Jarvis is a modern, real-time chat application built with React Native (Expo) an
 ### Backend Setup
 1. Navigate to the backend directory:
    ```bash
-   cd jarvis-backend
+   cd backend
    ```
 2. Create and activate a virtual environment:
    ```bash
@@ -61,7 +61,7 @@ Jarvis is a modern, real-time chat application built with React Native (Expo) an
 ### Frontend Setup
 1. Navigate to the app directory:
    ```bash
-   cd jarvis-app
+   cd app
    ```
 2. Install dependencies:
    ```bash
@@ -74,9 +74,9 @@ Jarvis is a modern, real-time chat application built with React Native (Expo) an
 
 ## 📝 Environment Variables
 
-Ensure you have the necessary `.env` files configured in both `jarvis-app` and `jarvis-backend` directories.
+Ensure you have the necessary `.env` files configured in both `app` and `backend` directories.
 
-**jarvis-app/.env**:
+**app/.env**:
 ```env
 EXPO_PUBLIC_API_URL=http://your-ip:8000
 EXPO_PUBLIC_WS_URL=ws://your-ip:8000

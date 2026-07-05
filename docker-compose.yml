@@ -29,13 +29,13 @@ services:
 
   backend:
     build:
-      context: ./jarvis-backend
+      context: ./backend
     ports:
       - "8000:8000"
     volumes:
-      - ./jarvis-backend:/app
-      - ./jarvis-backend/media:/app/media
-      - ./jarvis-backend/staticfiles:/app/staticfiles
+      - ./backend:/app
+      - ./backend/media:/app/media
+      - ./backend/staticfiles:/app/staticfiles
     env_file:
       - .env.production
     environment:
@@ -51,11 +51,11 @@ services:
 
   worker:
     build:
-      context: ./jarvis-backend
+      context: ./backend
     command: celery -A chat_backend worker -l info
     volumes:
-      - ./jarvis-backend:/app
-      - ./jarvis-backend/media:/app/media
+      - ./backend:/app
+      - ./backend/media:/app/media
     env_file:
       - .env.production
     environment:
@@ -69,7 +69,7 @@ services:
 
   app:
     build:
-      context: ./jarvis-app
+      context: ./app
     ports:
       - "3000:80"
     depends_on:
