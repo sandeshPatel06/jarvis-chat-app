@@ -201,6 +201,7 @@ class MessageUploadView(APIView):
         file_type = request.data.get('file_type')
         file_name = request.data.get('file_name')
         reply_to_id = request.data.get('reply_to_id')
+        duration = request.data.get('duration')
 
         # File Validation (Security)
         if file:
@@ -270,6 +271,7 @@ class MessageUploadView(APIView):
                 reply_to=reply_to_message,
                 message_type=message_type,
                 media_processing_state='pending' if file else 'ready',
+                media_metadata={'duration': float(duration)} if duration not in (None, '',) else {},
             )
 
             serializer = MessageSerializer(message)

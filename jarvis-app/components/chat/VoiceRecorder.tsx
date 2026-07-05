@@ -1,12 +1,12 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
-import { useAudioRecorder, RecordingPresets } from 'expo-audio';
+import { requestRecordingPermissionsAsync, useAudioRecorder, RecordingPresets } from 'expo-audio';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useStore } from '@/store';
 
 interface VoiceRecorderProps {
-    onSend: (audioUri: string, duration: number) => void;
+    onSend: (audioUri: string, duration: number) => Promise<void> | void;
     onCancel: () => void;
 }
 
@@ -17,10 +17,21 @@ export const VoiceRecorder = ({ onSend, onCancel }: VoiceRecorderProps) => {
     const [duration, setDuration] = useState(0);
     const durationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
     const waveAnimation = useRef(new Animated.Value(1)).current;
+    const isStartingRef = useRef(false);
 
     const startRecording = useCallback(async () => {
         try {
-            await audioRecorder.record();
+            if (isStartingRef.current) return;
+            isStartingRef.current = true;
+
+            const permission = await requestRecordingPermissionsAsync();
+            if (!permission.granted) {
+                onCancel();
+                return;
+            }
+
+            await audioRecorder.prepareToRecordAsync();
+            audioRecorder.record();
 
             if (!useStore.getState().appIsActive) {
                 return;
@@ -48,8 +59,11 @@ export const VoiceRecorder = ({ onSend, onCancel }: VoiceRecorderProps) => {
             ).start();
         } catch (err) {
             console.error('Failed to start recording', err);
+            onCancel();
+        } finally {
+            isStartingRef.current = false;
         }
-    }, [audioRecorder, waveAnimation]);
+    }, [audioRecorder, onCancel, waveAnimation]);
 
     const stopRecording = useCallback(async () => {
         try {
@@ -61,7 +75,7 @@ export const VoiceRecorder = ({ onSend, onCancel }: VoiceRecorderProps) => {
 
             const uri = audioRecorder.uri;
             if (uri) {
-                onSend(uri, duration);
+                await onSend(uri, duration);
             }
 
             setDuration(0);
@@ -96,6 +110,7 @@ export const VoiceRecorder = ({ onSend, onCancel }: VoiceRecorderProps) => {
         return () => {
             if (durationInterval.current) {
                 clearInterval(durationInterval.current);
+                durationInterval.current = null;
             }
         };
     }, [startRecording]);

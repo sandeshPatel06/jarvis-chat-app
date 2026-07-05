@@ -292,7 +292,7 @@ async function handleRemoteMessage(remoteMessage: any, context: 'foreground' | '
                 importance: notificationPrefs.sound || notificationPrefs.vibration ? AndroidImportance.HIGH : AndroidImportance.DEFAULT,
                 visibility: AndroidVisibility.PUBLIC,
                 vibration: notificationPrefs.vibration,
-                vibrationPattern: notificationPrefs.vibration ? [0, 250, 150, 250] : undefined,
+                vibrationPattern: notificationPrefs.vibration ? [250, 250] : undefined,
             });
 
             // Standardize field extraction with multiple fallbacks

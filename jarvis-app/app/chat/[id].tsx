@@ -39,6 +39,29 @@ import { api } from '@/services/api';
 import { exportChatAsEmail } from '@/utils/chatExport';
 import * as MediaLibrary from 'expo-media-library';
 
+type ChatRow =
+    | { kind: 'date'; key: string; label: string }
+    | { kind: 'message'; key: string; message: Message };
+
+const DAY = 24 * 60 * 60 * 1000;
+
+const formatDayLabel = (value: Date) => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const target = new Date(value.getFullYear(), value.getMonth(), value.getDate());
+    const diffDays = Math.round((today.getTime() - target.getTime()) / DAY);
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+
+    return value.toLocaleDateString([], {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+        year: now.getFullYear() === value.getFullYear() ? undefined : 'numeric',
+    });
+};
+
 
 export default function ChatDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -84,6 +107,7 @@ export default function ChatDetailScreen() {
 
     // Chat Options
     const [chatOptionsVisible, setChatOptionsVisible] = useState(false);
+    const [callMenuVisible, setCallMenuVisible] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
 
     // Search State
@@ -110,11 +134,17 @@ export default function ChatDetailScreen() {
 
     const displayMessages = useMemo(() => {
         const messages = chat?.messages || [];
-        const deduped = (() => {
+        const dedupedAndSorted = (() => {
             const seen = new Set<string>();
             const result: Message[] = [];
 
-            for (const message of messages) {
+            const sorted = [...messages].sort((a: any, b: any) => {
+                const left = new Date(a?.timestamp || 0).getTime();
+                const right = new Date(b?.timestamp || 0).getTime();
+                return left - right;
+            });
+
+            for (const message of sorted) {
                 const messageId = message?.id?.toString();
                 if (!messageId || seen.has(messageId)) continue;
                 seen.add(messageId);
@@ -124,12 +154,39 @@ export default function ChatDetailScreen() {
             return result;
         })();
 
-        if (!searchQuery) return deduped;
+        if (!searchQuery) return dedupedAndSorted;
         const query = searchQuery.toLowerCase();
-        return deduped.filter((m: any) => 
+        return dedupedAndSorted.filter((m: any) => 
             m.text?.toLowerCase().includes(query)
         );
     }, [chat?.messages, searchQuery]);
+
+    const chatRows = useMemo<ChatRow[]>(() => {
+        const rows: ChatRow[] = [];
+        let lastDayKey = '';
+
+        for (const message of displayMessages) {
+            const messageDate = new Date((message as any).timestamp || Date.now());
+            const dayKey = messageDate.toISOString().slice(0, 10);
+
+            if (dayKey !== lastDayKey) {
+                rows.push({
+                    kind: 'date',
+                    key: `date-${dayKey}`,
+                    label: formatDayLabel(messageDate),
+                });
+                lastDayKey = dayKey;
+            }
+
+            rows.push({
+                kind: 'message',
+                key: message.id.toString(),
+                message,
+            });
+        }
+
+        return rows;
+    }, [displayMessages]);
 
     const unreadMessageIds = useMemo(() => {
         return (chat?.messages || [])
@@ -194,6 +251,12 @@ export default function ChatDetailScreen() {
             markRead(chat.id, messageId);
         });
     }, [chat?.id, unreadMessageIds, markRead]);
+
+    useEffect(() => {
+        requestAnimationFrame(() => {
+            flatListRef.current?.scrollToEnd({ animated: false });
+        });
+    }, [chatRows.length, chat?.id]);
 
 
 
@@ -454,6 +517,20 @@ export default function ChatDetailScreen() {
         setMediaViewerVisible(true);
     }, []);
 
+    const handleCallPress = useCallback(() => {
+        setCallMenuVisible(true);
+    }, []);
+
+    const handleStartAudioCall = useCallback(() => {
+        setCallMenuVisible(false);
+        showToast('info', 'Call', 'Audio call is not wired to a live call provider yet.');
+    }, [showToast]);
+
+    const handleStartVideoCall = useCallback(() => {
+        setCallMenuVisible(false);
+        showToast('info', 'Call', 'Video call is not wired to a live call provider yet.');
+    }, [showToast]);
+
     const renderMessage = useCallback(({ item }: { item: Message }) => {
         return (
             <MessageItem
@@ -468,6 +545,22 @@ export default function ChatDetailScreen() {
             />
         );
     }, [handleLongPressMessage, handleSwipeReply, handleSwipeForward, handleMediaPress, selectionMode, selectedMessages, handleMessagePress]);
+
+    const renderChatRow = useCallback(({ item }: { item: ChatRow }) => {
+        if (item.kind === 'date') {
+            return (
+                <View style={styles.dateDividerWrap}>
+                    <View style={[styles.dateDivider, { backgroundColor: colors.card }]}>
+                        <Text style={[styles.dateDividerText, { color: colors.textSecondary }]}>
+                            {item.label}
+                        </Text>
+                    </View>
+                </View>
+            );
+        }
+
+        return renderMessage({ item: item.message });
+    }, [colors.card, colors.textSecondary, renderMessage]);
 
     const handleLoadMore = useCallback(async () => {
         if (!chat || loadingMore || chat.messages.length < 20) return;
@@ -564,6 +657,7 @@ export default function ChatDetailScreen() {
                         typingUser={typingUser}
                         onPinnedPress={() => setPinnedModalVisible(true)}
                         onOptionsPress={() => setChatOptionsVisible(true)}
+                        onCallPress={handleCallPress}
                         style={{ backgroundColor: backgroundSource ? 'transparent' : colors.background }}
                     />
 
@@ -782,6 +876,27 @@ export default function ChatDetailScreen() {
                         </Pressable>
                     </Modal>
 
+                    <Modal
+                        transparent
+                        visible={callMenuVisible}
+                        animationType="fade"
+                        onRequestClose={() => setCallMenuVisible(false)}
+                    >
+                        <Pressable style={styles.modalOverlay} onPress={() => setCallMenuVisible(false)}>
+                            <View style={[styles.callMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                <Text style={[styles.callMenuTitle, { color: colors.text }]}>Start call</Text>
+                                <TouchableOpacity style={styles.callMenuItem} onPress={handleStartAudioCall}>
+                                    <MaterialCommunityIcons name="phone" size={20} color={colors.text} />
+                                    <Text style={[styles.callMenuText, { color: colors.text }]}>Voice call</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.callMenuItem} onPress={handleStartVideoCall}>
+                                    <MaterialCommunityIcons name="video" size={20} color={colors.text} />
+                                    <Text style={[styles.callMenuText, { color: colors.text }]}>Video call</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </Pressable>
+                    </Modal>
+
                     {/* Message Options Modal */}
                     <MessageOptionsModal
                         visible={modalVisible}
@@ -829,11 +944,11 @@ export default function ChatDetailScreen() {
                     >
                         <FlatList
                             ref={flatListRef}
-                            data={displayMessages}
+                            data={chatRows}
                             extraData={[chat?.messages?.length, lastTypingSent.current, editingMessageId]} // Force re-render on these changes
-                            keyExtractor={(item) => item.id.toString()}
-                            renderItem={renderMessage}
-                            inverted={true}
+                            keyExtractor={(item) => item.key}
+                            renderItem={renderChatRow}
+                            inverted={false}
                             style={{ flex: 1, backgroundColor: 'transparent' }}
                             contentContainerStyle={styles.listContent}
                             keyboardDismissMode="interactive"
@@ -912,6 +1027,20 @@ export default function ChatDetailScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     listContent: { padding: 15 },
+    dateDividerWrap: {
+        alignItems: 'center',
+        marginVertical: 10,
+    },
+    dateDivider: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 999,
+        opacity: 0.95,
+    },
+    dateDividerText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.4)',
@@ -1014,6 +1143,35 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.2,
         shadowRadius: 15,
+    },
+    callMenu: {
+        position: 'absolute',
+        right: 16,
+        top: 96,
+        width: 220,
+        borderRadius: 20,
+        borderWidth: 1,
+        padding: 12,
+        elevation: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.2,
+        shadowRadius: 15,
+    },
+    callMenuTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        marginBottom: 8,
+    },
+    callMenuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+        gap: 10,
+    },
+    callMenuText: {
+        fontSize: 15,
+        fontWeight: '500',
     },
     selectionToolbar: {
         flexDirection: 'row',

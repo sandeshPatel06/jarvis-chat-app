@@ -2,9 +2,11 @@ import React from 'react';
 import { Modal, View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as Sharing from 'expo-sharing';
+import { cacheDirectory, documentDirectory, downloadAsync } from 'expo-file-system/legacy';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useStore } from '@/store';
 import { Message } from '@/types';
+import { getMediaUrl } from '@/utils/media';
 
 interface MessageOptionsModalProps {
     visible: boolean;
@@ -39,8 +41,8 @@ export const MessageOptionsModal: React.FC<MessageOptionsModalProps> = ({
     if (!message) return null;
 
     const handleShare = async () => {
-        if (!message.file || !message.file.startsWith('file://')) {
-            showAlert('Error', 'No local file available to share');
+        if (!message.file) {
+            showAlert('Error', 'No file available to share');
             return;
         }
 
@@ -51,7 +53,30 @@ export const MessageOptionsModal: React.FC<MessageOptionsModalProps> = ({
                 return;
             }
 
-            await Sharing.shareAsync(message.file);
+            let uriToShare = typeof message.file === 'string' ? message.file : (message.file as any)?.uri;
+            if (!uriToShare) {
+                showAlert('Error', 'No file available to share');
+                return;
+            }
+
+            if (!uriToShare.startsWith('file://')) {
+                const fullUrl = getMediaUrl(uriToShare) || uriToShare;
+                const ext = message.file_type?.startsWith('video/')
+                    ? '.mp4'
+                    : message.file_type?.startsWith('audio/')
+                        ? '.m4a'
+                        : message.file_type?.includes('pdf')
+                            ? '.pdf'
+                            : '.jpg';
+                const targetUri = (cacheDirectory || documentDirectory) + `share_${Date.now()}${ext}`;
+                const downloadResult = await downloadAsync(fullUrl, targetUri);
+                if (downloadResult.status !== 200) {
+                    throw new Error(`Download failed with status ${downloadResult.status}`);
+                }
+                uriToShare = downloadResult.uri;
+            }
+
+            await Sharing.shareAsync(uriToShare);
             onClose();
         } catch (error) {
             console.error('Share error:', error);
@@ -74,7 +99,7 @@ export const MessageOptionsModal: React.FC<MessageOptionsModalProps> = ({
                 activeOpacity={1}
                 onPress={onClose}
             >
-                <View style={[styles.menu, { backgroundColor: colors.card }]}>
+                <View style={[styles.menu, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <TouchableOpacity
                         style={styles.menuItem}
                         onPress={() => { onReact?.(message); }}
@@ -166,10 +191,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     menu: {
-        borderRadius: 12,
-        padding: 8,
-        minWidth: 200,
-        elevation: 5,
+        borderRadius: 18,
+        paddingVertical: 10,
+        minWidth: 240,
+        borderWidth: 1,
+        elevation: 8,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.25,
@@ -178,7 +204,8 @@ const styles = StyleSheet.create({
     menuItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
         gap: 12,
     },
     menuText: {

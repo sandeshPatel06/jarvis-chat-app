@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, Modal, Pressable } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -15,25 +15,14 @@ interface ChatHeaderProps {
     typingUser: string | null;
     onOptionsPress: () => void;
     onPinnedPress: () => void;
-    onSMSPress?: () => void;
+    onCallPress: () => void;
     style?: ViewStyle;
 }
 
-export const ChatHeader = ({ chat, typingUser, onOptionsPress, onPinnedPress, onSMSPress, style }: ChatHeaderProps) => {
+export const ChatHeader = ({ chat, typingUser, onOptionsPress, onPinnedPress, onCallPress, style }: ChatHeaderProps) => {
     const { colors, theme } = useAppTheme();
     const router = useRouter();
-    const startCall = useStore((state) => state.startCall);
     const insets = useSafeAreaInsets();
-
-    const handleVideoCall = () => {
-        startCall(chat.id, true);
-        router.push(`/call/${chat.id}`);
-    };
-
-    const handleAudioCall = () => {
-        startCall(chat.id, false);
-        router.push(`/call/${chat.id}`);
-    };
 
     return (
         <BlurView
@@ -105,30 +94,23 @@ export const ChatHeader = ({ chat, typingUser, onOptionsPress, onPinnedPress, on
                 </TouchableOpacity>
 
                 <View style={styles.actionsContainer}>
-                    <TouchableOpacity 
-                        onPress={handleAudioCall} 
-                        style={[styles.iconButton, { backgroundColor: `${colors.primary}15` }]}
+                    <TouchableOpacity
+                        onPress={onCallPress}
+                        style={[styles.iconButton, { backgroundColor: `${colors.primary}15`, marginRight: 6 }]}
                     >
                         <MaterialCommunityIcons name="phone" size={20} color={colors.primary} />
                     </TouchableOpacity>
 
-                    <TouchableOpacity 
-                        onPress={handleVideoCall} 
-                        style={[styles.iconButton, { backgroundColor: `${colors.primary}15`, marginHorizontal: 6 }]}
-                    >
-                        <MaterialCommunityIcons name="video" size={20} color={colors.primary} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity 
-                        onPress={onPinnedPress} 
-                        style={[styles.iconButton, { backgroundColor: `${colors.secondary}10` }]}
+                    <TouchableOpacity
+                        onPress={onPinnedPress}
+                        style={[styles.iconButton, { backgroundColor: `${colors.secondary}10`, marginRight: 6 }]}
                     >
                         <MaterialCommunityIcons name="pin-outline" size={20} color={colors.textSecondary} />
                     </TouchableOpacity>
 
-                    <TouchableOpacity 
-                        onPress={onOptionsPress} 
-                        style={[styles.iconButton, { marginLeft: 6 }]}
+                    <TouchableOpacity
+                        onPress={onOptionsPress}
+                        style={styles.iconButton}
                     >
                         <MaterialCommunityIcons name="dots-vertical" size={22} color={colors.textSecondary} />
                     </TouchableOpacity>
@@ -162,6 +144,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         flex: 1,
+        minWidth: 0,
+        marginRight: 8,
     },
     avatarWrapper: {
         position: 'relative',
@@ -182,6 +166,9 @@ const styles = StyleSheet.create({
     headerInfo: {
         marginLeft: 10,
         justifyContent: 'center',
+        flex: 1,
+        minWidth: 0,
+        marginRight: 6,
     },
     headerName: {
         fontSize: 16,
@@ -196,7 +183,7 @@ const styles = StyleSheet.create({
     actionsContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginLeft: 8,
+        flexShrink: 0,
     },
     iconButton: {
         width: 36,

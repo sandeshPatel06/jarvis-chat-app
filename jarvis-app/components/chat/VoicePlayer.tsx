@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useAudioPlayer } from 'expo-audio';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useStore } from '@/store';
@@ -13,9 +13,8 @@ interface VoicePlayerProps {
 export const VoicePlayer = ({ audioUri, duration }: VoicePlayerProps) => {
     const { colors } = useAppTheme();
     const player = useAudioPlayer(audioUri);
-    const playerRef = useRef(player);
+    const status = useAudioPlayerStatus(player);
     const appIsActive = useStore((state: any) => state.appIsActive);
-    const [position, setPosition] = useState(0);
     const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
 
     const waveformBars = useMemo(() => {
@@ -35,30 +34,17 @@ export const VoicePlayer = ({ audioUri, duration }: VoicePlayerProps) => {
     }, [audioUri, duration]);
 
     useEffect(() => {
-        playerRef.current = player;
-    }, [player]);
-
-    useEffect(() => {
-        if (!player.playing || !appIsActive) {
-            if (!appIsActive && player.playing) {
-                player.pause();
-            }
-            return;
+        if (!appIsActive && status.playing) {
+            player.pause();
         }
+    }, [status.playing, appIsActive, player]);
 
-        const interval = setInterval(() => {
-            setPosition(playerRef.current.currentTime);
-        }, 100);
-
-        return () => clearInterval(interval);
-    }, [player.playing, appIsActive, player]);
-
-    useEffect(() => {
-        setPosition(0);
-    }, [audioUri]);
+    const position = status.currentTime || 0;
+    const totalDuration = status.duration && status.duration > 0 ? status.duration : duration;
+    const progress = Math.max(0, Math.min(1, totalDuration > 0 ? position / totalDuration : 0));
 
     const togglePlayback = () => {
-        if (player.playing) {
+        if (status.playing) {
             player.pause();
         } else {
             player.play();
@@ -84,7 +70,7 @@ export const VoicePlayer = ({ audioUri, duration }: VoicePlayerProps) => {
         <View style={[styles.container, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
             <TouchableOpacity onPress={togglePlayback} style={styles.playButton}>
                 <MaterialCommunityIcons
-                    name={player.playing ? 'pause' : 'play'}
+                    name={status.playing ? 'pause' : 'play'}
                     size={24}
                     color="white"
                 />
@@ -99,14 +85,14 @@ export const VoicePlayer = ({ audioUri, duration }: VoicePlayerProps) => {
                                 styles.waveBar,
                                 {
                                     height: barHeight,
-                                    backgroundColor: i < (position / duration) * 20 ? colors.primary : 'rgba(255,255,255,0.3)',
+                                    backgroundColor: i < Math.ceil(progress * waveformBars.length) ? colors.primary : 'rgba(255,255,255,0.3)',
                                 }
                             ]}
                         />
                     ))}
                 </View>
                 <Text style={styles.time}>
-                    {formatTime(position)} / {formatTime(duration)}
+                    {formatTime(position)} / {formatTime(totalDuration)}
                 </Text>
             </View>
 
@@ -136,16 +122,19 @@ const styles = StyleSheet.create({
     },
     progressContainer: {
         flex: 1,
+        minWidth: 0,
     },
     waveform: {
         flexDirection: 'row',
         alignItems: 'center',
         height: 30,
         gap: 2,
+        overflow: 'hidden',
     },
     waveBar: {
         flex: 1,
         borderRadius: 2,
+        minHeight: 4,
     },
     time: {
         fontSize: 10,

@@ -417,7 +417,7 @@ export const ChatInput = ({
                         const file = {
                             uri,
                             name: `voice_${Date.now()}.m4a`,
-                            mimeType: 'audio/m4a',
+                            mimeType: 'audio/mp4',
                             size: 0, // Duration is more important for voice
                         };
                         try {
@@ -544,15 +544,11 @@ export const ChatInput = ({
                         }
                     }}
                 >
-                    {uploading ? (
-                        <ActivityIndicator color={colors.text} size="small" />
-                    ) : (
-                        <FontAwesome
-                            name={editingMessageId ? "times" : "plus"}
-                            size={20}
-                            color={colors.text}
-                        />
-                    )}
+                    <FontAwesome
+                        name={editingMessageId ? "times" : "plus"}
+                        size={20}
+                        color={colors.text}
+                    />
                 </TouchableOpacity>
 
                 <TextInput

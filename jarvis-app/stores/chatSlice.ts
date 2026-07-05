@@ -492,12 +492,13 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
             sender: 'me' as const,
             timestamp: new Date(),
             conversation_id: chatId,
-            file: file.uri, // Use local path
-            file_type: file.mimeType || 'image/jpeg',
-            file_name: file.name || 'file',
-            isUploading: true,
-            error: false,
-            duration: duration
+                file: file.uri, // Use local path
+                file_type: file.mimeType || 'image/jpeg',
+                file_name: file.name || 'file',
+                media_metadata: duration ? { duration } : {},
+                isUploading: true,
+                error: false,
+                duration: duration
         };
 
         addMessage(optimisticMessage);
@@ -517,6 +518,7 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
                 conversation_id: chatId,
                 tempId: tempId, 
                 file: file.uri,
+                media_metadata: duration ? { duration } : (result.media_metadata || {}),
                 isUploading: false,
                 error: false
             };
@@ -649,6 +651,7 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
                     file: m.file,
                     file_type: m.file_type,
                     file_name: m.file_name,
+                    media_metadata: m.media_metadata || {},
                     reactions: m.reactions || [],
                     reply_to: m.reply_to || null
                 };
@@ -852,6 +855,7 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set, 
                     file: m.file,
                     file_type: m.file_type,
                     file_name: m.file_name,
+                    media_metadata: m.media_metadata || {},
                     reactions: m.reactions || [],
                     is_pinned: !!m.is_pinned,
                     reply_to: m.reply_to || null

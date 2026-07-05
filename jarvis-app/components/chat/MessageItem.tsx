@@ -29,6 +29,10 @@ const MessageItemComponent = ({ item, onLongPress, onMediaPress, onSwipeReply, o
     const [imageError, setImageError] = React.useState(false);
     const isUploading = (item as any).isUploading;
     const hasError = (item as any).error;
+    const mediaDuration = Number((item as any).duration || (item as any).media_metadata?.duration || 0);
+    const mediaProgressLabel = mediaDuration > 0
+        ? `${Math.floor(mediaDuration / 60)}:${Math.floor(mediaDuration % 60).toString().padStart(2, '0')}`
+        : '--:--';
 
     const handleMediaPress = () => {
         if (item.file && item.file_type) {
@@ -170,11 +174,11 @@ const MessageItemComponent = ({ item, onLongPress, onMediaPress, onSwipeReply, o
                                 ]}
                             >
                                 {item.reply_to && (
-                                    <View style={[styles.replyContainer, { backgroundColor: colors.background, borderLeftColor: colors.primary }]}>
-                                        <View style={[styles.replyBar, { backgroundColor: colors.primary }]} />
+                                    <View style={[styles.replyContainer, { backgroundColor: colors.backgroundSecondary, borderLeftColor: colors.primary }]}>
+                                        <View style={[styles.replyAccent, { backgroundColor: colors.primary }]} />
                                         <View style={{ flex: 1 }}>
                                             <Text numberOfLines={1} style={[styles.replySender, { color: colors.primary }]}>{item.reply_to.sender}</Text>
-                                            <Text numberOfLines={1} style={[styles.replyText, { color: colors.text }]}>{item.reply_to.text}</Text>
+                                            <Text numberOfLines={2} style={[styles.replyText, { color: colors.text }]}>{item.reply_to.text}</Text>
                                         </View>
                                     </View>
                                 )}
@@ -213,7 +217,7 @@ const MessageItemComponent = ({ item, onLongPress, onMediaPress, onSwipeReply, o
                                                 <LinearGradient
                                                     colors={['transparent', 'rgba(0,0,0,0.6)']}
                                                     style={styles.videoInfoOverlay}
-                                                ><Text style={styles.videoDurationText}>0:30</Text></LinearGradient>
+                                                ><Text style={styles.videoDurationText}>{mediaProgressLabel}</Text></LinearGradient>
                                                 {(isUploading || hasError) && (
                                                     <View style={styles.mediaUploadOverlay}>
                                                         {isUploading ? (
@@ -224,10 +228,15 @@ const MessageItemComponent = ({ item, onLongPress, onMediaPress, onSwipeReply, o
                                                     </View>
                                                 )}</TouchableOpacity>
                                         ) : item.file_type?.startsWith('audio/') ? (
-                                            <VoicePlayer 
-                                                audioUri={getMediaUrl(item.file)!} 
-                                                duration={parseInt((item as any).duration || '0')} 
-                                            />
+                                            <View>
+                                                <VoicePlayer 
+                                                    audioUri={getMediaUrl(item.file)!} 
+                                                    duration={mediaDuration} 
+                                                />
+                                                <Text style={[styles.mediaDurationText, { color: colors.tabIconDefault }]}>
+                                                    {mediaProgressLabel}
+                                                </Text>
+                                            </View>
                                         ) : (
                                             <View style={[styles.documentPreview, { backgroundColor: colors.backgroundSecondary }]}>
                                                 <View style={[styles.fileIconBubble, { backgroundColor: colors.background }]}>
@@ -289,11 +298,11 @@ const MessageItemComponent = ({ item, onLongPress, onMediaPress, onSwipeReply, o
                                 style={[styles.messageBubbleMe, { borderBottomRightRadius: 4 }]}
                             >
                                 {item.reply_to && (
-                                    <View style={[styles.replyContainer, { backgroundColor: 'rgba(0,0,0,0.1)', borderLeftColor: 'white' }]}>
-                                        <View style={[styles.replyBar, { backgroundColor: 'white' }]} />
+                                    <View style={[styles.replyContainer, { backgroundColor: 'rgba(255,255,255,0.12)', borderLeftColor: 'white' }]}>
+                                        <View style={[styles.replyAccent, { backgroundColor: 'white' }]} />
                                         <View style={{ flex: 1 }}>
                                             <Text numberOfLines={1} style={[styles.replySender, { color: 'white' }]}>{item.reply_to.sender}</Text>
-                                            <Text numberOfLines={1} style={[styles.replyText, { color: 'rgba(255,255,255,0.8)' }]}>{item.reply_to.text}</Text>
+                                            <Text numberOfLines={2} style={[styles.replyText, { color: 'rgba(255,255,255,0.82)' }]}>{item.reply_to.text}</Text>
                                         </View>
                                     </View>
                                 )}
@@ -341,7 +350,7 @@ const MessageItemComponent = ({ item, onLongPress, onMediaPress, onSwipeReply, o
                                                 <LinearGradient
                                                     colors={['transparent', 'rgba(0,0,0,0.6)']}
                                                     style={styles.videoInfoOverlay}
-                                                ><Text style={styles.videoDurationText}>0:30</Text></LinearGradient>
+                                                ><Text style={styles.videoDurationText}>{mediaProgressLabel}</Text></LinearGradient>
                                                 {(isUploading || hasError) && (
                                                     <View style={styles.mediaUploadOverlay}>
                                                         {isUploading ? (
@@ -352,10 +361,15 @@ const MessageItemComponent = ({ item, onLongPress, onMediaPress, onSwipeReply, o
                                                     </View>
                                                 )}</TouchableOpacity>
                                         ) : item.file_type?.startsWith('audio/') ? (
-                                            <VoicePlayer 
-                                                audioUri={getMediaUrl(item.file)!} 
-                                                duration={parseInt((item as any).duration || '0')} 
-                                            />
+                                            <View>
+                                                <VoicePlayer 
+                                                    audioUri={getMediaUrl(item.file)!} 
+                                                    duration={mediaDuration} 
+                                                />
+                                                <Text style={[styles.mediaDurationText, { color: 'rgba(255,255,255,0.7)' }]}>
+                                                    {mediaProgressLabel}
+                                                </Text>
+                                            </View>
                                         ) : (
                                             <View style={[styles.documentPreview, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
                                                 <View style={[styles.fileIconBubble, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
@@ -440,6 +454,11 @@ export const MessageItem = React.memo(MessageItemComponent, (prevProps, nextProp
         prevProps.item.isDelivered === nextProps.item.isDelivered &&
         prevProps.item.isUploading === nextProps.item.isUploading &&
         prevProps.item.error === nextProps.item.error &&
+        prevProps.item.file === nextProps.item.file &&
+        prevProps.item.file_type === nextProps.item.file_type &&
+        prevProps.item.file_name === nextProps.item.file_name &&
+        (prevProps.item as any).duration === (nextProps.item as any).duration &&
+        JSON.stringify((prevProps.item as any).media_metadata || {}) === JSON.stringify((nextProps.item as any).media_metadata || {}) &&
         prevProps.selectionMode === nextProps.selectionMode &&
         prevProps.isSelected === nextProps.isSelected &&
         JSON.stringify(prevProps.item.reactions) === JSON.stringify(nextProps.item.reactions) &&
@@ -559,15 +578,18 @@ const styles = StyleSheet.create({
     },
     replyContainer: {
         flexDirection: 'row',
-        padding: 6,
+        paddingVertical: 8,
+        paddingRight: 10,
         paddingLeft: 8,
-        borderRadius: 6,
+        borderRadius: 12,
         marginBottom: 6,
         overflow: 'hidden',
         borderLeftWidth: 2,
     },
-    replyBar: {
-        display: 'none', // Using borderLeft instead for cleaner look
+    replyAccent: {
+        width: 3,
+        borderRadius: 999,
+        marginRight: 8,
     },
     replySender: {
         fontWeight: '600',
@@ -652,6 +674,12 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginTop: 1,
     },
+    mediaDurationText: {
+        fontSize: 10,
+        fontWeight: '600',
+        marginTop: 4,
+        alignSelf: 'flex-end',
+    },
     fileInfo: {
         flex: 1,
         justifyContent: 'center',
@@ -678,4 +706,3 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
 });
-

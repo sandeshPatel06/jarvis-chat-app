@@ -35,6 +35,7 @@ export interface Message {
     file?: string | null;
     file_type?: string | null;
     file_name?: string | null;
+    media_metadata?: Record<string, any>;
     isRead?: boolean;
     isDelivered?: boolean;
     reactions?: string[];
