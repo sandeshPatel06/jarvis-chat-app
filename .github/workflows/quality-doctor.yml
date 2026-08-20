@@ -3,7 +3,7 @@ name: "🩺 Quality: Expo Doctor"
 on:
   pull_request:
     branches: [ main ]
-    paths: [ 'jarvis-app/**' ]
+    paths: [ 'app/**', 'backend/**', 'render.yaml' ]
 
 jobs:
   doctor:
