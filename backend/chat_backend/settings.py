@@ -168,14 +168,29 @@ else:
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
+import socket
+from urllib.parse import urlparse
+
 try:
     import dj_database_url
 except ModuleNotFoundError:
     dj_database_url = None
 
-# Use database URL from environment if passed, fallback to SQLite for local development
+# Use database URL from environment if valid and reachable, fallback to SQLite if unresolvable or missing
 db_url = os.environ.get('DATABASE_URL')
+use_postgres = False
+
 if db_url and dj_database_url:
+    try:
+        parsed_url = urlparse(db_url)
+        hostname = parsed_url.hostname
+        if hostname:
+            socket.getaddrinfo(hostname, parsed_url.port or 5432, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        use_postgres = True
+    except Exception:
+        use_postgres = False
+
+if use_postgres:
     DATABASES = {
         'default': dj_database_url.parse(
             db_url,
