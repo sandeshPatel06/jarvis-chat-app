@@ -1,11 +1,6 @@
 name: Expo Build & Email Notification
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'jarvis-app/**'
   pull_request:
     paths:
       - 'jarvis-app/**'
@@ -78,13 +73,3 @@ jobs:
           from: "Expo CI <${{ secrets.SMTP_USER }}>"
           body: |
             Hello 👋
-
-            Your Expo Android build has completed successfully.
-
-            📦 Download link:
-            ${{ env.DOWNLOAD_URL }}
-
-            🔗 Expo Build Page:
-            https://expo.dev/accounts/reakuser/projects/jarvis/builds
-
-            — GitHub Actions 🚀
